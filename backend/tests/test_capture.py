@@ -56,9 +56,7 @@ def test_capture_empty_creates_nothing(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch(monkeypatch, FakeLLM(capture_tasks=[]))
-    tasks, project = capture_service.capture_text(
-        db, user.id, text="thanks!", reference_date=TODAY
-    )
+    tasks, project = capture_service.capture_text(db, user.id, text="thanks!", reference_date=TODAY)
     assert tasks == []
     assert project is None
     assert db.query(Task).count() == 0

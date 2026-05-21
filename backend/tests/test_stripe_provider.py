@@ -85,9 +85,7 @@ def test_validation_rejects_bad_amount(
         cap.validate(db, user, {"amount_minor": 0, "payment_method": "pm_card_visa"})
 
 
-def test_stripe_error_surfaces(
-    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_stripe_error_surfaces(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(stripe_payment.settings, "stripe_secret_key", "sk_test_abc")
     monkeypatch.setattr(
         httpx, "post", lambda *a, **k: _FakeResponse(402, {"error": "card_declined"})

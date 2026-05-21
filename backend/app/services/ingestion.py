@@ -42,18 +42,14 @@ def ingest_recent_messages(db: Session, user_id: str, *, max_results: int = 25) 
     try:
         for message_id in gmail.list_recent_message_ids(token, max_results=max_results):
             exists = db.scalar(
-                select(Message).where(
-                    Message.user_id == user_id, Message.external_id == message_id
-                )
+                select(Message).where(Message.user_id == user_id, Message.external_id == message_id)
             )
             if exists:
                 continue
             raw = gmail.get_message(token, message_id)
             sent_at = None
             if raw.get("internal_date_ms"):
-                sent_at = datetime.fromtimestamp(
-                    int(raw["internal_date_ms"]) / 1000, tz=UTC
-                )
+                sent_at = datetime.fromtimestamp(int(raw["internal_date_ms"]) / 1000, tz=UTC)
             message = Message(
                 user_id=user_id,
                 source="gmail",

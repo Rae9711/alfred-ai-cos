@@ -58,9 +58,7 @@ def test_requires_recipient_and_content(
         cap.validate(db, user, {"to": "15551234567"})
 
 
-def test_template_message_sends(
-    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_template_message_sends(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
     _configure(monkeypatch)
     captured: dict[str, Any] = {}
 

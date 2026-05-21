@@ -58,8 +58,7 @@ def prepare(db: Session, user_id: str, event: CalendarEvent) -> MeetingContextSu
     """Generate a meeting brief for one event from its related messages."""
     messages = related_messages(db, user_id, event)
     context = [
-        f"Subject: {m.subject or '(none)'}\nFrom: {m.sender}\n{m.snippet or ''}"
-        for m in messages
+        f"Subject: {m.subject or '(none)'}\nFrom: {m.sender}\n{m.snippet or ''}" for m in messages
     ]
     return get_llm().summarize_meeting_context(
         event_title=event.title or "(untitled meeting)", related_messages=context

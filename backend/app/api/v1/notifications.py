@@ -29,9 +29,7 @@ def register_device(
     """Register or refresh a push token. Idempotent on the token."""
     existing = db.scalar(select(Device).where(Device.push_token == payload.push_token))
     if existing is None:
-        db.add(
-            Device(user_id=user.id, push_token=payload.push_token, platform=payload.platform)
-        )
+        db.add(Device(user_id=user.id, push_token=payload.push_token, platform=payload.platform))
     else:
         existing.user_id = user.id
         existing.platform = payload.platform

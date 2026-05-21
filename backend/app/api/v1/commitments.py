@@ -20,9 +20,7 @@ def list_commitments(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Commitment]:
-    return list(
-        db.scalars(select(Commitment).where(Commitment.user_id == user.id))
-    )
+    return list(db.scalars(select(Commitment).where(Commitment.user_id == user.id)))
 
 
 @router.post("/{commitment_id}/status", response_model=CommitmentOut)

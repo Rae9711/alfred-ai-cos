@@ -14,9 +14,7 @@ class CalendarEvent(Base):
     """
 
     __tablename__ = "calendar_events"
-    __table_args__ = (
-        UniqueConstraint("user_id", "external_id", name="uq_event_user_external"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "external_id", name="uq_event_user_external"),)
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     external_id: Mapped[str] = mapped_column(String(256), index=True)

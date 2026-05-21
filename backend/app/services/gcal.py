@@ -57,9 +57,7 @@ def _normalize(item: dict[str, Any]) -> dict[str, Any]:
         "end_time": _parse_when(item.get("end", {})),
         "location": item.get("location"),
         "description": item.get("description"),
-        "attendees": [
-            a["email"] for a in item.get("attendees", []) or [] if a.get("email")
-        ],
+        "attendees": [a["email"] for a in item.get("attendees", []) or [] if a.get("email")],
     }
 
 

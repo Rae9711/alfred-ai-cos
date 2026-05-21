@@ -28,14 +28,10 @@ def generate_briefing(db: Session, user_id: str, *, today: date_type) -> DailyBr
     summary = get_llm().generate_daily_briefing(today_payload=snapshot)
 
     existing = db.scalar(
-        select(DailyBriefing).where(
-            DailyBriefing.user_id == user_id, DailyBriefing.date == today
-        )
+        select(DailyBriefing).where(DailyBriefing.user_id == user_id, DailyBriefing.date == today)
     )
     if existing is None:
-        briefing = DailyBriefing(
-            user_id=user_id, date=today, summary=summary, snapshot=snapshot
-        )
+        briefing = DailyBriefing(user_id=user_id, date=today, summary=summary, snapshot=snapshot)
         db.add(briefing)
     else:
         existing.summary = summary
@@ -48,7 +44,5 @@ def generate_briefing(db: Session, user_id: str, *, today: date_type) -> DailyBr
 
 def get_today_briefing(db: Session, user_id: str, *, today: date_type) -> DailyBriefing | None:
     return db.scalar(
-        select(DailyBriefing).where(
-            DailyBriefing.user_id == user_id, DailyBriefing.date == today
-        )
+        select(DailyBriefing).where(DailyBriefing.user_id == user_id, DailyBriefing.date == today)
     )

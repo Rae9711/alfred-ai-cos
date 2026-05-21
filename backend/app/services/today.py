@@ -48,14 +48,20 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
     ][:5]
 
     waiting_on_user = [
-        WaitingItem(id=s.commitment.id, description=s.commitment.description,
-                    person=s.commitment.counterparty)
+        WaitingItem(
+            id=s.commitment.id,
+            description=s.commitment.description,
+            person=s.commitment.counterparty,
+        )
         for s in scored
         if s.commitment.owner == CommitmentOwner.user and s.commitment.counterparty
     ]
     user_waiting_on = [
-        WaitingItem(id=s.commitment.id, description=s.commitment.description,
-                    person=s.commitment.counterparty)
+        WaitingItem(
+            id=s.commitment.id,
+            description=s.commitment.description,
+            person=s.commitment.counterparty,
+        )
         for s in scored
         if s.commitment.owner == CommitmentOwner.counterparty and s.commitment.counterparty
     ]
