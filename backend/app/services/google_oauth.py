@@ -6,6 +6,7 @@ caller via app.services.crypto."""
 
 from __future__ import annotations
 
+import os
 from typing import Any, cast
 
 import httpx
@@ -15,6 +16,11 @@ from google_auth_oauthlib.flow import Flow
 from app.core.config import get_settings
 
 settings = get_settings()
+
+# Google normalizes/reorders the granted scopes (e.g. "email" -> the userinfo.email
+# URN), which oauthlib's strict checker rejects as a "scope changed" error during token
+# exchange. The granted scopes are a superset of what we asked for, so relax the check.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 
 def _client_config() -> dict[str, Any]:
@@ -30,8 +36,16 @@ def _client_config() -> dict[str, Any]:
 
 
 def build_authorization_url(state: str) -> str:
-    """Return the Google consent URL. `state` ties the callback to a pending login."""
-    flow = Flow.from_client_config(_client_config(), scopes=settings.google_scopes)
+    """Return the Google consent URL. `state` ties the callback to a pending login.
+
+    PKCE is disabled: this is a confidential web client whose client secret already
+    authenticates the token exchange. A PKCE code_verifier generated here would be lost
+    between this request and the callback (separate Flow instances), so enabling it would
+    break the exchange with "Missing code verifier".
+    """
+    flow = Flow.from_client_config(
+        _client_config(), scopes=settings.google_scopes, autogenerate_code_verifier=False
+    )
     flow.redirect_uri = settings.google_oauth_redirect_uri
     url, _ = flow.authorization_url(
         access_type="offline",  # request a refresh token
@@ -48,7 +62,9 @@ def exchange_code(code: str) -> dict[str, Any]:
     Includes the account email, read from the OpenID userinfo endpoint, so the
     caller can upsert the User without a second round trip.
     """
-    flow = Flow.from_client_config(_client_config(), scopes=settings.google_scopes)
+    flow = Flow.from_client_config(
+        _client_config(), scopes=settings.google_scopes, autogenerate_code_verifier=False
+    )
     flow.redirect_uri = settings.google_oauth_redirect_uri
     flow.fetch_token(code=code)
     creds = flow.credentials
