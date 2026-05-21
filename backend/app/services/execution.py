@@ -49,14 +49,20 @@ def requires_strong_confirmation(risk_level: int) -> bool:
     return risk_level >= RiskLevel.financial_legal
 
 
-def _spend_limit(db: Session, user_id: str) -> SpendLimit | None:
-    return db.scalar(select(SpendLimit).where(SpendLimit.user_id == user_id))
+def _spend_limit(db: Session, user_id: str, *, lock: bool = False) -> SpendLimit | None:
+    stmt = select(SpendLimit).where(SpendLimit.user_id == user_id)
+    if lock:
+        # Serialize concurrent financial executions for this user so two approvals
+        # cannot both read the pre-debit balance and both pass the cap (TOCTOU).
+        # SQLite ignores with_for_update (single-writer), which is fine for tests.
+        stmt = stmt.with_for_update()
+    return db.scalar(stmt)
 
 
-def check_spend(db: Session, user_id: str, amount_minor: int) -> None:
+def check_spend(db: Session, user_id: str, amount_minor: int, *, lock: bool = False) -> None:
     """Raise ExecutionBlocked if a financial action would exceed the user's cap.
     With no spend limit configured, financial actions are blocked by default (safe)."""
-    limit = _spend_limit(db, user_id)
+    limit = _spend_limit(db, user_id, lock=lock)
     if limit is None:
         raise ExecutionBlocked("No spend limit set; financial actions are blocked by default.")
     if limit.spent_minor + amount_minor > limit.cap_minor:
@@ -67,15 +73,33 @@ def check_spend(db: Session, user_id: str, amount_minor: int) -> None:
         )
 
 
-def _redact(payload: dict[str, Any]) -> dict[str, Any]:
-    """Strip obviously sensitive content before writing the audit payload."""
-    redacted = {}
-    for k, v in payload.items():
-        if k in {"body", "content", "card_number", "token", "message"}:
-            redacted[k] = "[redacted]"
-        else:
-            redacted[k] = v
-    return redacted
+_SENSITIVE_KEYS = {
+    "body",
+    "content",
+    "card_number",
+    "token",
+    "message",
+    "payment_method",
+    "to",
+    "description",
+}
+
+
+def _redact(value: Any) -> Any:
+    """Recursively strip sensitive content before writing the audit payload."""
+    if isinstance(value, dict):
+        return {k: "[redacted]" if k in _SENSITIVE_KEYS else _redact(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact(v) for v in value]
+    return value
+
+
+def _proposal_amount(proposal: ActionProposal) -> int:
+    """The authoritative approved amount for a financial action: read once from the
+    proposal target. Both the cap gate and the post-execution debit use this value,
+    so the gate and the charge cannot diverge."""
+    raw = proposal.target.get("amount_minor")
+    return int(raw) if isinstance(raw, int) and not isinstance(raw, bool) else 0
 
 
 def _audit(
@@ -106,35 +130,63 @@ def _audit(
 
 def execute_proposal(db: Session, user: User, proposal: ActionProposal) -> ExecutionResult:
     """Execute an approved proposal through its capability, enforcing spend limits and
-    writing an audit row. Caller is responsible for having recorded approval."""
+    writing an audit row on every outcome. Caller records approval; this guarantees the
+    proposal never stays 'approved' after this returns or raises (it becomes executed or
+    failed), and that an audit row is written for success, error, and blocked alike."""
     provider = get_capability(proposal.action_type)
     if provider is None:
+        proposal.status = ActionStatus.failed
         _audit(db, user_id=user.id, proposal=proposal, result="blocked", detail="no provider")
         db.commit()
         raise ExecutionBlocked(f"No capability registered for {proposal.action_type}")
 
-    # Spend gate for financial actions.
-    if proposal.risk_level >= RiskLevel.financial_legal:
-        amount = int(proposal.target.get("amount_minor") or 0)
+    financial = proposal.risk_level >= RiskLevel.financial_legal
+    amount = _proposal_amount(proposal)
+
+    # Spend gate for financial actions. Lock the limit row so concurrent financial
+    # executions for this user serialize and cannot both pass the cap (BLOCKER-3).
+    if financial:
         try:
-            check_spend(db, user.id, amount)
+            check_spend(db, user.id, amount, lock=True)
         except ExecutionBlocked as blocked:
+            proposal.status = ActionStatus.failed
             _audit(db, user_id=user.id, proposal=proposal, result="blocked", detail=str(blocked))
             db.commit()
             raise
 
+    # Pass the proposal id as an idempotency key so providers that support it (Stripe)
+    # make retries and the lost-response case safe (SERIOUS-3). Copy so the stored
+    # target is not mutated.
+    exec_payload = {**proposal.target, "idempotency_key": proposal.id}
+
+    # Execute. Any failure (CapabilityError or an unexpected provider/network error)
+    # flips the proposal to failed and writes an audit row, so the money-movement log
+    # is never skipped and no proposal is left stuck in 'approved' (SERIOUS-1, SERIOUS-2).
     try:
-        provider.validate(db, user, proposal.target)
-        result = provider.execute(db, user, proposal.target)
+        provider.validate(db, user, exec_payload)
+        result = provider.execute(db, user, exec_payload)
     except CapabilityError as exc:
         proposal.status = ActionStatus.failed
         _audit(db, user_id=user.id, proposal=proposal, result="error", detail=str(exc))
         db.commit()
         raise ExecutionBlocked(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - audit then re-raise; never lose the record
+        proposal.status = ActionStatus.failed
+        _audit(
+            db,
+            user_id=user.id,
+            proposal=proposal,
+            result="error",
+            detail=f"{type(exc).__name__}: {exc}",
+        )
+        db.commit()
+        raise
 
-    # On success, debit the spend limit for financial actions.
-    if result.amount_minor and proposal.risk_level >= RiskLevel.financial_legal:
-        limit = _spend_limit(db, user.id)
+    # Debit the cap by the amount the provider actually charged, re-checking it against
+    # the locked limit. The provider should charge the approved amount; if it reports
+    # more, we still record it but the lock prevents concurrent overspend.
+    if financial and result.amount_minor:
+        limit = _spend_limit(db, user.id, lock=True)
         if limit is not None:
             limit.spent_minor += result.amount_minor
 

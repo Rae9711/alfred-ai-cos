@@ -1,34 +1,47 @@
 # Albert
 
 Mobile-first AI chief of staff. Albert connects to Gmail and Calendar, finds what
-you are forgetting, ranks what matters today, and prepares drafts you approve before
-anything is sent.
+you are forgetting, ranks what matters today, prepares drafts and follow-ups, briefs
+you each morning, prepares you for meetings, and executes approved actions through a
+strict, audited permission system.
 
-This repo is the foundation for the first vertical slice:
+The core wedge, end to end:
 
 ```
 Gmail OAuth → email ingestion → commitment extraction → Today priorities → draft reply
 ```
 
-Nothing beyond that slice is built. No payments, browser automation, WhatsApp, or
-delivery integrations. See [TODO.md](./TODO.md) for what comes next and
+On top of that: calendar sync and meeting prep, daily briefings, text and voice capture,
+a waiting-for tracker, onboarding calibration, smart notifications with quiet hours,
+account deletion, and an execution layer (capability framework with risk classification,
+spend limits, audit log, Stripe test-mode payments, WhatsApp sandbox messaging). Browser
+automation and food-delivery ordering are deliberately refused, not faked, see
+[docs/integrations/REFUSED.md](./docs/integrations/REFUSED.md).
+
+See [TODO.md](./TODO.md) for what is built and what remains, and
 [ARCHITECTURE.md](./ARCHITECTURE.md) for why it is shaped this way.
 
 ## Layout
 
 ```
 backend/              FastAPI app, Postgres models, AI pipeline, Celery workers
-  app/api/v1/         HTTP routes (auth, sync, today, commitments, drafts, actions)
+  app/api/v1/         HTTP routes (auth, sync, today, commitments, drafts, actions,
+                        meetings, briefings, tasks, capture, waiting, me, notifications)
   app/db/             SQLAlchemy models + enums
   app/llm/            Provider-agnostic LLM interface; Anthropic impl isolated in providers/
-  app/services/       OAuth, Gmail, ingestion, extraction, priority engine, Today builder
-  app/workers/        Celery app + tasks
+  app/transcription/  Provider-agnostic transcription seam (voice capture)
+  app/capabilities/   CapabilityProvider framework + providers (gmail draft, task, Stripe,
+                        WhatsApp, refused stubs)
+  app/services/       OAuth, Gmail, calendar, ingestion, extraction, priority, today,
+                        meeting prep, briefing, tasks, capture, waiting, notifications, execution
+  app/workers/        Celery app + tasks (sync, briefings, notification scan) + beat schedule
   migrations/         Alembic
-mobile/               React Native / Expo app (Expo Router)
-  app/                Routes (index = Today / Connect)
+mobile/               React Native / Expo app (Expo Router, tab navigator)
+  app/                Routes: (tabs)/{index,capture,waiting,settings}, connect, onboarding,
+                        approvals, meeting/[id]
   src/                api client, screens, components, theme
 packages/shared-types/  TypeScript types mirrored from backend schemas
-docs/                 (reserved for deeper design notes)
+docs/integrations/    Per-integration notes (stripe, whatsapp, REFUSED)
 ```
 
 ## Prerequisites

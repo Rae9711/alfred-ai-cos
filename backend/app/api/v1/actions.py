@@ -11,10 +11,10 @@ generic propose endpoint so existing clients and tests keep working."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
 from app.capabilities import get_capability
@@ -129,9 +129,21 @@ def approve_action(
             detail="This action needs strong confirmation. Re-send with confirm=true.",
         )
 
-    proposal.status = ActionStatus.approved
-    proposal.approved_at = datetime.now(UTC)
+    # Atomically claim the proposal: only the request that flips proposed -> approved
+    # proceeds. Concurrent approvals update zero rows and get 409, so a single proposal
+    # is never executed twice (no double charge). (BLOCKER-4)
+    claimed = db.execute(
+        update(ActionProposal)
+        .where(
+            ActionProposal.id == proposal.id,
+            ActionProposal.status == ActionStatus.proposed,
+        )
+        .values(status=ActionStatus.approved, approved_at=datetime.now(UTC))
+    )
     db.commit()
+    if cast("CursorResult[Any]", claimed).rowcount != 1:
+        raise HTTPException(status_code=409, detail="Action already being processed")
+    db.refresh(proposal)
 
     try:
         execution.execute_proposal(db, user, proposal)

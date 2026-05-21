@@ -6,6 +6,7 @@ run without Postgres or Anthropic."""
 import os
 from collections.abc import Iterator
 
+os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://albert:albert@localhost:5432/albert")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("JWT_SECRET", "test-secret")

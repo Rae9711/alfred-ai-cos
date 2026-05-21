@@ -58,9 +58,17 @@ class StripePaymentCapability:
         key = _guard_key()
         amount = int(payload["amount_minor"])
         currency = str(payload.get("currency", "eur")).lower()
+        headers: dict[str, str] = {}
+        # An idempotency key (the proposal id, injected by the execution service) makes
+        # retries and the lost-response case safe: Stripe returns the original charge
+        # instead of creating a second one.
+        idem = payload.get("idempotency_key")
+        if idem:
+            headers["Idempotency-Key"] = str(idem)
         resp = httpx.post(
             _ENDPOINT,
             auth=(key, ""),
+            headers=headers,
             data={
                 "amount": amount,
                 "currency": currency,

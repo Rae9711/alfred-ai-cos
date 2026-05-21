@@ -12,6 +12,7 @@ from app.db.base import get_db
 from app.db.enums import Provider
 from app.db.models import (
     ActionProposal,
+    AuditLog,
     CalendarEvent,
     Commitment,
     ConnectedAccount,
@@ -21,6 +22,7 @@ from app.db.models import (
     ExecutionLog,
     Message,
     Notification,
+    SpendLimit,
     Task,
     User,
 )
@@ -33,9 +35,13 @@ router = APIRouter(tags=["account"])
 # Every user-scoped table. Deleted explicitly so account deletion works regardless
 # of whether the database enforces ON DELETE CASCADE (Postgres does; SQLite needs a
 # PRAGMA). Order does not matter since we delete by user_id, not by FK chain.
+# Must list ALL user-scoped tables: a missing one orphans data on a non-cascading DB
+# and violates "delete all associated data" (PRD 12.1, 13.1).
 _USER_SCOPED = (
+    AuditLog,
     ExecutionLog,
     ActionProposal,
+    SpendLimit,
     DraftReply,
     Notification,
     Device,
@@ -119,9 +125,7 @@ def delete_account(
 ) -> None:
     """Delete the account and all associated data, revoking integrations first
     (PRD 12.1, 13.1). Revocation is best-effort; deletion always proceeds."""
-    for account in db.scalars(
-        select(ConnectedAccount).where(ConnectedAccount.user_id == user.id)
-    ):
+    for account in db.scalars(select(ConnectedAccount).where(ConnectedAccount.user_id == user.id)):
         _revoke_account(account)
 
     for model in _USER_SCOPED:

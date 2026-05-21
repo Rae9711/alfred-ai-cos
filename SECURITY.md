@@ -49,11 +49,37 @@ client never holds the Google tokens.
 
 ### Account deletion and integration revocation
 
-`DELETE /api/v1/me` deletes every user-scoped row across all tables and revokes the Google
+`DELETE /api/v1/me` deletes every user-scoped row across all tables (the full list is
+maintained in `_USER_SCOPED`, including `SpendLimit` and `AuditLog`) and revokes the Google
 OAuth grant via Google's revoke endpoint. `DELETE /api/v1/connected-accounts/{provider}`
 revokes and removes a single integration without deleting the account. Revocation is
 best-effort and never blocks deletion: a failed revoke still removes the local data. A test
 asserts no orphan rows remain after deletion (`tests/test_account_deletion.py`).
+
+### Execution-layer safety
+
+Any action that touches the outside world runs through `app/services/execution.py`, which:
+
+- **Classifies by risk** (0-5) and requires approval accordingly; level 4-5 (financial,
+  sensitive) require a second strong confirmation (`?confirm=true`, HTTP 428 otherwise).
+- **Gates spend** for financial actions against a per-user `SpendLimit`, blocked by default
+  when no limit is set. The limit row is locked (`SELECT ... FOR UPDATE`) during execution
+  so concurrent approvals cannot both pass the cap.
+- **Claims proposals atomically**: the `proposed -> approved` transition is a conditional
+  `UPDATE ... WHERE status='proposed'`, so a proposal is never executed (or charged) twice.
+- **Audits every attempt**: success, error, and blocked all write an `AuditLog` row, even on
+  unexpected provider/network exceptions; the proposal never stays stuck in `approved`.
+- **Uses idempotency keys**: the proposal id is passed to providers (Stripe) so retries and
+  lost-response cases do not double-charge.
+- **Redacts** sensitive fields (recursively) from the stored audit payload.
+
+### OAuth CSRF binding
+
+The OAuth `state` nonce is set in an HttpOnly cookie at `/auth/google/start` and required to
+match the state token at the callback (constant-time compare), so a signed state alone,
+replayed or forged for a victim, is rejected. The environment defaults to `production`, so a
+deployment that forgets to set `ENVIRONMENT` keeps the dev-only endpoints (dev-session, seed)
+disabled rather than exposing them.
 
 ## What this foundation does not yet do
 
@@ -62,13 +88,15 @@ These are required before a real beta, tracked in TODO.md:
 - **OAuth token refresh.** The slice rebuilds credentials from the stored payload but does
   not yet refresh expired access tokens and re-encrypt them. Long-lived sessions will fail
   on expiry until this lands.
-- **OAuth state binding to a device/session.** The `state` parameter is a signed,
-  short-lived JWT, but it is not yet bound to the initiating client. Add PKCE-style binding.
-- **Log redaction.** No structured logging policy exists yet. Before production, scrub
-  email content, tokens, and PII from logs (PRD 13.2, open question 13.x).
+- **Session revocation.** The JWT is valid until expiry (30 days); there is no logout/revoke
+  list. Add a `jti` denylist or short-lived tokens + refresh.
+- **Log redaction in app logs.** Audit-payload redaction exists; a structured app-logging
+  policy that scrubs email content, tokens, and PII does not yet (PRD 13.2).
 - **Rate limiting** on the API and on Gmail calls.
-- **Role-based backend access** and audit logging beyond `ExecutionLog`.
+- **Role-based backend access.**
 - **Key rotation** for `TOKEN_ENCRYPTION_KEY` (re-encryption path).
+- **Multi-currency spend accounting.** The `SpendLimit` is a single-currency per-period cap,
+  not a ledger; cross-currency charges are not normalized against the cap.
 - **No model training on user data.** The Anthropic API is used for inference only. Make
   this an explicit, enforced policy and surface it in the privacy settings.
 

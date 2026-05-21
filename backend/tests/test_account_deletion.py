@@ -14,6 +14,7 @@ from app.db.enums import (
 )
 from app.db.models import (
     ActionProposal,
+    AuditLog,
     CalendarEvent,
     Commitment,
     ConnectedAccount,
@@ -22,6 +23,7 @@ from app.db.models import (
     DraftReply,
     Message,
     Notification,
+    SpendLimit,
     Task,
     User,
 )
@@ -65,8 +67,15 @@ def populated_user(db: Session) -> User:
     )
     db.add(DailyBriefing(user_id=u.id, date=__import__("datetime").date(2026, 5, 21), summary="s"))
     db.add(Device(user_id=u.id, push_token="tok"))
+    db.add(Notification(user_id=u.id, type=NotificationType.reminder, title="t", body="b"))
+    db.add(SpendLimit(user_id=u.id, cap_minor=1000))
     db.add(
-        Notification(user_id=u.id, type=NotificationType.reminder, title="t", body="b")
+        AuditLog(
+            user_id=u.id,
+            action_type=ActionType.create_task,
+            result="success",
+            occurred_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+        )
     )
     db.commit()
     return u

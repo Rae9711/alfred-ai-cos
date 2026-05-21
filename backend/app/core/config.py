@@ -9,8 +9,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # App
-    environment: Literal["development", "staging", "production"] = "development"
+    # App. Defaults to production so a deployment that forgets to set ENVIRONMENT
+    # fails closed: dev-only endpoints (dev-session, dev seed) stay disabled.
+    environment: Literal["development", "staging", "production"] = "production"
     app_base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
 

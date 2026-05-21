@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,14 +30,30 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 
+_STATE_COOKIE = "albert_oauth_nonce"
+
+
 @router.get("/google/start", response_model=AuthStartResponse)
-def google_start() -> AuthStartResponse:
-    """Begin the Google OAuth flow. The mobile app opens authorization_url."""
+def google_start(response: Response) -> AuthStartResponse:
+    """Begin the Google OAuth flow. The mobile app opens authorization_url.
+
+    The nonce is both signed into the state token and set in an HttpOnly cookie. The
+    callback requires both to match, so a signed state alone (replayed or forged for a
+    victim) is not enough: it must arrive from the same browser that started the flow.
+    This is the CSRF binding OAuth `state` exists to provide."""
     nonce = secrets.token_urlsafe(16)
     state = jwt.encode(
         {"nonce": nonce, "exp": datetime.now(UTC) + timedelta(minutes=10)},
         settings.jwt_secret,
         algorithm=settings.jwt_algorithm,
+    )
+    response.set_cookie(
+        _STATE_COOKIE,
+        nonce,
+        max_age=600,
+        httponly=True,
+        secure=settings.environment != "development",
+        samesite="lax",
     )
     return AuthStartResponse(
         authorization_url=google_oauth.build_authorization_url(state), state=state
@@ -48,13 +64,20 @@ def google_start() -> AuthStartResponse:
 def google_callback(
     code: str = Query(...),
     state: str = Query(...),
+    oauth_nonce: str | None = Cookie(default=None, alias=_STATE_COOKIE),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Google redirects here. Exchange code, upsert user, store tokens, mint session."""
     try:
-        jwt.decode(state, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        decoded = jwt.decode(state, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=400, detail="Invalid OAuth state") from exc
+
+    # Bind the callback to the browser that began the flow: the state's nonce must match
+    # the HttpOnly cookie set in google_start. constant-time compare to avoid timing leaks.
+    expected = decoded.get("nonce")
+    if not oauth_nonce or not expected or not secrets.compare_digest(oauth_nonce, expected):
+        raise HTTPException(status_code=400, detail="OAuth state did not match this browser")
 
     token_payload = google_oauth.exchange_code(code)
     profile_email = _require_email(token_payload)
