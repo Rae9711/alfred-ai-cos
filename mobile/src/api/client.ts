@@ -124,4 +124,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ quiet_hours }),
     }),
+  disconnectAccount: (provider: string) =>
+    request<void>(`/connected-accounts/${provider}`, { method: "DELETE" }),
+  deleteAccount: () => request<void>("/me", { method: "DELETE" }),
 };

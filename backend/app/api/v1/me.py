@@ -1,18 +1,51 @@
-"""Account routes: profile, onboarding calibration (PRD 9.1, 12.1).
-
-Account deletion and integration revocation are added in A11."""
+"""Account routes: profile, onboarding calibration, deletion, integration
+revocation (PRD 9.1, 12.1, 13.1)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.models import User
+from app.db.enums import Provider
+from app.db.models import (
+    ActionProposal,
+    CalendarEvent,
+    Commitment,
+    ConnectedAccount,
+    DailyBriefing,
+    Device,
+    DraftReply,
+    ExecutionLog,
+    Message,
+    Notification,
+    Task,
+    User,
+)
 from app.schemas.api import MeOut, OnboardingPrefs
+from app.services import google_oauth
+from app.services.crypto import decrypt_token
 
 router = APIRouter(tags=["account"])
+
+# Every user-scoped table. Deleted explicitly so account deletion works regardless
+# of whether the database enforces ON DELETE CASCADE (Postgres does; SQLite needs a
+# PRAGMA). Order does not matter since we delete by user_id, not by FK chain.
+_USER_SCOPED = (
+    ExecutionLog,
+    ActionProposal,
+    DraftReply,
+    Notification,
+    Device,
+    DailyBriefing,
+    Task,
+    Commitment,
+    CalendarEvent,
+    Message,
+    ConnectedAccount,
+)
 
 _ONBOARDING_KEYS = ("focus", "optimize_for", "proactiveness")
 
@@ -49,3 +82,49 @@ def set_onboarding(
     user.preferences = merged
     db.commit()
     return _me(user)
+
+
+def _revoke_account(account: ConnectedAccount) -> None:
+    """Best-effort revoke of a connected account's OAuth grant. Never raises."""
+    if account.provider == Provider.google:
+        try:
+            google_oauth.revoke_token(decrypt_token(account.token_ciphertext))
+        except Exception:  # noqa: BLE001 - revocation is best-effort, never blocks
+            pass
+
+
+@router.delete("/connected-accounts/{provider}", status_code=204)
+def disconnect_account(
+    provider: Provider,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Revoke and delete a single integration (PRD 12.1)."""
+    account = db.scalar(
+        select(ConnectedAccount).where(
+            ConnectedAccount.user_id == user.id, ConnectedAccount.provider == provider
+        )
+    )
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not connected")
+    _revoke_account(account)
+    db.delete(account)
+    db.commit()
+
+
+@router.delete("/me", status_code=204)
+def delete_account(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete the account and all associated data, revoking integrations first
+    (PRD 12.1, 13.1). Revocation is best-effort; deletion always proceeds."""
+    for account in db.scalars(
+        select(ConnectedAccount).where(ConnectedAccount.user_id == user.id)
+    ):
+        _revoke_account(account)
+
+    for model in _USER_SCOPED:
+        db.execute(delete(model).where(model.user_id == user.id))
+    db.delete(user)
+    db.commit()

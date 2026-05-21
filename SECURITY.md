@@ -47,6 +47,14 @@ Albert mints its own short-lived JWT after Google login (`core/security.py`). Th
 app stores it in the device secure store (`expo-secure-store`), not plain storage. The
 client never holds the Google tokens.
 
+### Account deletion and integration revocation
+
+`DELETE /api/v1/me` deletes every user-scoped row across all tables and revokes the Google
+OAuth grant via Google's revoke endpoint. `DELETE /api/v1/connected-accounts/{provider}`
+revokes and removes a single integration without deleting the account. Revocation is
+best-effort and never blocks deletion: a failed revoke still removes the local data. A test
+asserts no orphan rows remain after deletion (`tests/test_account_deletion.py`).
+
 ## What this foundation does not yet do
 
 These are required before a real beta, tracked in TODO.md:
@@ -60,7 +68,6 @@ These are required before a real beta, tracked in TODO.md:
   email content, tokens, and PII from logs (PRD 13.2, open question 13.x).
 - **Rate limiting** on the API and on Gmail calls.
 - **Role-based backend access** and audit logging beyond `ExecutionLog`.
-- **Account deletion and integration revocation** endpoints (PRD 12.1 requires both).
 - **Key rotation** for `TOKEN_ENCRYPTION_KEY` (re-encryption path).
 - **No model training on user data.** The Anthropic API is used for inference only. Make
   this an explicit, enforced policy and surface it in the privacy settings.

@@ -86,3 +86,24 @@ def credentials_from_payload(payload: dict[str, Any]) -> Credentials:
         client_secret=payload.get("client_secret"),
         scopes=payload.get("scopes"),
     )
+
+
+def revoke_token(payload: dict[str, Any]) -> bool:
+    """Revoke a Google OAuth grant (PRD 12.1, 13.1). Returns True on success.
+
+    Revokes the refresh token when present (it invalidates the whole grant), else
+    the access token. Best-effort: a failed revoke must not block account deletion,
+    so the caller logs and proceeds. Seed/dev tokens have nothing to revoke."""
+    token = payload.get("refresh_token") or payload.get("token")
+    if not token or payload.get("seed"):
+        return False
+    try:
+        resp = httpx.post(
+            "https://oauth2.googleapis.com/revoke",
+            params={"token": token},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10,
+        )
+        return resp.status_code == 200
+    except httpx.HTTPError:
+        return False

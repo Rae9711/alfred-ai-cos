@@ -3,6 +3,7 @@
 
 import { useCallback, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,13 +13,59 @@ import {
 } from "react-native";
 
 import { api } from "@/api/client";
+import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
 import { colors, spacing } from "@/theme/theme";
 
 export function SettingsScreen() {
+  const { signOut } = useAuth();
   const [quietHours, setQuietHours] = useState("22-07");
   const [pushOn, setPushOn] = useState<boolean | null>(null);
   const [note, setNote] = useState<string | null>(null);
+
+  const disconnectGoogle = useCallback(() => {
+    Alert.alert(
+      "Disconnect Google?",
+      "Albert will lose access to your Gmail and Calendar. Your data in Albert stays.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Disconnect",
+          style: "destructive",
+          onPress: () => {
+            void api
+              .disconnectAccount("google")
+              .then(() => setNote("Google disconnected."))
+              .catch((e: unknown) =>
+                setNote(e instanceof Error ? e.message : "Disconnect failed"),
+              );
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const deleteAccount = useCallback(() => {
+    Alert.alert(
+      "Delete your account?",
+      "This permanently deletes all your data and revokes Albert's access. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete everything",
+          style: "destructive",
+          onPress: () => {
+            void api
+              .deleteAccount()
+              .then(() => signOut())
+              .catch((e: unknown) =>
+                setNote(e instanceof Error ? e.message : "Deletion failed"),
+              );
+          },
+        },
+      ],
+    );
+  }, [signOut]);
 
   const enablePush = useCallback(async () => {
     setNote(null);
@@ -74,6 +121,17 @@ export function SettingsScreen() {
         Albert holds non-urgent alerts during these hours. Deadline risks still
         come through.
       </Text>
+
+      <Text style={styles.section}>Account</Text>
+      <Pressable style={styles.button} onPress={disconnectGoogle}>
+        <Text style={styles.buttonText}>Disconnect Google</Text>
+      </Pressable>
+      <Pressable style={styles.button} onPress={() => void signOut()}>
+        <Text style={styles.buttonText}>Sign out</Text>
+      </Pressable>
+      <Pressable style={styles.dangerButton} onPress={deleteAccount}>
+        <Text style={styles.dangerText}>Delete account</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -117,4 +175,13 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: colors.text, fontWeight: "600" },
   hint: { color: colors.textMuted, fontSize: 12 },
+  dangerButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "#E5484D",
+    borderRadius: 10,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  dangerText: { color: "#E5484D", fontWeight: "700" },
 });
