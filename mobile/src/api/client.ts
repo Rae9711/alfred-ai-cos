@@ -9,14 +9,17 @@ import type {
   CommitmentStatus,
   Draft,
   DraftCreateRequest,
+  MeetingPrep,
   SyncResponse,
   TodayDashboard,
+  UpcomingMeeting,
 } from "@albert/shared-types";
 
 import { getToken } from "./auth";
 
 const BASE_URL: string =
-  (Constants.expoConfig?.extra?.apiBaseUrl as string) ?? "http://localhost:8000";
+  (Constants.expoConfig?.extra?.apiBaseUrl as string) ??
+  "http://localhost:8000";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getToken();
@@ -41,13 +44,20 @@ export const api = {
   getToday: () => request<TodayDashboard>("/today"),
   listCommitments: () => request<Commitment[]>("/commitments"),
   updateCommitmentStatus: (id: string, status: CommitmentStatus) =>
-    request<Commitment>(`/commitments/${id}/status?status=${status}`, { method: "POST" }),
+    request<Commitment>(`/commitments/${id}/status?status=${status}`, {
+      method: "POST",
+    }),
   createDraft: (body: DraftCreateRequest) =>
     request<Draft>("/drafts", { method: "POST", body: JSON.stringify(body) }),
   proposeDraftToGmail: (draftId: string) =>
-    request<ActionProposal>(`/actions/propose-draft-to-gmail/${draftId}`, { method: "POST" }),
+    request<ActionProposal>(`/actions/propose-draft-to-gmail/${draftId}`, {
+      method: "POST",
+    }),
   approveAction: (actionId: string) =>
     request<ActionProposal>(`/actions/${actionId}/approve`, { method: "POST" }),
   rejectAction: (actionId: string) =>
     request<ActionProposal>(`/actions/${actionId}/reject`, { method: "POST" }),
+  listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
+  getMeetingPrep: (eventId: string) =>
+    request<MeetingPrep>(`/meetings/${eventId}/prep`),
 };

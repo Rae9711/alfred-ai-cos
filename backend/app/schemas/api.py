@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -68,3 +68,24 @@ class SyncResponse(BaseModel):
     ingested: int
     commitments_found: int
     events_synced: int = 0
+
+
+# --- Meetings ---
+class UpcomingMeeting(BaseModel):
+    id: str
+    title: str | None
+    start_time: datetime | None
+    end_time: datetime | None
+    location: str | None
+    attendees: list[str]
+    prep_required: bool
+
+    model_config = {"from_attributes": True}
+
+
+class MeetingPrepOut(BaseModel):
+    event: UpcomingMeeting
+    summary: str
+    open_commitments: list[str]
+    suggested_questions: list[str]
+    related_message_count: int

@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { CommitmentStatus, type TodayDashboard } from "@albert/shared-types";
 
 import { api } from "@/api/client";
@@ -18,6 +19,7 @@ import { PriorityCard } from "@/components/PriorityCard";
 import { colors, spacing } from "@/theme/theme";
 
 export function TodayScreen() {
+  const router = useRouter();
   const [data, setData] = useState<TodayDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -70,7 +72,13 @@ export function TodayScreen() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={syncing} onRefresh={onSync} tintColor={colors.accent} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={syncing}
+          onRefresh={onSync}
+          tintColor={colors.accent}
+        />
+      }
     >
       <Text style={styles.heading}>Today</Text>
       {data ? <Text style={styles.summary}>{data.summary}</Text> : null}
@@ -78,7 +86,9 @@ export function TodayScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable style={styles.syncButton} onPress={onSync} disabled={syncing}>
-        <Text style={styles.syncText}>{syncing ? "Syncing…" : "Sync Gmail"}</Text>
+        <Text style={styles.syncText}>
+          {syncing ? "Syncing…" : "Sync Gmail"}
+        </Text>
       </Pressable>
 
       <Text style={styles.sectionTitle}>Top priorities</Text>
@@ -88,11 +98,15 @@ export function TodayScreen() {
             key={item.id}
             item={item}
             onMarkDone={() => void updateStatus(item.id, CommitmentStatus.Done)}
-            onSnooze={() => void updateStatus(item.id, CommitmentStatus.Snoozed)}
+            onSnooze={() =>
+              void updateStatus(item.id, CommitmentStatus.Snoozed)
+            }
           />
         ))
       ) : (
-        <Text style={styles.empty}>Nothing pressing. Sync to find open loops.</Text>
+        <Text style={styles.empty}>
+          Nothing pressing. Sync to find open loops.
+        </Text>
       )}
 
       {data?.people_waiting_on_you.length ? (
@@ -106,6 +120,26 @@ export function TodayScreen() {
           ))}
         </>
       ) : null}
+
+      {data?.meetings_to_prepare.length ? (
+        <>
+          <Text style={styles.sectionTitle}>Meetings to prepare</Text>
+          {data.meetings_to_prepare.map((m) => (
+            <Pressable
+              key={m.id}
+              style={styles.meeting}
+              onPress={() => router.push(`/meeting/${m.id}`)}
+            >
+              <Text style={styles.meetingTitle}>{m.title ?? "Meeting"}</Text>
+              {m.start_time ? (
+                <Text style={styles.waiting}>
+                  {new Date(m.start_time).toLocaleString()}
+                </Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -113,7 +147,12 @@ export function TodayScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, gap: spacing.md },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bg,
+  },
   heading: { color: colors.text, fontSize: 28, fontWeight: "700" },
   summary: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   error: { color: "#E5484D", fontSize: 13 },
@@ -124,7 +163,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   syncText: { color: "#0E0F12", fontWeight: "600" },
-  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "600", marginTop: spacing.sm },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "600",
+    marginTop: spacing.sm,
+  },
   empty: { color: colors.textMuted, fontSize: 13, fontStyle: "italic" },
   waiting: { color: colors.textMuted, fontSize: 13 },
+  meeting: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: 2,
+  },
+  meetingTitle: { color: colors.text, fontSize: 15, fontWeight: "600" },
 });

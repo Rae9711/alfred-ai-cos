@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import actions, auth, commitments, dev, drafts, sync, today
+from app.api.v1 import actions, auth, commitments, dev, drafts, meetings, sync, today
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -11,4 +11,5 @@ api_router.include_router(today.router)
 api_router.include_router(commitments.router)
 api_router.include_router(drafts.router)
 api_router.include_router(actions.router)
+api_router.include_router(meetings.router)
 api_router.include_router(dev.router)

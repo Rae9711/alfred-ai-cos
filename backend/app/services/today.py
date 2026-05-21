@@ -1,8 +1,8 @@
 """Today builder (PRD 10.1, 19.1 GET /api/v1/today).
 
 Assembles the Today dashboard from scored commitments: top priorities, people
-waiting on the user, and what the user is waiting on. Calendar-driven sections
-(meetings to prepare) are stubbed for the slice and filled when meeting-prep lands."""
+waiting on the user, what the user is waiting on, and upcoming meetings that need
+preparation."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
 from app.db.models import Commitment
-from app.schemas.today import TodayDashboard, TodayPriority, WaitingItem
+from app.schemas.today import MeetingToPrepare, TodayDashboard, TodayPriority, WaitingItem
+from app.services.meeting_prep import upcoming_events
 from app.services.priority import score_commitment
 
 
@@ -59,14 +60,25 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
         if s.commitment.owner == CommitmentOwner.counterparty and s.commitment.counterparty
     ]
 
+    meetings = [
+        MeetingToPrepare(
+            id=event.id,
+            title=event.title,
+            start_time=event.start_time.isoformat() if event.start_time else None,
+        )
+        for event in upcoming_events(db, user_id, within_hours=48)
+        if event.prep_required
+    ]
+
     summary = (
         f"You have {len(open_commitments)} open loop(s). "
-        f"{len(top)} matter today. {len(waiting_on_user)} people are waiting on you."
+        f"{len(top)} matter today. {len(waiting_on_user)} people are waiting on you. "
+        f"{len(meetings)} meeting(s) need prep."
     )
     return TodayDashboard(
         summary=summary,
         top_priorities=top,
         people_waiting_on_you=waiting_on_user,
         you_are_waiting_on=user_waiting_on,
-        meetings_to_prepare=[],  # filled when meeting-prep ships
+        meetings_to_prepare=meetings,
     )

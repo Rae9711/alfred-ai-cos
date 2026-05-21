@@ -37,6 +37,24 @@ export interface TodayDashboard {
   meetings_to_prepare: MeetingToPrepare[];
 }
 
+export interface UpcomingMeeting {
+  id: string;
+  title: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  location: string | null;
+  attendees: string[];
+  prep_required: boolean;
+}
+
+export interface MeetingPrep {
+  event: UpcomingMeeting;
+  summary: string;
+  open_commitments: string[];
+  suggested_questions: string[];
+  related_message_count: number;
+}
+
 export interface Commitment {
   id: string;
   description: string;
