@@ -5,6 +5,8 @@ import type {
   CommitmentOwner,
   CommitmentStatus,
   Priority,
+  SourceType,
+  TaskStatus,
 } from "./enums.js";
 
 export interface TodayPriority {
@@ -60,6 +62,24 @@ export interface Briefing {
   date: string;
   summary: string;
   user_feedback: string | null;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  priority: Priority;
+  status: TaskStatus;
+  source_type: SourceType;
+  source_id: string | null;
+}
+
+export interface TaskCreateRequest {
+  title: string;
+  description?: string | null;
+  due_date?: string | null;
+  priority?: Priority;
 }
 
 export interface Commitment {

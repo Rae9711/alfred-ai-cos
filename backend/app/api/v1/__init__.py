@@ -11,6 +11,7 @@ from app.api.v1 import (
     drafts,
     meetings,
     sync,
+    tasks,
     today,
 )
 
@@ -23,4 +24,5 @@ api_router.include_router(drafts.router)
 api_router.include_router(actions.router)
 api_router.include_router(meetings.router)
 api_router.include_router(briefings.router)
+api_router.include_router(tasks.router)
 api_router.include_router(dev.router)

@@ -13,7 +13,8 @@ export const CommitmentOwner = {
   User: "user",
   Counterparty: "counterparty",
 } as const;
-export type CommitmentOwner = (typeof CommitmentOwner)[keyof typeof CommitmentOwner];
+export type CommitmentOwner =
+  (typeof CommitmentOwner)[keyof typeof CommitmentOwner];
 
 export const CommitmentStatus = {
   Open: "open",
@@ -21,7 +22,23 @@ export const CommitmentStatus = {
   Snoozed: "snoozed",
   Dismissed: "dismissed",
 } as const;
-export type CommitmentStatus = (typeof CommitmentStatus)[keyof typeof CommitmentStatus];
+export type CommitmentStatus =
+  (typeof CommitmentStatus)[keyof typeof CommitmentStatus];
+
+export const TaskStatus = {
+  Open: "open",
+  Done: "done",
+  Snoozed: "snoozed",
+} as const;
+export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
+
+export const SourceType = {
+  Gmail: "gmail",
+  Calendar: "calendar",
+  Manual: "manual",
+  Voice: "voice",
+} as const;
+export type SourceType = (typeof SourceType)[keyof typeof SourceType];
 
 export const MessageClassification = {
   NeedsReply: "needs_reply",

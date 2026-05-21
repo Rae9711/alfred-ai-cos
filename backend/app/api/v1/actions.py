@@ -21,6 +21,7 @@ from app.db.enums import (
     ActionType,
     Provider,
     RiskLevel,
+    SourceType,
 )
 from app.db.models import (
     ActionProposal,
@@ -32,6 +33,7 @@ from app.db.models import (
 )
 from app.schemas.api import ActionProposalOut
 from app.services import gmail
+from app.services import tasks as task_service
 from app.services.crypto import decrypt_token
 
 router = APIRouter(prefix="/actions", tags=["actions"])
@@ -128,7 +130,20 @@ def _owned_proposal(db: Session, action_id: str, user_id: str) -> ActionProposal
 
 
 def _execute(db: Session, proposal: ActionProposal, user: User) -> None:
-    """Execution Agent (PRD 14.1 agent 8). Pushes the draft into Gmail."""
+    """Execution Agent (PRD 14.1 agent 8). Dispatches on action type.
+
+    B1 generalizes this into a CapabilityProvider registry; for now it branches
+    over the action types the slice supports."""
+    if proposal.action_type == ActionType.create_draft:
+        _execute_push_draft(db, proposal, user)
+    elif proposal.action_type == ActionType.create_task:
+        _execute_create_task(db, proposal, user)
+    else:
+        raise ValueError(f"No executor for action type {proposal.action_type}")
+
+
+def _execute_push_draft(db: Session, proposal: ActionProposal, user: User) -> None:
+    """Push a drafted reply into Gmail (level 3)."""
     draft_id = proposal.target.get("draft_reply_id")
     draft = db.get(DraftReply, draft_id)
     if draft is None:
@@ -157,3 +172,19 @@ def _execute(db: Session, proposal: ActionProposal, user: User) -> None:
         thread_id=message.thread_id,
     )
     draft.gmail_draft_id = gmail_draft_id
+
+
+def _execute_create_task(db: Session, proposal: ActionProposal, user: User) -> None:
+    """Create a task from an approved proposal (level 2 reversible write)."""
+    title = proposal.target.get("title")
+    if not title:
+        raise ValueError("create_task proposal has no title")
+    task_service.create_task(
+        db,
+        user.id,
+        title=str(title),
+        description=proposal.target.get("description"),
+        source_type=SourceType.gmail,
+        source_id=proposal.target.get("source_id"),
+        confidence=proposal.target.get("confidence"),
+    )

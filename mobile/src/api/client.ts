@@ -12,6 +12,9 @@ import type {
   DraftCreateRequest,
   MeetingPrep,
   SyncResponse,
+  Task,
+  TaskCreateRequest,
+  TaskStatus,
   TodayDashboard,
   UpcomingMeeting,
 } from "@albert/shared-types";
@@ -61,11 +64,17 @@ export const api = {
   listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
   getMeetingPrep: (eventId: string) =>
     request<MeetingPrep>(`/meetings/${eventId}/prep`),
-  generateBriefing: () => request<Briefing>("/briefings/generate", { method: "POST" }),
+  generateBriefing: () =>
+    request<Briefing>("/briefings/generate", { method: "POST" }),
   getTodayBriefing: () => request<Briefing>("/briefings/today"),
   briefingFeedback: (id: string, useful: boolean) =>
     request<Briefing>(`/briefings/${id}/feedback`, {
       method: "POST",
       body: JSON.stringify({ useful }),
     }),
+  createTask: (body: TaskCreateRequest) =>
+    request<Task>("/tasks", { method: "POST", body: JSON.stringify(body) }),
+  listTasks: () => request<Task[]>("/tasks"),
+  updateTaskStatus: (id: string, status: TaskStatus) =>
+    request<Task>(`/tasks/${id}/status?status=${status}`, { method: "POST" }),
 };

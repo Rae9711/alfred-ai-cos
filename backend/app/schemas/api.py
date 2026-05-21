@@ -6,7 +6,14 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from app.db.enums import ActionStatus, CommitmentOwner, CommitmentStatus, Priority
+from app.db.enums import (
+    ActionStatus,
+    CommitmentOwner,
+    CommitmentStatus,
+    Priority,
+    SourceType,
+    TaskStatus,
+)
 
 
 # --- Auth ---
@@ -103,3 +110,24 @@ class BriefingOut(BaseModel):
 
 class BriefingFeedbackRequest(BaseModel):
     useful: bool
+
+
+# --- Tasks ---
+class TaskCreateRequest(BaseModel):
+    title: str
+    description: str | None = None
+    due_date: date | None = None
+    priority: Priority = Priority.medium
+
+
+class TaskOut(BaseModel):
+    id: str
+    title: str
+    description: str | None
+    due_date: date | None
+    priority: Priority
+    status: TaskStatus
+    source_type: SourceType
+    source_id: str | None
+
+    model_config = {"from_attributes": True}
