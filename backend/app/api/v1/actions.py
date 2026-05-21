@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.capabilities import get_capability
@@ -89,6 +90,24 @@ def propose_push_draft(
         target={"draft_reply_id": draft.id},
         proposed_content=draft.body,
         reason="Push the prepared reply into your Gmail drafts for review before sending.",
+    )
+
+
+@router.get("/pending", response_model=list[ActionProposalOut])
+def list_pending(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ActionProposal]:
+    """Proposals awaiting the user's decision (PRD 10.6 approval queue)."""
+    return list(
+        db.scalars(
+            select(ActionProposal)
+            .where(
+                ActionProposal.user_id == user.id,
+                ActionProposal.status == ActionStatus.proposed,
+            )
+            .order_by(ActionProposal.created_at.desc())
+        )
     )
 
 

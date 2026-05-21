@@ -22,6 +22,7 @@ import { colors, spacing } from "@/theme/theme";
 export function TodayScreen() {
   const router = useRouter();
   const [data, setData] = useState<TodayDashboard | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,12 @@ export function TodayScreen() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      setData(await api.getToday());
+      const [dashboard, pending] = await Promise.all([
+        api.getToday(),
+        api.listPendingActions(),
+      ]);
+      setData(dashboard);
+      setPendingCount(pending.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -85,6 +91,14 @@ export function TodayScreen() {
       {data ? <Text style={styles.summary}>{data.summary}</Text> : null}
 
       <BriefingCard />
+
+      {pendingCount > 0 ? (
+        <Pressable style={styles.approvalsBanner} onPress={() => router.push("/approvals")}>
+          <Text style={styles.approvalsText}>
+            {pendingCount} action{pendingCount === 1 ? "" : "s"} need your approval
+          </Text>
+        </Pressable>
+      ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -183,4 +197,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   meetingTitle: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  approvalsBanner: {
+    backgroundColor: "#2A1F15",
+    borderWidth: 1,
+    borderColor: "#F5A623",
+    borderRadius: 10,
+    padding: spacing.md,
+  },
+  approvalsText: { color: "#F5A623", fontWeight: "600" },
 });

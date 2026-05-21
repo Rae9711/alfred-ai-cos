@@ -158,7 +158,16 @@ export interface ActionProposal {
   action_type: string;
   risk_level: number;
   reason: string | null;
+  proposed_content: string | null;
+  approval_required: boolean;
+  strong_confirmation: boolean;
   status: ActionStatus;
+}
+
+export interface ProposeActionRequest {
+  action_type: string;
+  target: Record<string, unknown>;
+  reason?: string | null;
 }
 
 export interface SyncResponse {

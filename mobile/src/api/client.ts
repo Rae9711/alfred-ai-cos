@@ -62,10 +62,13 @@ export const api = {
     request<ActionProposal>(`/actions/propose-draft-to-gmail/${draftId}`, {
       method: "POST",
     }),
-  approveAction: (actionId: string) =>
-    request<ActionProposal>(`/actions/${actionId}/approve`, { method: "POST" }),
+  approveAction: (actionId: string, confirm = false) =>
+    request<ActionProposal>(`/actions/${actionId}/approve?confirm=${confirm}`, {
+      method: "POST",
+    }),
   rejectAction: (actionId: string) =>
     request<ActionProposal>(`/actions/${actionId}/reject`, { method: "POST" }),
+  listPendingActions: () => request<ActionProposal[]>("/actions/pending"),
   listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
   getMeetingPrep: (eventId: string) =>
     request<MeetingPrep>(`/meetings/${eventId}/prep`),
