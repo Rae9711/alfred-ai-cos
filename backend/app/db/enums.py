@@ -60,8 +60,7 @@ class SourceType(enum.StrEnum):
     voice = "voice"
 
 
-# Action risk levels per PRD section 12.10. The slice only uses up to level 3 (send email),
-# which is the boundary the approval system must guard.
+# Action risk levels per PRD section 12.10. Levels 4-5 require strong confirmation.
 class RiskLevel(enum.IntEnum):
     read_only = 0
     internal_prep = 1
@@ -72,9 +71,13 @@ class RiskLevel(enum.IntEnum):
 
 
 class ActionType(enum.StrEnum):
-    send_email = "send_email"  # level 3, requires approval
-    create_draft = "create_draft"  # level 1
-    create_task = "create_task"  # level 2
+    create_draft = "create_draft"  # push a reply into Gmail drafts (level 3)
+    create_task = "create_task"  # level 2 reversible write
+    send_email = "send_email"  # level 3 external comm
+    send_message = "send_message"  # level 3 (e.g. WhatsApp)
+    make_payment = "make_payment"  # level 4 financial
+    place_order = "place_order"  # level 4 financial (commerce)
+    browser_action = "browser_action"  # refused; see docs/integrations/REFUSED.md
 
 
 class ActionStatus(enum.StrEnum):

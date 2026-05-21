@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 
 from app.db.enums import (
     ActionStatus,
+    ActionType,
     CommitmentOwner,
     CommitmentStatus,
     Priority,
@@ -60,15 +61,29 @@ class DraftOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# --- Action approval (the level-3 spine) ---
+# --- Action approval (the capability spine) ---
 class ActionProposalOut(BaseModel):
     id: str
     action_type: str
     risk_level: int
     reason: str | None
+    proposed_content: str | None = None
+    approval_required: bool = True
     status: ActionStatus
 
     model_config = {"from_attributes": True}
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def strong_confirmation(self) -> bool:
+        # Mirrors execution.requires_strong_confirmation: levels 4-5.
+        return self.risk_level >= 4
+
+
+class ProposeActionRequest(BaseModel):
+    action_type: ActionType
+    target: dict[str, object]
+    reason: str | None = None
 
 
 class SyncResponse(BaseModel):

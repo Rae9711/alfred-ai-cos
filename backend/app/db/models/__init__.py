@@ -10,6 +10,7 @@ PRD entities not yet needed (Person, Project) are deferred. See docs/ARCHITECTUR
 from app.db.models.action import ActionProposal, ExecutionLog
 from app.db.models.briefing import DailyBriefing
 from app.db.models.calendar_event import CalendarEvent
+from app.db.models.capability import AuditLog, SpendLimit
 from app.db.models.commitment import Commitment
 from app.db.models.connected_account import ConnectedAccount
 from app.db.models.draft_reply import DraftReply
@@ -20,6 +21,7 @@ from app.db.models.user import User
 
 __all__ = [
     "ActionProposal",
+    "AuditLog",
     "CalendarEvent",
     "Commitment",
     "ConnectedAccount",
@@ -29,6 +31,7 @@ __all__ = [
     "ExecutionLog",
     "Message",
     "Notification",
+    "SpendLimit",
     "Task",
     "User",
 ]
