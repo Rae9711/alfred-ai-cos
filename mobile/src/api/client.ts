@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import type {
   ActionProposal,
   AuthStartResponse,
+  Briefing,
   Commitment,
   CommitmentStatus,
   Draft,
@@ -60,4 +61,11 @@ export const api = {
   listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
   getMeetingPrep: (eventId: string) =>
     request<MeetingPrep>(`/meetings/${eventId}/prep`),
+  generateBriefing: () => request<Briefing>("/briefings/generate", { method: "POST" }),
+  getTodayBriefing: () => request<Briefing>("/briefings/today"),
+  briefingFeedback: (id: string, useful: boolean) =>
+    request<Briefing>(`/briefings/${id}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ useful }),
+    }),
 };

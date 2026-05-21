@@ -1,14 +1,14 @@
-"""ORM models for Albert's first vertical slice.
+"""ORM models for Albert.
 
-Only the entities on the path Gmail OAuth -> ingestion -> commitment extraction ->
-Today priorities -> draft reply are modeled here, plus the ownership (User,
-ConnectedAccount) and approval/audit spine (ActionProposal, ExecutionLog).
+Covers ownership (User, ConnectedAccount), the ingestion/extraction path (Message,
+CalendarEvent, Commitment, Task, DraftReply), daily briefings, and the approval/
+audit spine (ActionProposal, ExecutionLog).
 
-Entities from the PRD data model not yet needed by the slice (Person, Project,
-DailyBriefing) are intentionally deferred. See docs/ARCHITECTURE.md.
+PRD entities not yet needed (Person, Project) are deferred. See docs/ARCHITECTURE.md.
 """
 
 from app.db.models.action import ActionProposal, ExecutionLog
+from app.db.models.briefing import DailyBriefing
 from app.db.models.calendar_event import CalendarEvent
 from app.db.models.commitment import Commitment
 from app.db.models.connected_account import ConnectedAccount
@@ -22,6 +22,7 @@ __all__ = [
     "CalendarEvent",
     "Commitment",
     "ConnectedAccount",
+    "DailyBriefing",
     "DraftReply",
     "ExecutionLog",
     "Message",

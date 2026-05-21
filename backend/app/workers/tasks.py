@@ -4,8 +4,13 @@ path (PRD 13.4 near-real-time ingestion)."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+
 from app.db.base import SessionLocal
-from app.services import extraction, ingestion
+from app.db.models import User
+from app.services import briefing, extraction, ingestion
 from app.workers.celery_app import celery_app
 
 
@@ -21,3 +26,30 @@ def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
         return {"ingested": len(messages), "commitments_found": commitments}
     finally:
         db.close()
+
+
+@celery_app.task(name="albert.generate_briefing")  # type: ignore[untyped-decorator]
+def generate_briefing(user_id: str) -> str:
+    """Generate today's briefing for one user. Returns the briefing id."""
+    db = SessionLocal()
+    try:
+        result = briefing.generate_briefing(db, user_id, today=datetime.now(UTC).date())
+        return result.id
+    finally:
+        db.close()
+
+
+@celery_app.task(name="albert.generate_all_briefings")  # type: ignore[untyped-decorator]
+def generate_all_briefings() -> int:
+    """Beat entry point: fan out briefing generation to every user. Returns the count.
+
+    Per-user generation is dispatched as its own task so one slow/failing user does
+    not block the rest (PRD 13.3 failures visible and isolated)."""
+    db = SessionLocal()
+    try:
+        user_ids = list(db.scalars(select(User.id)))
+    finally:
+        db.close()
+    for uid in user_ids:
+        generate_briefing.delay(uid)
+    return len(user_ids)

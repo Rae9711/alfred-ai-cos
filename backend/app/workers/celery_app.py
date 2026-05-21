@@ -5,6 +5,7 @@ And the beat scheduler (periodic sync, daily briefing) with:
 """
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import get_settings
 
@@ -22,4 +23,12 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        # Generate every user's morning briefing at 06:00 UTC. Per-user timezone
+        # delivery is a later refinement (briefing carries a date, not a send time).
+        "daily-briefings": {
+            "task": "albert.generate_all_briefings",
+            "schedule": crontab(hour=6, minute=0),
+        },
+    },
 )

@@ -89,3 +89,17 @@ class MeetingPrepOut(BaseModel):
     open_commitments: list[str]
     suggested_questions: list[str]
     related_message_count: int
+
+
+# --- Briefing ---
+class BriefingOut(BaseModel):
+    id: str
+    date: date
+    summary: str
+    user_feedback: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class BriefingFeedbackRequest(BaseModel):
+    useful: bool

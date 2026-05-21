@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { CommitmentStatus, type TodayDashboard } from "@albert/shared-types";
 
 import { api } from "@/api/client";
+import { BriefingCard } from "@/components/BriefingCard";
 import { PriorityCard } from "@/components/PriorityCard";
 import { colors, spacing } from "@/theme/theme";
 
@@ -82,6 +83,8 @@ export function TodayScreen() {
     >
       <Text style={styles.heading}>Today</Text>
       {data ? <Text style={styles.summary}>{data.summary}</Text> : null}
+
+      <BriefingCard />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 

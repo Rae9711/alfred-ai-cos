@@ -55,6 +55,13 @@ export interface MeetingPrep {
   related_message_count: number;
 }
 
+export interface Briefing {
+  id: string;
+  date: string;
+  summary: string;
+  user_feedback: string | null;
+}
+
 export interface Commitment {
   id: string;
   description: string;
