@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     llm_extract_model: str = "claude-sonnet-4-6"
     llm_draft_model: str = "claude-sonnet-4-6"
 
+    # Transcription (voice capture). Provider-agnostic; "none" disables voice and the
+    # endpoint returns 501. "openai" uses the Whisper API when openai_api_key is set.
+    transcription_provider: Literal["none", "openai"] = "none"
+    openai_api_key: str = ""
+    transcription_model: str = "whisper-1"
+
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",

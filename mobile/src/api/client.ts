@@ -83,4 +83,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
+  captureVoice: async (uri: string): Promise<CaptureResponse> => {
+    const token = await getToken();
+    const form = new FormData();
+    // React Native FormData accepts a { uri, name, type } file object.
+    form.append("audio", {
+      uri,
+      name: "note.m4a",
+      type: "audio/m4a",
+    } as unknown as Blob);
+    const res = await fetch(`${BASE_URL}/api/v1/capture/voice`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+    return (await res.json()) as CaptureResponse;
+  },
 };

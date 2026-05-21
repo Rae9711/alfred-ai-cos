@@ -13,6 +13,7 @@
   "dependencies": {
     "@albert/shared-types": "workspace:*",
     "expo": "~52.0.0",
+    "expo-audio": "~0.3.0",
     "expo-auth-session": "~6.0.0",
     "expo-constants": "~17.0.0",
     "expo-linking": "~7.0.0",

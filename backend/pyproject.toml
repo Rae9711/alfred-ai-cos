@@ -21,6 +21,7 @@ dependencies = [
     "google-auth-oauthlib>=1.2",
     "google-api-python-client>=2.149",
     "anthropic>=0.39",
+    "python-multipart>=0.0.12",
 ]
 
 [dependency-groups]
@@ -41,7 +42,12 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI's dependency-injection idiom calls Depends()/Query() in argument
 # defaults. That is correct usage, not the mutable-default bug B008 targets.
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.params.Depends"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.File",
+    "fastapi.params.Depends",
+]
 
 [tool.mypy]
 python_version = "3.12"

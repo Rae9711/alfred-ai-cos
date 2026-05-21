@@ -13,6 +13,7 @@ import {
 import { TaskStatus, type Task } from "@albert/shared-types";
 
 import { api } from "@/api/client";
+import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, priorityColor, spacing } from "@/theme/theme";
 
 export function CaptureScreen() {
@@ -64,6 +65,11 @@ export function CaptureScreen() {
     }
   }, [dump, load]);
 
+  const voice = useVoiceCapture(async (result) => {
+    setLastProject(result.detected_project);
+    await load();
+  });
+
   const toggle = useCallback(
     async (task: Task) => {
       const next =
@@ -89,15 +95,36 @@ export function CaptureScreen() {
         onChangeText={setDump}
         multiline
       />
-      <Pressable
-        style={styles.parseButton}
-        onPress={() => void parse()}
-        disabled={parsing}
-      >
-        <Text style={styles.parseText}>
-          {parsing ? "Parsing…" : "Parse into tasks"}
-        </Text>
-      </Pressable>
+      <View style={styles.captureButtons}>
+        <Pressable
+          style={styles.parseButton}
+          onPress={() => void parse()}
+          disabled={parsing}
+        >
+          <Text style={styles.parseText}>
+            {parsing ? "Parsing…" : "Parse into tasks"}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.micButton,
+            voice.state === "recording" && styles.micActive,
+          ]}
+          onPress={() =>
+            void (voice.state === "recording" ? voice.stop() : voice.start())
+          }
+          disabled={voice.state === "uploading"}
+        >
+          <Text style={styles.micText}>
+            {voice.state === "recording"
+              ? "Stop"
+              : voice.state === "uploading"
+                ? "…"
+                : "Record"}
+          </Text>
+        </Pressable>
+      </View>
+      {voice.error ? <Text style={styles.error}>{voice.error}</Text> : null}
       {lastProject ? (
         <Text style={styles.project}>Project detected: {lastProject}</Text>
       ) : null}
@@ -166,13 +193,28 @@ const styles = StyleSheet.create({
     minHeight: 88,
     textAlignVertical: "top",
   },
+  captureButtons: { flexDirection: "row", gap: spacing.sm },
   parseButton: {
+    flex: 1,
     backgroundColor: colors.accent,
     borderRadius: 10,
     paddingVertical: spacing.sm,
     alignItems: "center",
+    justifyContent: "center",
   },
   parseText: { color: "#0E0F12", fontWeight: "700" },
+  micButton: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micActive: { borderColor: "#E5484D" },
+  micText: { color: colors.text, fontWeight: "600" },
   project: { color: colors.accent, fontSize: 12 },
   inputRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   input: {
