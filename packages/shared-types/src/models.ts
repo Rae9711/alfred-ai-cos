@@ -102,6 +102,21 @@ export interface WaitingView {
   you_are_waiting_on: WaitingEntry[];
 }
 
+export interface OnboardingPrefs {
+  focus?: string | null;
+  optimize_for?: string | null;
+  proactiveness?: string | null;
+}
+
+export interface Me {
+  id: string;
+  email: string;
+  name: string | null;
+  timezone: string;
+  preferences: Record<string, unknown>;
+  onboarded: boolean;
+}
+
 export interface Commitment {
   id: string;
   description: string;

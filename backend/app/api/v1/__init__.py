@@ -10,6 +10,7 @@ from app.api.v1 import (
     commitments,
     dev,
     drafts,
+    me,
     meetings,
     sync,
     tasks,
@@ -29,4 +30,5 @@ api_router.include_router(briefings.router)
 api_router.include_router(tasks.router)
 api_router.include_router(capture.router)
 api_router.include_router(waiting.router)
+api_router.include_router(me.router)
 api_router.include_router(dev.router)

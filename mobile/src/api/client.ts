@@ -11,7 +11,9 @@ import type {
   CommitmentStatus,
   Draft,
   DraftCreateRequest,
+  Me,
   MeetingPrep,
+  OnboardingPrefs,
   SyncResponse,
   Task,
   TaskCreateRequest,
@@ -102,4 +104,7 @@ export const api = {
     return (await res.json()) as CaptureResponse;
   },
   getWaiting: () => request<WaitingView>("/waiting"),
+  getMe: () => request<Me>("/me"),
+  submitOnboarding: (prefs: OnboardingPrefs) =>
+    request<Me>("/onboarding", { method: "POST", body: JSON.stringify(prefs) }),
 };
