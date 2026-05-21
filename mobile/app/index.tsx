@@ -1,27 +1,27 @@
-// Entry route. Shows the Connect screen until a session token exists, then Today.
+// Entry route. Redirects to the tabs when authed, to connect otherwise.
 
-import { useEffect, useState } from "react";
+import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 
-import { getToken } from "@/api/auth";
-import { ConnectScreen } from "@/screens/ConnectScreen";
-import { TodayScreen } from "@/screens/TodayScreen";
+import { useAuth } from "@/api/AuthContext";
 import { colors } from "@/theme/theme";
 
 export default function Index() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    void getToken().then((t) => setAuthed(Boolean(t)));
-  }, []);
+  const { authed } = useAuth();
 
   if (authed === null) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.bg,
+          justifyContent: "center",
+        }}
+      >
         <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
-  return authed ? <TodayScreen /> : <ConnectScreen onConnected={() => setAuthed(true)} />;
+  return authed ? <Redirect href="/(tabs)" /> : <Redirect href="/connect" />;
 }

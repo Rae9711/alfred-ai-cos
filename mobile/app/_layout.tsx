@@ -1,14 +1,15 @@
-// Root layout. Captures the albert://auth?token=... deep link from the OAuth
-// callback and stores the session token before rendering the app.
+// Root layout. Provides auth state and captures the albert://auth?token=... deep link
+// from the OAuth callback, storing the session token and refreshing auth state.
 
 import { useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Slot } from "expo-router";
 import * as Linking from "expo-linking";
 
 import { setToken } from "@/api/auth";
+import { AuthProvider, useAuth } from "@/api/AuthContext";
 
-export default function RootLayout() {
-  const router = useRouter();
+function DeepLinkHandler() {
+  const { refresh } = useAuth();
 
   useEffect(() => {
     const handle = async (url: string | null) => {
@@ -17,14 +18,22 @@ export default function RootLayout() {
       const token = parsed.queryParams?.token;
       if (parsed.path === "auth" && typeof token === "string") {
         await setToken(token);
-        router.replace("/");
+        await refresh();
       }
     };
 
     void Linking.getInitialURL().then(handle);
     const sub = Linking.addEventListener("url", (e) => void handle(e.url));
     return () => sub.remove();
-  }, [router]);
+  }, [refresh]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return <Slot />;
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <DeepLinkHandler />
+    </AuthProvider>
+  );
 }
