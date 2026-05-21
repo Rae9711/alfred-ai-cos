@@ -13,13 +13,19 @@ from app.db.enums import ActionType
 
 @lru_cache
 def _registry() -> dict[ActionType, CapabilityProvider]:
+    from app.capabilities.providers.browser_action import BrowserActionCapability
     from app.capabilities.providers.create_task import CreateTaskCapability
+    from app.capabilities.providers.delivery_order import DeliveryOrderCapability
     from app.capabilities.providers.gmail_draft import GmailDraftCapability
     from app.core.config import get_settings
 
     providers: list[CapabilityProvider] = [
         GmailDraftCapability(),
         CreateTaskCapability(),
+        # Refused capabilities are always registered so the boundary is explicit:
+        # they raise a sourced CapabilityError. See docs/integrations/REFUSED.md.
+        BrowserActionCapability(),
+        DeliveryOrderCapability(),
     ]
 
     settings = get_settings()

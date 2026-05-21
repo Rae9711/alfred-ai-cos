@@ -98,17 +98,19 @@ def test_validation_failure_audits_error(db: Session, user: User) -> None:
     assert audit.result == "error"
 
 
-def test_no_provider_blocks_and_audits(db: Session, user: User) -> None:
-    # browser_action is not registered (refused), so execution is blocked.
+def test_refused_capability_blocks_with_reason(db: Session, user: User) -> None:
+    # browser_action is registered but refused: it raises a sourced CapabilityError,
+    # which the execution service turns into a clean error + audit row (not a 500).
     proposal = _proposal(
         user.id, action_type=ActionType.browser_action, risk_level=RiskLevel.external_comm.value
     )
     db.add(proposal)
     db.commit()
-    with pytest.raises(execution.ExecutionBlocked, match="No capability"):
+    with pytest.raises(execution.ExecutionBlocked, match="refused"):
         execution.execute_proposal(db, user, proposal)
+    assert proposal.status == ActionStatus.failed
     audit = db.query(AuditLog).filter(AuditLog.user_id == user.id).one()
-    assert audit.result == "blocked"
+    assert audit.result == "error"
 
 
 def test_financial_action_without_provider_is_blocked(db: Session, user: User) -> None:
