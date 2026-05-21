@@ -87,6 +87,21 @@ export interface CaptureResponse {
   detected_project: string | null;
 }
 
+export interface WaitingEntry {
+  id: string;
+  description: string;
+  counterparty: string | null;
+  due_date: string | null;
+  age_days: number;
+  source_type: SourceType;
+  source_id: string | null;
+}
+
+export interface WaitingView {
+  waiting_on_you: WaitingEntry[];
+  you_are_waiting_on: WaitingEntry[];
+}
+
 export interface Commitment {
   id: string;
   description: string;

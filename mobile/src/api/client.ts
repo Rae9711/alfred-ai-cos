@@ -18,6 +18,7 @@ import type {
   TaskStatus,
   TodayDashboard,
   UpcomingMeeting,
+  WaitingView,
 } from "@albert/shared-types";
 
 import { getToken } from "./auth";
@@ -100,4 +101,5 @@ export const api = {
     if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
     return (await res.json()) as CaptureResponse;
   },
+  getWaiting: () => request<WaitingView>("/waiting"),
 };

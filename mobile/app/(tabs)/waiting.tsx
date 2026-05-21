@@ -1,10 +1,5 @@
-import { Placeholder } from "@/components/Placeholder";
+import { WaitingScreen } from "@/screens/WaitingScreen";
 
 export default function WaitingTab() {
-  return (
-    <Placeholder
-      title="Waiting"
-      note="Who owes you, and who you owe, lands here."
-    />
-  );
+  return <WaitingScreen />;
 }

@@ -133,6 +133,22 @@ class TaskOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- Waiting-for ---
+class WaitingEntryOut(BaseModel):
+    id: str
+    description: str
+    counterparty: str | None
+    due_date: date | None
+    age_days: int
+    source_type: SourceType
+    source_id: str | None
+
+
+class WaitingView(BaseModel):
+    waiting_on_you: list[WaitingEntryOut]
+    you_are_waiting_on: list[WaitingEntryOut]
+
+
 # --- Capture ---
 class CaptureRequest(BaseModel):
     text: str
