@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     transcription_model: str = "whisper-1"
 
+    # Stripe (payments). Test mode only unless allow_live_payments is explicitly true,
+    # which itself requires a sk_live_ key. The provider refuses a live key otherwise.
+    # See docs/integrations/stripe.md for the compliance prerequisites.
+    stripe_secret_key: str = ""
+    allow_live_payments: bool = False
+
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",

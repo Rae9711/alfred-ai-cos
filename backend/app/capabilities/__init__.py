@@ -15,11 +15,21 @@ from app.db.enums import ActionType
 def _registry() -> dict[ActionType, CapabilityProvider]:
     from app.capabilities.providers.create_task import CreateTaskCapability
     from app.capabilities.providers.gmail_draft import GmailDraftCapability
+    from app.core.config import get_settings
 
     providers: list[CapabilityProvider] = [
         GmailDraftCapability(),
         CreateTaskCapability(),
     ]
+
+    settings = get_settings()
+    # Payments register only when a Stripe key is present, so make_payment stays
+    # absent (and blocks) on an unconfigured deployment.
+    if settings.stripe_secret_key:
+        from app.capabilities.providers.stripe_payment import StripePaymentCapability
+
+        providers.append(StripePaymentCapability())
+
     return {p.describe().action_type: p for p in providers}
 
 
