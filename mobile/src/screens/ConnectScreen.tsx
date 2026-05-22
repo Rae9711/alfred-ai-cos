@@ -4,6 +4,7 @@
 
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
 import { api } from "@/api/client";
@@ -28,9 +29,21 @@ export function ConnectScreen({ onConnected }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const { authorization_url } = await api.startGoogleAuth();
-      await WebBrowser.openAuthSessionAsync(authorization_url, "albert://auth");
-      // The deep-link handler stores the token; re-check before advancing.
+      // The deep link to return to after Google: albert://auth in a standalone build,
+      // exp://<host>/--/auth under Expo Go. createURL picks the right one per runtime,
+      // so the OAuth redirect lands in whichever client is actually running.
+      const returnUrl = Linking.createURL("auth");
+      const { authorization_url } = await api.startGoogleAuth(returnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(
+        authorization_url,
+        returnUrl,
+      );
+      // openAuthSessionAsync resolves with the redirect URL when it lands; parse the
+      // token directly (the global deep-link handler also catches it as a fallback).
+      if (result.type === "success" && result.url) {
+        const token = Linking.parse(result.url).queryParams?.token;
+        if (typeof token === "string") await setToken(token);
+      }
       if (await getToken()) onConnected();
     } catch (e) {
       setError(

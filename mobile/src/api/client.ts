@@ -37,6 +37,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      // Skip ngrok's free-tier interstitial so the app gets JSON, not the warning page.
+      "ngrok-skip-browser-warning": "true",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },
@@ -49,7 +51,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  startGoogleAuth: () => request<AuthStartResponse>("/auth/google/start"),
+  // `redirect` is the app's own deep link to return to after Google sign-in
+  // (Linking.createURL("auth")): albert://auth in a build, exp://…/--/auth in Expo Go.
+  startGoogleAuth: (redirect: string) =>
+    request<AuthStartResponse>(
+      `/auth/google/start?redirect=${encodeURIComponent(redirect)}`,
+    ),
   // Development only: mint a session for an already-connected account, bypassing the
   // mobile OAuth round-trip (which needs a LAN-reachable redirect URI). The backend
   // returns 404 outside ENVIRONMENT=development.
@@ -112,7 +119,10 @@ export const api = {
     } as unknown as Blob);
     const res = await fetch(`${BASE_URL}/api/v1/capture/voice`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: form,
     });
     if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
