@@ -15,6 +15,7 @@ import type {
   Me,
   MeetingPrep,
   OnboardingPrefs,
+  SessionToken,
   SyncResponse,
   Task,
   TaskCreateRequest,
@@ -49,6 +50,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   startGoogleAuth: () => request<AuthStartResponse>("/auth/google/start"),
+  // Development only: mint a session for an already-connected account, bypassing the
+  // mobile OAuth round-trip (which needs a LAN-reachable redirect URI). The backend
+  // returns 404 outside ENVIRONMENT=development.
+  devSession: (email: string) =>
+    request<SessionToken>(`/auth/dev-session?email=${encodeURIComponent(email)}`, {
+      method: "POST",
+    }),
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
   listCommitments: () => request<Commitment[]>("/commitments"),

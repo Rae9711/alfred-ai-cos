@@ -7,7 +7,7 @@ import type {
   Priority,
   SourceType,
   TaskStatus,
-} from "./enums.js";
+} from "./enums";
 
 export interface TodayPriority {
   id: string;

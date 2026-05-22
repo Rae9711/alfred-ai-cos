@@ -1,2 +1,2 @@
-export * from "./enums.js";
-export * from "./models.js";
+export * from "./enums";
+export * from "./models";

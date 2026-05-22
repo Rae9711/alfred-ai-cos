@@ -1,0 +1,5 @@
+# Use a hoisted (npm-style) node_modules layout. Expo/Metro's expo-router Babel
+# transform expects expo-router at a conventional node_modules path; bun's default
+# isolated .bun/ layout breaks it. Hoisting fixes the bundle.
+[install]
+linker = "hoisted"

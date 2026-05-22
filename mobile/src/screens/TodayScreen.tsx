@@ -88,14 +88,20 @@ export function TodayScreen() {
       }
     >
       <Text style={styles.heading}>Today</Text>
-      {data ? <Text style={styles.summary}>{data.summary}</Text> : null}
 
+      {/* The briefing is the day's narrative hero. The old data.summary stat line
+          ("N open loops, M matter today") said the same thing more robotically right
+          below it; the briefing replaces it. */}
       <BriefingCard />
 
       {pendingCount > 0 ? (
-        <Pressable style={styles.approvalsBanner} onPress={() => router.push("/approvals")}>
+        <Pressable
+          style={styles.approvalsBanner}
+          onPress={() => router.push("/approvals")}
+        >
           <Text style={styles.approvalsText}>
-            {pendingCount} action{pendingCount === 1 ? "" : "s"} need your approval
+            {pendingCount} action{pendingCount === 1 ? "" : "s"} need your
+            approval
           </Text>
         </Pressable>
       ) : null}
@@ -171,7 +177,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   heading: { color: colors.text, fontSize: 28, fontWeight: "700" },
-  summary: { color: colors.textMuted, fontSize: 14, lineHeight: 20 },
   error: { color: "#E5484D", fontSize: 13 },
   syncButton: {
     backgroundColor: colors.accent,

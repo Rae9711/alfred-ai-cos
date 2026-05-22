@@ -55,6 +55,13 @@ Gate green throughout: ruff, mypy strict, 73 pytest, tsc (shared + mobile).
 
 ### Correctness and quality
 
+- [ ] **Thread-aware extraction (trust-critical, found in live testing 2026-05-22).**
+      Extraction runs per-message in isolation, so a commitment raised early in a thread
+      stays flagged even after it was resolved later in the SAME thread (e.g. the user
+      replied with the doc, or the sender said "never mind"). Fix: fetch the full Gmail
+      thread (`gmail.users.threads.get`) and extract over the whole conversation, marking
+      a commitment resolved/closed when a later message in the thread settles it. Touches
+      `app/services/extraction.py` and `app/services/gmail.py`.
 - [ ] Full-thread retrieval for drafting (currently uses the stored snippet).
 - [ ] Idempotent, incremental Gmail sync (history API / `historyId`) instead of refetch.
 - [ ] Priority engine learns from feedback (PRD 16.1); feedback is recorded but not yet fed back.

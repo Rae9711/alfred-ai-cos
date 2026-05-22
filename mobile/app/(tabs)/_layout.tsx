@@ -1,31 +1,14 @@
-// Tab navigator. Gates auth: if no session, redirect to connect. Four tabs map to the
-// Phase 1 surface: Today (home), Capture, Waiting, Settings.
+// Passthrough layout. The tab UI lives in (tabs)/index.tsx as a custom bar over plain
+// primitives, because Expo Go SDK 54 (New Architecture) crashes on expo-router's native
+// <Tabs> bar. The other (tabs)/* route files are unused for now but kept for a future
+// migration back to a native tab bar in a dev build.
 
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Slot } from "expo-router";
 
 import { useAuth } from "@/api/AuthContext";
-import { colors } from "@/theme/theme";
 
 export default function TabsLayout() {
   const { authed } = useAuth();
   if (authed === false) return <Redirect href="/connect" />;
-
-  return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-        },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: "Today" }} />
-      <Tabs.Screen name="capture" options={{ title: "Capture" }} />
-      <Tabs.Screen name="waiting" options={{ title: "Waiting" }} />
-      <Tabs.Screen name="settings" options={{ title: "Settings" }} />
-    </Tabs>
-  );
+  return <Slot />;
 }
