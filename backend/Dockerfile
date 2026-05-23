@@ -1,5 +1,11 @@
 # Albert backend image. One image, three roles (web / worker / beat) selected by the
 # compose command. Python 3.12 + uv for reproducible installs from uv.lock.
+#
+# No --platform pin on purpose: each host builds natively. The VPS deploy builds amd64
+# on the (amd64) server via deploy/albert-deploy.sh; a local arm64 Mac builds arm64 for
+# smoke tests only. The local image never ships to the VPS, so cross-arch can't bite.
+# Don't add `platform:` to compose (forces slow emulation) or `docker save` a local
+# image onto the server (wrong arch).
 
 FROM python:3.12-slim AS base
 
