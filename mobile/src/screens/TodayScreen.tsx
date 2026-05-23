@@ -28,6 +28,7 @@ import { Ic } from "@/components/icons";
 import { PriorityCard } from "@/components/PriorityCard";
 import { useShell } from "@/components/Shell";
 import { firstNameOf, greetingFor } from "@/lib/today";
+import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import {
   Avatar,
@@ -262,7 +263,18 @@ export function TodayScreen() {
               key={item.id}
               item={item}
               done={completing.has(item.id)}
-              onAct={() => router.push("/approvals")}
+              onAct={() =>
+                openSheet(
+                  <ApprovalSheet
+                    recipient={item.counterparty ?? "them"}
+                    subject={`Re: ${item.title}`}
+                    onDone={() => {
+                      showToast("Sent.");
+                      void load();
+                    }}
+                  />,
+                )
+              }
               onMarkDone={() => void markPriorityDone(item.id)}
               onSnooze={() => void snoozePriority(item.id)}
             />
