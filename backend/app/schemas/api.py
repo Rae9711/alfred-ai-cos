@@ -61,6 +61,23 @@ class DraftOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CommitmentDraftRequest(BaseModel):
+    tone: str = "concise"
+    instruction: str | None = None
+
+
+class CommitmentDraftOut(BaseModel):
+    """A drafted reply for a commitment. Carries what the approval sheet renders: the
+    recipient, subject, body, tone, and the verbatim source evidence ('why I drafted this').
+    Not persisted yet (DraftReply requires a message_id) — generated on demand."""
+
+    recipient: str | None
+    subject: str
+    body: str
+    tone: str
+    evidence: str | None
+
+
 # --- Action approval (the capability spine) ---
 class ActionProposalOut(BaseModel):
     id: str

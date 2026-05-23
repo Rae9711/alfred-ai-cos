@@ -266,8 +266,8 @@ export function TodayScreen() {
               onAct={() =>
                 openSheet(
                   <ApprovalSheet
+                    commitmentId={item.id}
                     recipient={item.counterparty ?? "them"}
-                    subject={`Re: ${item.title}`}
                     onDone={() => {
                       showToast("Sent.");
                       void load();

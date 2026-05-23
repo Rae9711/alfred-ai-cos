@@ -148,6 +148,16 @@ export interface Draft {
   gmail_draft_id: string | null;
 }
 
+// A drafted reply for a Today priority/commitment (the "Act" button). Generated on
+// demand from the commitment, not persisted; carries what the approval sheet renders.
+export interface CommitmentDraft {
+  recipient: string | null;
+  subject: string;
+  body: string;
+  tone: string;
+  evidence: string | null;
+}
+
 export interface DraftCreateRequest {
   message_id: string;
   tone?: string;

@@ -7,9 +7,17 @@
 // Inbox demo it falls back to the scripted Khalil draft. Tone switching uses the
 // scripted variants until the backend supports tone-aware regeneration.
 
-import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
+import { api } from "@/api/client";
 import { DEMO_DRAFT, TONE_VARIANTS } from "@/data/demo";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
@@ -28,13 +36,19 @@ import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 type Tone = "concise" | "warm" | "formal";
 
+// Two modes:
+//  - commitmentId present (Today "Act") → fetch a REAL draft from the backend; tone
+//    change re-drafts. To/subject/body/evidence all come from the commitment.
+//  - no commitmentId (Inbox demo) → scripted DEMO_DRAFT content, as before.
 export function ApprovalSheet({
-  to = DEMO_DRAFT.to,
-  subject = DEMO_DRAFT.subject,
-  recipient = "Prof. Khalil",
+  commitmentId,
+  to: toProp,
+  subject: subjectProp,
+  recipient: recipientProp = "Prof. Khalil",
   initialBody,
   onDone,
 }: {
+  commitmentId?: string;
   to?: string;
   subject?: string;
   recipient?: string;
@@ -42,14 +56,55 @@ export function ApprovalSheet({
   onDone?: () => void;
 }) {
   const { closeSheet } = useShell();
+  const real = commitmentId != null;
+
   const [tone, setTone] = useState<Tone>("concise");
-  const [body, setBody] = useState(initialBody ?? TONE_VARIANTS.concise ?? "");
+  const [loading, setLoading] = useState(real);
+  const [error, setError] = useState<string | null>(null);
+  const [to, setTo] = useState(toProp ?? (real ? "" : DEMO_DRAFT.to));
+  const [subject, setSubject] = useState(
+    subjectProp ?? (real ? "" : DEMO_DRAFT.subject),
+  );
+  const [recipient, setRecipient] = useState(recipientProp);
+  const [evidence, setEvidence] = useState<string | null>(
+    real ? null : DEMO_DRAFT.evidence,
+  );
+  const [body, setBody] = useState(
+    initialBody ?? (real ? "" : (TONE_VARIANTS.concise ?? "")),
+  );
   const [editing, setEditing] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // Fetch a real draft for a commitment (and on tone change).
+  const fetchDraft = useCallback(
+    async (nextTone: Tone) => {
+      if (!commitmentId) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const d = await api.draftForCommitment(commitmentId, nextTone);
+        setTo(d.recipient ?? "");
+        setSubject(d.subject);
+        if (d.recipient) setRecipient(d.recipient);
+        setBody(d.body);
+        setEvidence(d.evidence);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't draft this reply");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [commitmentId],
+  );
+
+  useEffect(() => {
+    if (real) void fetchDraft("concise");
+  }, [real, fetchDraft]);
+
   const regen = (next: Tone) => {
     setTone(next);
-    setBody(TONE_VARIANTS[next] ?? body);
+    if (real) void fetchDraft(next);
+    else setBody(TONE_VARIANTS[next] ?? body);
   };
 
   const send = () => {
@@ -79,7 +134,7 @@ export function ApprovalSheet({
 
       <View style={styles.willHappen}>
         <Text style={styles.willText}>
-          <Text style={styles.willStrong}>Alfred will send</Text> this from your
+          <Text style={styles.willStrong}>Albert will send</Text> this from your
           Gmail account — reversible within 30 seconds.
         </Text>
       </View>
@@ -89,12 +144,14 @@ export function ApprovalSheet({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Field label="To" value={to} />
-        <Field label="Subject" value={subject} />
-        <Field
-          label="Attached"
-          value={DEMO_DRAFT.attachments.join(", ") || "—"}
-        />
+        <Field label="To" value={to || "—"} />
+        <Field label="Subject" value={subject || "—"} />
+        {real ? null : (
+          <Field
+            label="Attached"
+            value={DEMO_DRAFT.attachments.join(", ") || "—"}
+          />
+        )}
 
         <View style={styles.bodyCard}>
           <View style={styles.bodyHead}>
@@ -105,17 +162,24 @@ export function ApprovalSheet({
               onPress={() => setEditing((e) => !e)}
             />
           </View>
-          {editing ? (
+          {loading ? (
+            <View style={styles.bodyLoading}>
+              <ActivityIndicator color={colors.accent} />
+              <Meta style={styles.bodyLoadingText}>Drafting your reply…</Meta>
+            </View>
+          ) : editing ? (
             <TextInput
               value={body}
               onChangeText={setBody}
               multiline
+              placeholder="Write your reply…"
               placeholderTextColor={inputPlaceholder}
               style={styles.bodyInput}
             />
           ) : (
-            <Text style={styles.bodyText}>{body}</Text>
+            <Text style={styles.bodyText}>{body || "Write your reply…"}</Text>
           )}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
 
         <Text style={styles.sectionLabel}>Tone</Text>
@@ -131,23 +195,26 @@ export function ApprovalSheet({
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Why I drafted this</Text>
-        <View style={styles.evidence}>
-          <Meta style={styles.evidenceFrom}>{DEMO_DRAFT.evidenceFrom}</Meta>
-          <Serif
-            size={14.5}
-            italic
-            color={colors.ink2}
-            style={styles.evidenceQuote}
-          >
-            "{DEMO_DRAFT.evidence}"
-          </Serif>
-        </View>
+        {evidence ? (
+          <>
+            <Text style={styles.sectionLabel}>Why I drafted this</Text>
+            <View style={styles.evidence}>
+              <Serif
+                size={14.5}
+                italic
+                color={colors.ink2}
+                style={styles.evidenceQuote}
+              >
+                "{evidence}"
+              </Serif>
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.risk}>
           <Ic.Lock size={14} color={colors.ink3} stroke={1.6} />
           <Meta style={styles.riskText}>
-            Reversible action · Logged in your activity history · Alfred will
+            Reversible action · Logged in your activity history · Albert will
             not send before you press Send.
           </Meta>
         </View>
@@ -163,7 +230,7 @@ export function ApprovalSheet({
         <Btn
           label={sending ? "Sending…" : `Send to ${firstName}`}
           kind="accent"
-          disabled={sending}
+          disabled={sending || loading || !body.trim()}
           onPress={send}
           leading={
             sending ? (
@@ -262,6 +329,14 @@ const styles = StyleSheet.create({
     minHeight: 200,
     textAlignVertical: "top",
   },
+  bodyLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 24,
+  },
+  bodyLoadingText: { color: colors.ink3 },
+  errorText: { color: colors.warn, fontSize: 13, marginTop: 10 },
   sectionLabel: {
     fontSize: 13,
     fontWeight: "500",
@@ -274,7 +349,6 @@ const styles = StyleSheet.create({
   toneRow: { flexDirection: "row", gap: 6 },
   toneBtn: { flex: 1 },
   evidence: { backgroundColor: colors.paper2, borderRadius: 12, padding: 12 },
-  evidenceFrom: { marginBottom: 6 },
   evidenceQuote: { lineHeight: 22 },
   risk: {
     flexDirection: "row",

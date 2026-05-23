@@ -9,6 +9,7 @@ import type {
   Briefing,
   CaptureResponse,
   Commitment,
+  CommitmentDraft,
   CommitmentStatus,
   Draft,
   DraftCreateRequest,
@@ -73,6 +74,13 @@ export const api = {
   updateCommitmentStatus: (id: string, status: CommitmentStatus) =>
     request<Commitment>(`/commitments/${id}/status?status=${status}`, {
       method: "POST",
+    }),
+  // Draft a reply for a Today priority ("Act"). Returns real recipient/subject/body/
+  // evidence generated from the commitment, not a stored Gmail draft.
+  draftForCommitment: (id: string, tone = "concise") =>
+    request<CommitmentDraft>(`/commitments/${id}/draft`, {
+      method: "POST",
+      body: JSON.stringify({ tone }),
     }),
   createDraft: (body: DraftCreateRequest) =>
     request<Draft>("/drafts", { method: "POST", body: JSON.stringify(body) }),
