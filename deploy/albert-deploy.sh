@@ -22,7 +22,9 @@ until [ "$(docker inspect -f '{{.State.Health.Status}}' albert_postgres 2>/dev/n
 done
 
 echo "→ running migrations (alembic upgrade head)"
-$COMPOSE exec -T albert_web alembic upgrade head
+# `run --rm` uses a one-off container, so migrations don't depend on albert_web already
+# being up/healthy (it may still be starting, or crash-looping on a stale schema).
+$COMPOSE run --rm --no-deps albert_web alembic upgrade head
 
 echo "✓ albert @ ${ALBERT_TAG} is live on 127.0.0.1:${ALBERT_WEB_PORT:-8011} (behind Caddy)"
 $COMPOSE ps

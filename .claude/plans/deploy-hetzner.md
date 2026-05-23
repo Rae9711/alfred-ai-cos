@@ -32,14 +32,40 @@ Legend: **[A]** = Adam does (needs your accounts/access) · **[C]** = Claude doe
 ```
 docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
 docker network ls
-sudo ss -tlnp | grep -E ':(80|443|5432|6379|8000) '
+sudo ss -tlnp | grep -E ':(80|443|5432|6379|8000|8011) '
 which caddy; systemctl is-active caddy
-ls /etc/caddy/ ; ls /opt
+ls -la /etc/caddy/ ; ls -la /opt
 docker volume ls | grep -iE 'pg|postgres|redis'
+docker inspect caddy --format '{{json .NetworkSettings.Networks}}' 2>/dev/null
+free -h
+df -h
+docker system df
 ```
 
-Answers: Caddy container-vs-systemd, free ports for Albert's web container, whether a
-shareable Postgres exists, where apps live on disk.
+Answers: Caddy container-vs-systemd (+ its network), free ports, RAM/disk headroom,
+where apps live on disk.
+
+## Decisions (round 2, from Adam)
+
+- **GCP**: new OAuth **client in the EXISTING project** + prod redirect URI + 3 test
+  users. No separate prod project (premature for 3 testers; revisit before real users).
+- **Healthcheck**: `albert_web` → `/health` (unauth, DB-free), not `/docs`. `/docs` is
+  NOT disabled in prod (verified), but `/health` is the correct target.
+- **Deploy gate**: keep the `albert_postgres`-healthy wait (migrations need a ready DB);
+  do NOT gate on web health. Migrations run via `compose run --rm` (one-off, no dep on
+  albert_web being up).
+- **Secrets → 1Password**: TOKEN_ENCRYPTION_KEY (loss = all stored Google tokens become
+  undecryptable) and JWT_SECRET. Live only in 1Password + /opt/albert/repo/.env.
+- **Backup restore test** (after first dump, throwaway pgvector container — vanilla
+  postgres lacks the `vector` ext):
+  ```
+  docker run -d --name albert_restore_test -e POSTGRES_PASSWORD=test \
+    -e POSTGRES_USER=albert -e POSTGRES_DB=albert pgvector/pgvector:pg16
+  sleep 8
+  gunzip -c /opt/albert/backups/albert-<stamp>.sql.gz | docker exec -i albert_restore_test psql -U albert -d albert
+  docker exec albert_restore_test psql -U albert -d albert -c "\dt"
+  docker rm -f albert_restore_test
+  ```
 
 ## Current state (verified)
 
