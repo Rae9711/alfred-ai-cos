@@ -17,7 +17,9 @@ dist/
 # --- Env & secrets ---
 .env
 .env.*
+# ...but always keep *.example templates (no real secrets in them).
 !.env.example
+!.env.*.example
 *.pem
 *.key
 service-account*.json
