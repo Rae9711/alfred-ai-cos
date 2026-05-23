@@ -9,11 +9,13 @@ import {
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import type { MeetingPrep } from "@albert/shared-types";
 
 import { api } from "@/api/client";
-import { Eyebrow, Meta, SectionTitle, Serif } from "@/components/ui";
-import { colors, spacing } from "@/theme/theme";
+import { Ic } from "@/components/icons";
+import { Eyebrow, IconBtn, Meta, SectionTitle, Serif } from "@/components/ui";
+import { colors, layout, spacing } from "@/theme/theme";
 
 function dateLine(iso: string | undefined): string {
   if (!iso) return "";
@@ -29,6 +31,7 @@ function dateLine(iso: string | undefined): string {
 }
 
 export function MeetingPrepScreen({ eventId }: { eventId: string }) {
+  const router = useRouter();
   const [prep, setPrep] = useState<MeetingPrep | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +65,12 @@ export function MeetingPrepScreen({ eventId }: { eventId: string }) {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Eyebrow>Meeting prep</Eyebrow>
+      <View style={styles.headerRow}>
+        <Eyebrow>Meeting prep</Eyebrow>
+        <IconBtn onPress={() => router.back()}>
+          <Ic.Close size={18} color={colors.ink2} />
+        </IconBtn>
+      </View>
       <Serif size={30} style={styles.title}>
         {prep.event.title ?? "Meeting"}
       </Serif>
@@ -116,8 +124,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   content: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: layout.topPad,
     paddingBottom: spacing.xl,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
   },
   centered: {
     flex: 1,
