@@ -56,3 +56,24 @@ class CaptureResult(BaseModel):
     detected_project: str | None = Field(
         default=None, description="A project name if the note clearly belongs to one."
     )
+
+
+class AssistantInterpretation(BaseModel):
+    """How Albert read a free-text request from the Ask screen. `intent` decides the
+    action; `book_calendar` fills the event fields (ISO 8601 with the user's offset)."""
+
+    intent: str = Field(
+        description="One of: book_calendar, none. 'book_calendar' when the user asks to "
+        "schedule/book/block time. 'none' for anything else."
+    )
+    reply: str = Field(
+        description="A short, calm one-line reply to show the user (e.g. confirmation, "
+        "or — when intent is none — an honest note that this isn't supported yet)."
+    )
+    title: str | None = Field(default=None, description="Event title when booking.")
+    start: str | None = Field(
+        default=None, description="Event start, ISO 8601 with the user's UTC offset."
+    )
+    end: str | None = Field(
+        default=None, description="Event end, ISO 8601 with the user's UTC offset."
+    )

@@ -1,8 +1,10 @@
-"""Google Calendar API wrapper. Read-only (calendar.readonly scope).
+"""Google Calendar API wrapper. Reads (calendar.readonly) and creates events
+(calendar.events scope).
 
 Lists upcoming events from the primary calendar and normalizes them into the shape
-CalendarEvent expects. Like the Gmail wrapper, this is the only place the Calendar
-API surface is touched, so the rest of the app stays provider-agnostic about Google."""
+CalendarEvent expects, and creates new events ("book my time"). Like the Gmail wrapper,
+this is the only place the Calendar API surface is touched, so the rest of the app stays
+provider-agnostic about Google."""
 
 from __future__ import annotations
 
@@ -47,6 +49,37 @@ def list_upcoming_events(
         .execute()
     )
     return [_normalize(item) for item in resp.get("items", [])]
+
+
+def create_event(
+    token_payload: dict[str, Any],
+    *,
+    title: str,
+    start: datetime,
+    end: datetime,
+    description: str | None = None,
+    location: str | None = None,
+) -> dict[str, Any]:
+    """Create an event on the user's primary calendar and return it normalized.
+
+    start/end must be timezone-aware (they carry the user's intended wall-clock time
+    as an offset). Google reads the offset, so we don't pass a separate timeZone.
+    """
+    svc = _service(token_payload)
+    body: dict[str, Any] = {
+        "summary": title,
+        "start": {"dateTime": start.isoformat()},
+        "end": {"dateTime": end.isoformat()},
+    }
+    if description:
+        body["description"] = description
+    if location:
+        body["location"] = location
+
+    created = svc.events().insert(calendarId="primary", body=body).execute()
+    normalized = _normalize(created)
+    normalized["html_link"] = created.get("htmlLink")
+    return normalized
 
 
 def _normalize(item: dict[str, Any]) -> dict[str, Any]:

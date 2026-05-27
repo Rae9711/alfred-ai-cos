@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     actions,
+    assistant,
     auth,
     briefings,
     capture,
@@ -22,6 +23,7 @@ from app.api.v1 import (
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
+api_router.include_router(assistant.router)
 api_router.include_router(sync.router)
 api_router.include_router(today.router)
 api_router.include_router(commitments.router)

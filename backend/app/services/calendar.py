@@ -4,6 +4,7 @@ which is the signal meeting-prep (A3) keys off."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -45,6 +46,36 @@ def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[Ca
         touched.append(_upsert_event(db, user_id, raw, user_email))
     db.commit()
     return touched
+
+
+def book_event(
+    db: Session,
+    user_id: str,
+    *,
+    title: str,
+    start: datetime,
+    end: datetime,
+    description: str | None = None,
+    location: str | None = None,
+) -> CalendarEvent:
+    """Create a calendar event on the user's primary calendar and persist it locally so
+    it shows up immediately. Returns the stored CalendarEvent."""
+    account = _account(db, user_id)
+    user = db.get(User, user_id)
+    user_email = user.email if user else ""
+    token = decrypt_token(account.token_ciphertext)
+
+    raw = gcal.create_event(
+        token,
+        title=title,
+        start=start,
+        end=end,
+        description=description,
+        location=location,
+    )
+    event = _upsert_event(db, user_id, raw, user_email)
+    db.commit()
+    return event
 
 
 def upsert_seed_event(

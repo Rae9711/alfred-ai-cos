@@ -7,6 +7,7 @@ from datetime import date
 
 from app.db.enums import CommitmentOwner, MessageClassification, Priority
 from app.schemas.llm import (
+    AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
     DraftResult,
@@ -25,11 +26,14 @@ class FakeLLM:
         commitments: list[ExtractedCommitment] | None = None,
         capture_tasks: list[ParsedTask] | None = None,
         detected_project: str | None = None,
+        interpretation: AssistantInterpretation | None = None,
     ) -> None:
         self._commitments = commitments or []
         self._capture_tasks = capture_tasks or []
         self._detected_project = detected_project
+        self._interpretation = interpretation
         self.briefing_calls: list[dict] = []
+        self.interpret_calls: list[dict] = []
 
     def classify_message(
         self, *, subject: str | None, body: str, sender: str
@@ -73,6 +77,14 @@ class FakeLLM:
 
     def parse_capture(self, *, text: str, reference_date: date) -> CaptureResult:
         return CaptureResult(tasks=self._capture_tasks, detected_project=self._detected_project)
+
+    def interpret_request(
+        self, *, text: str, now_iso: str, timezone: str
+    ) -> AssistantInterpretation:
+        self.interpret_calls.append({"text": text, "now_iso": now_iso, "timezone": timezone})
+        if self._interpretation is not None:
+            return self._interpretation
+        return AssistantInterpretation(intent="none", reply="I can book calendar time.")
 
 
 class FakeNotifier:

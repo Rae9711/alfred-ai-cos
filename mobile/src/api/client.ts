@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import type {
   ActionProposal,
   AppNotification,
+  AssistantAskResponse,
   AuthStartResponse,
   Briefing,
   CaptureResponse,
@@ -72,6 +73,13 @@ export const api = {
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: () => request<InboxView>("/messages"),
+  // Ask Albert a free-text request ("book my calendar tomorrow 5-6pm"). The backend
+  // interprets it and books real calendar time when that's the intent.
+  ask: (text: string) =>
+    request<AssistantAskResponse>("/assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
   listCommitments: () => request<Commitment[]>("/commitments"),
   updateCommitmentStatus: (id: string, status: CommitmentStatus) =>
     request<Commitment>(`/commitments/${id}/status?status=${status}`, {

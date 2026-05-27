@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.schemas.llm import (
+    AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
     DraftResult,
@@ -63,6 +64,19 @@ _CAPTURE_SYSTEM = (
     "relative dates ('tomorrow', 'Friday', 'next week') against the reference date as "
     "absolute YYYY-MM-DD. Infer priority from urgency words. If the note clearly belongs "
     "to one project, set detected_project. Do not invent tasks the user did not imply."
+)
+_INTERPRET_SYSTEM = (
+    "You are Albert's assistant agent. Read one free-text request and decide what to do.\n"
+    "If the user asks to schedule, book, block, or hold time on their calendar, set "
+    "intent='book_calendar' and fill title, start, and end. Resolve relative phrasing "
+    "('tomorrow', 'this evening', '5 to 6pm', 'Friday morning') against the given current "
+    "local time, and return start/end as ISO 8601 WITH the user's UTC offset (e.g. "
+    "2026-05-28T17:00:00+02:00). Default an event to 1 hour if only a start is given. "
+    "Give the title sensible wording from the request ('Focus block', 'Gym', or whatever "
+    "they named). Put a short confirmation in reply, e.g. 'Booked 5–6pm tomorrow.'\n"
+    "For anything that is not a calendar booking, set intent='none' and a brief, honest "
+    "reply saying what you can do (book calendar time) rather than pretending. Never "
+    "invent times the user did not express."
 )
 
 
@@ -191,3 +205,18 @@ class AnthropicLLMClient:
             tool=_tool_for(CaptureResult, "record_tasks", "Record the parsed tasks."),
         )
         return CaptureResult.model_validate(raw)
+
+    def interpret_request(
+        self, *, text: str, now_iso: str, timezone: str
+    ) -> AssistantInterpretation:
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_INTERPRET_SYSTEM,
+            user_content=(
+                f"Current local time: {now_iso} (timezone {timezone}).\n\nRequest:\n{text}"
+            ),
+            tool=_tool_for(
+                AssistantInterpretation, "record_interpretation", "Record the interpretation."
+            ),
+        )
+        return AssistantInterpretation.model_validate(raw)

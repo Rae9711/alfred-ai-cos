@@ -17,13 +17,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import CursorResult, select, update
 from sqlalchemy.orm import Session
 
-from app.capabilities import get_capability
 from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.enums import ActionStatus, ActionType
 from app.db.models import ActionProposal, DraftReply, User
 from app.schemas.api import ActionProposalOut, ProposeActionRequest
 from app.services import execution
+from app.services.actions import propose_action_internal
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 
@@ -37,24 +37,15 @@ def _propose(
     reason: str | None = None,
     proposed_content: str | None = None,
 ) -> ActionProposal:
-    provider = get_capability(action_type)
-    if provider is None:
-        raise HTTPException(status_code=400, detail=f"No capability for {action_type}")
-    desc = provider.describe()
-    policy = execution.approval_policy(desc.risk_level)
-    proposal = ActionProposal(
-        user_id=user.id,
+    # Delegates to the service so every proposal (route or assistant) shares one path.
+    return propose_action_internal(
+        db,
+        user,
         action_type=action_type,
-        risk_level=desc.risk_level.value,
         target=target,
+        reason=reason,
         proposed_content=proposed_content,
-        reason=reason or desc.summary,
-        approval_required=policy.approval_required,
-        status=ActionStatus.proposed,
     )
-    db.add(proposal)
-    db.commit()
-    return proposal
 
 
 @router.post("", response_model=ActionProposalOut)
