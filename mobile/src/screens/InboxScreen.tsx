@@ -276,19 +276,14 @@ function MessageCard({
                 <Text style={styles.preview}>{msg.snippet}</Text>
               ) : null}
               <View style={styles.msgActions}>
-                {msg.category === "Needs Reply" ? (
+                {/* Draft a reply is sensible for anything that isn't pure FYI. */}
+                {msg.category !== "FYI" ? (
                   <Btn
                     label="Draft reply"
                     kind="accent"
                     tiny
                     onPress={onDraft}
                   />
-                ) : null}
-                {msg.category === "Needs Decision" ? (
-                  <>
-                    <Btn label="Yes" kind="accent" tiny onPress={onArchive} />
-                    <Btn label="No" kind="ghost" tiny onPress={onArchive} />
-                  </>
                 ) : null}
                 <Btn label="Snooze" kind="ghost" tiny onPress={onSnooze} />
                 <Btn label="Archive" kind="ghost" tiny onPress={onArchive} />
