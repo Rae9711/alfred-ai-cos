@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/gmail.compose",
+        # gmail.send: send email on the user's behalf (level-3 approval-gated action).
+        # Adding this invalidates existing tokens — users re-consent on next sign-in.
+        "https://www.googleapis.com/auth/gmail.send",
         "https://www.googleapis.com/auth/calendar.readonly",
         # calendar.events: create/update events on the user's calendar ("book my time").
         # Adding this invalidates existing tokens — users re-consent on next sign-in.

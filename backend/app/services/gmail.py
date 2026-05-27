@@ -1,8 +1,7 @@
-"""Gmail API wrapper for the slice: list recent messages, fetch one, create a draft.
+"""Gmail API wrapper: list recent messages, fetch one, create a draft, and send.
 
-Sending is intentionally absent. The slice never sends; it only creates Gmail drafts
-(gmail.compose scope). Sending would be a level-3 action gated by ActionProposal and
-would require the gmail.send scope, added when that path is built (see docs/TODO.md)."""
+Sending (gmail.send scope) is a level-3 action: it only runs through an approved
+ActionProposal via the SendEmail capability, never directly from a route."""
 
 from __future__ import annotations
 
@@ -83,3 +82,32 @@ def create_draft(
         draft_body["message"]["threadId"] = thread_id
     created = svc.users().drafts().create(userId="me", body=draft_body).execute()
     return cast(str, created["id"])
+
+
+def send_draft(token_payload: dict[str, Any], draft_id: str) -> dict[str, Any]:
+    """Send an existing Gmail draft. Returns the sent message {id, threadId}."""
+    svc = _service(token_payload)
+    sent = svc.users().drafts().send(userId="me", body={"id": draft_id}).execute()
+    return {"id": sent.get("id"), "thread_id": sent.get("threadId")}
+
+
+def send_message(
+    token_payload: dict[str, Any],
+    *,
+    to: str,
+    subject: str,
+    body: str,
+    thread_id: str | None = None,
+) -> dict[str, Any]:
+    """Compose and send an email directly (no stored draft). Returns {id, threadId}."""
+    svc = _service(token_payload)
+    msg = EmailMessage()
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+    encoded = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    send_body: dict[str, Any] = {"raw": encoded}
+    if thread_id:
+        send_body["threadId"] = thread_id
+    sent = svc.users().messages().send(userId="me", body=send_body).execute()
+    return {"id": sent.get("id"), "thread_id": sent.get("threadId")}

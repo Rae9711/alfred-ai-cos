@@ -121,6 +121,11 @@ export const api = {
     request<ActionProposal>(`/actions/propose-draft-to-gmail/${draftId}`, {
       method: "POST",
     }),
+  // Propose SENDING a stored draft (level 3, gmail.send). Pair with approveAction.
+  proposeSendDraft: (draftId: string) =>
+    request<ActionProposal>(`/actions/propose-send-draft/${draftId}`, {
+      method: "POST",
+    }),
   approveAction: (actionId: string, confirm = false) =>
     request<ActionProposal>(`/actions/${actionId}/approve?confirm=${confirm}`, {
       method: "POST",

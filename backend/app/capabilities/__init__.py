@@ -18,10 +18,12 @@ def _registry() -> dict[ActionType, CapabilityProvider]:
     from app.capabilities.providers.create_task import CreateTaskCapability
     from app.capabilities.providers.delivery_order import DeliveryOrderCapability
     from app.capabilities.providers.gmail_draft import GmailDraftCapability
+    from app.capabilities.providers.send_email import SendEmailCapability
     from app.core.config import get_settings
 
     providers: list[CapabilityProvider] = [
         GmailDraftCapability(),
+        SendEmailCapability(),
         CreateTaskCapability(),
         CalendarEventCapability(),
         # Refused capabilities are always registered so the boundary is explicit:

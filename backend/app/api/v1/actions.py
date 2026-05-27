@@ -84,6 +84,27 @@ def propose_push_draft(
     )
 
 
+@router.post("/propose-send-draft/{draft_id}", response_model=ActionProposalOut)
+def propose_send_draft(
+    draft_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ActionProposal:
+    """Convenience wrapper: propose SENDING a stored draft via Gmail (level 3, gmail.send).
+    The proposal is approval-gated by the execution spine like every level-3 action."""
+    draft = db.get(DraftReply, draft_id)
+    if draft is None or draft.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return _propose(
+        db,
+        user,
+        action_type=ActionType.send_email,
+        target={"draft_reply_id": draft.id},
+        proposed_content=draft.body,
+        reason="Send this reply from your Gmail account.",
+    )
+
+
 @router.get("/pending", response_model=list[ActionProposalOut])
 def list_pending(
     user: User = Depends(get_current_user),

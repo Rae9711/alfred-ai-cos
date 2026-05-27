@@ -28,7 +28,7 @@ import {
   Serif,
   SerifEm,
 } from "@/components/ui";
-import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { colors, fonts, layout, spacing } from "@/theme/theme";
 
 export function SettingsScreen() {
   const { signOut } = useAuth();
@@ -53,7 +53,11 @@ export function SettingsScreen() {
           if (!v) return;
           void api
             .setQuietHours(v)
-            .then(() => setNote(`Quiet hours set to ${v}.`))
+            .then(() => api.getMe())
+            .then((m) => {
+              setMe(m);
+              setNote(`Quiet hours set to ${v}.`);
+            })
             .catch((e: unknown) =>
               setNote(e instanceof Error ? e.message : "Could not save"),
             );
@@ -64,13 +68,6 @@ export function SettingsScreen() {
     } else {
       setNote("Quiet hours editing is available on iOS.");
     }
-  }, []);
-
-  const teachAlbert = useCallback(() => {
-    Alert.alert(
-      "Teach Albert",
-      "Telling Albert lasting preferences (tone, important people, focus times) is coming soon. For now, Albert learns from your approvals and feedback.",
-    );
   }, []);
 
   const connectIntegration = useCallback((name: string) => {
@@ -135,6 +132,9 @@ export function SettingsScreen() {
   const name = me?.name?.trim() || "You";
   const firstName = name.split(/\s+/)[0] ?? name;
   const rest = name.slice(firstName.length);
+  // Real saved quiet hours from preferences (e.g. "22-08"), or null if never set.
+  const qh = me?.preferences?.["quiet_hours"];
+  const quietHours = typeof qh === "string" && qh ? qh : null;
 
   return (
     <ScrollView
@@ -153,23 +153,13 @@ export function SettingsScreen() {
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
 
-      {/* This week */}
-      <View style={styles.statsCard}>
-        <Text style={styles.statsLabel}>This week, Albert</Text>
-        <View style={styles.statsRow}>
-          <StatCol n="34" label="loops closed" />
-          <StatCol n="12" label="drafts approved" />
-          <StatCol n="3" label="meetings prepped" />
-        </View>
-      </View>
-
       {/* Integrations */}
       <SectionTitle label="Integrations" />
       <View style={styles.group}>
         <Integration name="Gmail" detail={me?.email ?? "Connected"} connected />
         <Integration
           name="Google Calendar"
-          detail="Primary · Personal"
+          detail="Primary calendar"
           connected
         />
         <Integration
@@ -191,7 +181,7 @@ export function SettingsScreen() {
         <Row label="Enable push" detail="" onPress={() => void enablePush()} />
         <Row
           label="Quiet hours"
-          detail="10 pm — 8 am"
+          detail={quietHours ?? "Not set"}
           isLast
           onPress={editQuietHours}
         />
@@ -228,25 +218,6 @@ export function SettingsScreen() {
         />
       </View>
 
-      {/* Memory */}
-      <SectionTitle label="What Albert remembers" />
-      <View style={styles.memoryCard}>
-        <Memory text="You prefer a concise email tone." />
-        <Memory text="High-importance senders surface first." />
-        <Memory
-          text="Deadlines from email and calendar become commitments."
-          isLast
-        />
-        <Btn
-          label="Teach Albert something"
-          kind="ghost"
-          tiny
-          style={styles.teachBtn}
-          leading={<Ic.Plus size={11} color={colors.ink2} />}
-          onPress={teachAlbert}
-        />
-      </View>
-
       {/* Account */}
       <SectionTitle label="Account" />
       <View style={styles.group}>
@@ -263,15 +234,6 @@ export function SettingsScreen() {
 
       <Meta style={styles.version}>Albert · 阿福 · made calmly</Meta>
     </ScrollView>
-  );
-}
-
-function StatCol({ n, label }: { n: string; label: string }) {
-  return (
-    <View style={styles.statCol}>
-      <Serif size={28}>{n}</Serif>
-      <Meta style={styles.statColLabel}>{label}</Meta>
-    </View>
   );
 }
 
@@ -373,15 +335,6 @@ function ApprovalRow({
   );
 }
 
-function Memory({ text, isLast = false }: { text: string; isLast?: boolean }) {
-  return (
-    <View style={[styles.memoryRow, !isLast && styles.memoryDivider]}>
-      <View style={styles.memoryDot} />
-      <Text style={styles.memoryText}>{text}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
   content: {
@@ -392,26 +345,6 @@ const styles = StyleSheet.create({
   header: { gap: 4, paddingBottom: 8 },
   name: { marginTop: 2 },
   note: { color: colors.accentInk, fontSize: 13, marginTop: spacing.sm },
-
-  statsCard: {
-    marginTop: 16,
-    padding: 14,
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-  },
-  statsLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
-    marginBottom: 10,
-  },
-  statsRow: { flexDirection: "row", gap: 12 },
-  statCol: { flex: 1 },
-  statColLabel: { marginTop: 4 },
 
   group: {
     backgroundColor: colors.card,
@@ -467,28 +400,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   approvalDesc: { fontSize: 13, color: colors.ink2, marginTop: 4 },
-
-  memoryCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    padding: 14,
-  },
-  memoryRow: { flexDirection: "row", gap: 10, paddingVertical: 8 },
-  memoryDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.hair,
-  },
-  memoryDot: {
-    marginTop: 6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.accent,
-  },
-  memoryText: { flex: 1, fontSize: 13.5, color: colors.ink2, lineHeight: 20 },
-  teachBtn: { marginTop: 12, alignSelf: "flex-start" },
 
   version: { textAlign: "center", marginTop: 24 },
 });

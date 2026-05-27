@@ -61,7 +61,7 @@ export function ApprovalSheet({
 
   const [tone, setTone] = useState<Tone>("concise");
   const [loading, setLoading] = useState(generates);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<"save" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [to, setTo] = useState(toProp ?? "");
@@ -111,10 +111,10 @@ export function ApprovalSheet({
     if (generates) void fetchDraft(next);
   };
 
-  // Save: push to Gmail drafts when we have a message-threaded draft; otherwise just
-  // confirm the local draft. Never claims to "send".
+  // Save the draft to the user's Gmail drafts (message mode), or just confirm a local
+  // draft (commitment / blank mode). Never sends.
   const save = useCallback(async () => {
-    setSaving(true);
+    setSaving("save");
     setError(null);
     try {
       if (canSaveToGmail && draftId) {
@@ -128,11 +128,30 @@ export function ApprovalSheet({
       onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save the draft");
-      setSaving(false);
+      setSaving(null);
     }
   }, [canSaveToGmail, draftId, closeSheet, onDone, showToast]);
 
-  const saveLabel = canSaveToGmail ? "Save to Gmail drafts" : "Save draft";
+  // Send the reply from the user's Gmail (message mode only — it threads onto the real
+  // message). Goes through the level-3 approval path; here we approve immediately since
+  // the user explicitly tapped Send after reviewing.
+  const send = useCallback(async () => {
+    if (!draftId) return;
+    setSaving("send");
+    setError(null);
+    try {
+      const proposal = await api.proposeSendDraft(draftId);
+      await api.approveAction(proposal.id);
+      showToast("Sent.");
+      closeSheet();
+      onDone?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't send");
+      setSaving(null);
+    }
+  }, [draftId, closeSheet, onDone, showToast]);
+
+  const canSend = canSaveToGmail; // only a real message thread is sendable
 
   return (
     <View style={styles.wrap}>
@@ -150,12 +169,17 @@ export function ApprovalSheet({
 
       <View style={styles.willHappen}>
         <Text style={styles.willText}>
-          <Text style={styles.willStrong}>
-            {canSaveToGmail
-              ? "Albert saves this to your Gmail drafts"
-              : "Albert saves this draft for you"}
-          </Text>
-          . You send it yourself — nothing leaves without you.
+          {canSend ? (
+            <>
+              <Text style={styles.willStrong}>Send</Text> from your Gmail, or
+              save it to your drafts. Nothing goes out until you tap Send.
+            </>
+          ) : (
+            <>
+              <Text style={styles.willStrong}>Albert saves this draft</Text> for
+              you to review. Nothing is sent.
+            </>
+          )}
         </Text>
       </View>
 
@@ -232,8 +256,8 @@ export function ApprovalSheet({
         <View style={styles.risk}>
           <Ic.Lock size={14} color={colors.ink3} stroke={1.6} />
           <Meta style={styles.riskText}>
-            {canSaveToGmail
-              ? "Saved to your Gmail drafts · you review and send it yourself."
+            {canSend
+              ? "Sends from your Gmail account · logged in your activity history."
               : "Saved as a draft · nothing is sent."}
           </Meta>
         </View>
@@ -244,22 +268,31 @@ export function ApprovalSheet({
           label="Discard"
           kind="ghost"
           onPress={closeSheet}
-          style={styles.footerSave}
+          style={styles.footerDiscard}
         />
         <Btn
-          label={saving ? "Saving…" : saveLabel}
-          kind="accent"
-          disabled={saving || loading || !body.trim()}
+          label={saving === "save" ? "Saving…" : "Save draft"}
+          kind={canSend ? "ghost" : "accent"}
+          disabled={saving != null || loading || !body.trim()}
           onPress={() => void save()}
-          leading={
-            saving ? (
-              <Ic.Refresh size={12} color="#fff" />
-            ) : (
-              <Ic.Check size={12} color="#fff" stroke={2.4} />
-            )
-          }
-          style={styles.footerSend}
+          style={styles.footerSave}
         />
+        {canSend ? (
+          <Btn
+            label={saving === "send" ? "Sending…" : "Send"}
+            kind="accent"
+            disabled={saving != null || loading || !body.trim()}
+            onPress={() => void send()}
+            leading={
+              saving === "send" ? (
+                <Ic.Refresh size={12} color="#fff" />
+              ) : (
+                <Ic.Send size={12} color="#fff" />
+              )
+            }
+            style={styles.footerSend}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -382,6 +415,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hair,
   },
+  footerDiscard: { flex: 0.8 },
   footerSave: { flex: 1 },
-  footerSend: { flex: 1.6 },
+  footerSend: { flex: 1.2 },
 });
