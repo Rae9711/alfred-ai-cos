@@ -1,7 +1,7 @@
-// Ask Alfred — chat screen, pixel-matched to the prototype's ScreenAsk. Serif title,
-// chat bubbles (Alfred serif/left, user ink-pill/right), suggested questions, composer
-// with an accent send button. Runs on the scripted reply engine (src/data/demo.ts)
-// until a real chat backend exists; the bubble/composer UI is final.
+// Ask Albert — chat screen, pixel-matched to the prototype's ScreenAsk. Serif title,
+// chat bubbles (Albert serif/left, user ink-pill/right), suggested questions, composer.
+// Wired to POST /assistant/ask: it interprets the request and books real calendar time
+// ("book my calendar tomorrow 5-6pm"). Non-calendar requests get an honest reply.
 
 import { useCallback, useRef, useState } from "react";
 import {
@@ -14,55 +14,52 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
 
-import {
-  CHAT_SEED,
-  SUGGESTED_QUESTIONS,
-  scriptedReply,
-  type ChatMessage,
-} from "@/data/demo";
-import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
-import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
+import { api } from "@/api/client";
+import { CHAT_SEED, SUGGESTED_QUESTIONS, type ChatMessage } from "@/data/demo";
 import { Ic, AlfMark } from "@/components/icons";
 import { useShell } from "@/components/Shell";
-import {
-  Btn,
-  Eyebrow,
-  Serif,
-  SerifEm,
-  inputPlaceholder,
-} from "@/components/ui";
-import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
+import { colors, fonts, layout } from "@/theme/theme";
 
 export function AskScreen() {
-  const router = useRouter();
-  const { openSheet, showToast } = useShell();
+  const { showToast } = useShell();
   const [chat, setChat] = useState<ChatMessage[]>(CHAT_SEED);
   const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const handleAction = useCallback(
-    (kind: "today" | "meeting" | "approval") => {
-      if (kind === "today") router.navigate("/(tabs)");
-      else if (kind === "approval")
-        openSheet(<ApprovalSheet onDone={() => showToast("Sent.")} />);
-      else if (kind === "meeting")
-        openSheet(<MeetingPrepSheet eventId="demo" />);
-    },
-    [router, openSheet, showToast],
-  );
-
-  const send = useCallback((text: string) => {
-    const q = text.trim();
-    if (!q) return;
-    setChat((c) => [...c, { role: "user", text: q, ts: "now" }]);
-    setInput("");
-    setTimeout(() => {
-      setChat((c) => [...c, scriptedReply(q)]);
+  const send = useCallback(
+    async (text: string) => {
+      const q = text.trim();
+      if (!q || thinking) return;
+      setChat((c) => [...c, { role: "user", text: q, ts: "now" }]);
+      setInput("");
+      setThinking(true);
       scrollRef.current?.scrollToEnd({ animated: true });
-    }, 600);
-  }, []);
+      try {
+        const res = await api.ask(q);
+        setChat((c) => [...c, { role: "alfred", text: res.reply, ts: "now" }]);
+        if (res.action === "booked") showToast("Added to your calendar.");
+      } catch (e) {
+        setChat((c) => [
+          ...c,
+          {
+            role: "alfred",
+            text:
+              e instanceof Error
+                ? `Something went wrong: ${e.message}`
+                : "Something went wrong.",
+            ts: "now",
+          },
+        ]);
+      } finally {
+        setThinking(false);
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }
+    },
+    [thinking, showToast],
+  );
 
   return (
     <KeyboardAvoidingView
@@ -70,7 +67,7 @@ export function AskScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.header}>
-        <Eyebrow>Ask Alfred</Eyebrow>
+        <Eyebrow>Ask Albert</Eyebrow>
         <Serif size={30} style={styles.title}>
           What's on your <SerifEm>mind?</SerifEm>
         </Serif>
@@ -86,9 +83,17 @@ export function AskScreen() {
         }
       >
         {chat.map((m, i) => (
-          <Bubble key={i} msg={m} onAction={handleAction} />
+          <Bubble key={i} msg={m} />
         ))}
-        {chat.length <= 1 ? (
+        {thinking ? (
+          <View style={[styles.bubbleWrap, styles.left]}>
+            <View style={styles.alfHead}>
+              <AlfMark size={22} filled color={colors.accent} />
+              <Text style={styles.alfLabel}>Albert · thinking…</Text>
+            </View>
+          </View>
+        ) : null}
+        {chat.length <= 1 && !thinking ? (
           <View style={styles.suggest}>
             <Text style={styles.suggestLabel}>Try asking</Text>
             <View style={styles.suggestList}>
@@ -114,7 +119,7 @@ export function AskScreen() {
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder="Ask Alfred anything…"
+            placeholder="Ask Albert anything…"
             placeholderTextColor={inputPlaceholder}
             style={styles.composerInput}
             multiline
@@ -133,20 +138,14 @@ export function AskScreen() {
   );
 }
 
-function Bubble({
-  msg,
-  onAction,
-}: {
-  msg: ChatMessage;
-  onAction: (kind: "today" | "meeting" | "approval") => void;
-}) {
+function Bubble({ msg }: { msg: ChatMessage }) {
   const isAlf = msg.role === "alfred";
   return (
     <View style={[styles.bubbleWrap, isAlf ? styles.left : styles.right]}>
       {isAlf ? (
         <View style={styles.alfHead}>
           <AlfMark size={22} filled color={colors.accent} />
-          <Text style={styles.alfLabel}>Alfred · {msg.ts}</Text>
+          <Text style={styles.alfLabel}>Albert · {msg.ts}</Text>
         </View>
       ) : null}
       {isAlf ? (
@@ -158,20 +157,6 @@ function Bubble({
           <Text style={styles.userText}>{msg.text}</Text>
         </View>
       )}
-      {msg.actions ? (
-        <View style={styles.actions}>
-          {msg.actions.map((a, i) => (
-            <Btn
-              key={i}
-              label={a.label}
-              kind="ghost"
-              tiny
-              onPress={() => onAction(a.kind)}
-              leading={<Ic.Arrow size={11} color={colors.ink2} />}
-            />
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -230,7 +215,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   userText: { color: colors.paper, fontSize: 14.5, lineHeight: 21 },
-  actions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
 
   composer: {
     paddingHorizontal: layout.padX,

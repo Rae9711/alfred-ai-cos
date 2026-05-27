@@ -176,6 +176,14 @@ export interface InboxView {
   filtered_count: number;
 }
 
+// Response from the Ask screen's free-text request. `action` is "booked" when a
+// calendar event was created, "none" otherwise; `reply` is the line to show.
+export interface AssistantAskResponse {
+  reply: string;
+  action: "booked" | "none";
+  detail: string | null;
+}
+
 export interface DraftCreateRequest {
   message_id: string;
   tone?: string;
