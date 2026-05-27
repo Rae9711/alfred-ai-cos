@@ -39,7 +39,16 @@ def ask(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AssistantAskResponse:
-    tz = user.timezone or "UTC"
+    # Prefer the device timezone from the request (the app sends it); fall back to the
+    # stored one. Persist it so other features (briefings, due dates) use the real zone.
+    tz = payload.timezone or user.timezone or "UTC"
+    if payload.timezone and payload.timezone != user.timezone:
+        try:
+            ZoneInfo(payload.timezone)  # validate before storing
+            user.timezone = payload.timezone
+            db.commit()
+        except (ZoneInfoNotFoundError, ValueError):
+            tz = user.timezone or "UTC"
     now = _now_in_tz(tz)
     interp = get_llm().interpret_request(text=payload.text, now_iso=now.isoformat(), timezone=tz)
 

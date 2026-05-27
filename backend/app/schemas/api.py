@@ -83,6 +83,9 @@ class InboxOut(BaseModel):
 
 class AssistantAskRequest(BaseModel):
     text: str
+    # The device's IANA timezone (e.g. "Europe/Paris"). Sent so "5pm" resolves to the
+    # user's wall clock, not the server default. Persisted to the user when provided.
+    timezone: str | None = None
 
 
 class AssistantAskResponse(BaseModel):

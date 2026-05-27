@@ -34,6 +34,16 @@ const BASE_URL: string =
   (Constants.expoConfig?.extra?.apiBaseUrl as string) ??
   "http://localhost:8000";
 
+// The device's IANA timezone (e.g. "Europe/Paris"), via Hermes' Intl. Falls back to
+// UTC if unavailable. Sent with assistant requests so booked times match the user's clock.
+function deviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 // The AuthContext registers a handler so a 401 (expired/invalid token, or a rotated
 // server secret) drops the user back to Connect instead of looping on dead requests.
 let onAuthExpired: (() => void) | null = null;
@@ -86,12 +96,12 @@ export const api = {
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: () => request<InboxView>("/messages"),
-  // Ask Albert a free-text request ("book my calendar tomorrow 5-6pm"). The backend
-  // interprets it and books real calendar time when that's the intent.
+  // Ask Albert a free-text request ("book my calendar tomorrow 5-6pm"). Sends the
+  // device timezone so "5pm" resolves to the user's wall clock, not the server default.
   ask: (text: string) =>
     request<AssistantAskResponse>("/assistant/ask", {
       method: "POST",
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, timezone: deviceTimezone() }),
     }),
   listCommitments: () => request<Commitment[]>("/commitments"),
   updateCommitmentStatus: (id: string, status: CommitmentStatus) =>
