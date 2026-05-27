@@ -179,6 +179,13 @@ export interface InboxView {
   filtered_count: number;
 }
 
+// Result of "Add to calendar" on a message: booked true if an event was created.
+export interface BookMessageResponse {
+  booked: boolean;
+  reply: string;
+  detail: string | null;
+}
+
 // Response from the Ask screen's free-text request. `action` is "booked" when a
 // calendar event was created, "none" otherwise; `reply` is the line to show.
 export interface AssistantAskResponse {

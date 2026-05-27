@@ -81,6 +81,17 @@ class InboxOut(BaseModel):
     filtered_count: int  # spam/noise filtered out (the "I filtered N" line)
 
 
+class BookMessageRequest(BaseModel):
+    # The device timezone, so the event lands in the user's wall clock.
+    timezone: str | None = None
+
+
+class BookMessageResponse(BaseModel):
+    booked: bool  # true if an event was created
+    reply: str  # what to show the user (confirmation, or why nothing was booked)
+    detail: str | None = None
+
+
 class AssistantAskRequest(BaseModel):
     text: str
     # The device's IANA timezone (e.g. "Europe/Paris"). Sent so "5pm" resolves to the

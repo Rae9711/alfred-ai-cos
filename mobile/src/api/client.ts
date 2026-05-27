@@ -7,6 +7,7 @@ import type {
   AppNotification,
   AssistantAskResponse,
   AuthStartResponse,
+  BookMessageResponse,
   Briefing,
   CaptureResponse,
   Commitment,
@@ -96,6 +97,12 @@ export const api = {
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: () => request<InboxView>("/messages"),
+  // "Add to calendar" on a message — books it if it describes a timed event.
+  bookFromMessage: (messageId: string, timezone: string) =>
+    request<BookMessageResponse>(`/messages/${messageId}/book`, {
+      method: "POST",
+      body: JSON.stringify({ timezone }),
+    }),
   // Ask Albert a free-text request ("book my calendar tomorrow 5-6pm"). Sends the
   // device timezone so "5pm" resolves to the user's wall clock, not the server default.
   ask: (text: string) =>

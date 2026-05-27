@@ -128,6 +128,22 @@ export function InboxScreen() {
     showToast(msg);
   };
 
+  // "Add to calendar": book the event the message describes (if any), in the device tz.
+  const book = async (id: string) => {
+    let tz = "UTC";
+    try {
+      tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      // keep UTC
+    }
+    try {
+      const res = await api.bookFromMessage(id, tz);
+      showToast(res.booked ? "Added to your calendar." : res.reply);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Couldn't add to calendar");
+    }
+  };
+
   const replyCount = counts["reply"] ?? 0;
   const decideCount = counts["decide"] ?? 0;
   const briefing =
@@ -205,6 +221,7 @@ export function InboxScreen() {
               />,
             )
           }
+          onBook={() => void book(m.id)}
           onArchive={() => archive(m.id)}
           onSnooze={() => archive(m.id, "Snoozed.")}
         />
@@ -233,6 +250,7 @@ function MessageCard({
   expanded,
   onToggle,
   onDraft,
+  onBook,
   onArchive,
   onSnooze,
 }: {
@@ -240,6 +258,7 @@ function MessageCard({
   expanded: boolean;
   onToggle: () => void;
   onDraft: () => void;
+  onBook: () => void;
   onArchive: () => void;
   onSnooze: () => void;
 }) {
@@ -283,6 +302,16 @@ function MessageCard({
                     kind="accent"
                     tiny
                     onPress={onDraft}
+                  />
+                ) : null}
+                {/* Add to calendar: for decisions/replies that may describe an event. */}
+                {msg.category === "Needs Decision" ||
+                msg.category === "Needs Reply" ? (
+                  <Btn
+                    label="Add to calendar"
+                    kind="ghost"
+                    tiny
+                    onPress={onBook}
                   />
                 ) : null}
                 <Btn label="Snooze" kind="ghost" tiny onPress={onSnooze} />

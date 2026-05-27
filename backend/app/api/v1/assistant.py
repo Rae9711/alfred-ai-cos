@@ -8,29 +8,16 @@ Other intents return an honest reply rather than pretending."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.enums import ActionType
 from app.db.models import User
-from app.llm import get_llm
 from app.schemas.api import AssistantAskRequest, AssistantAskResponse
-from app.services import execution
-from app.services.actions import propose_action_internal
+from app.services.assistant import interpret_and_book, resolve_timezone
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
-
-
-def _now_in_tz(timezone: str) -> datetime:
-    try:
-        return datetime.now(ZoneInfo(timezone))
-    except (ZoneInfoNotFoundError, ValueError):
-        return datetime.now(UTC)
 
 
 @router.post("/ask", response_model=AssistantAskResponse)
@@ -39,36 +26,10 @@ def ask(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AssistantAskResponse:
-    # Prefer the device timezone from the request (the app sends it); fall back to the
-    # stored one. Persist it so other features (briefings, due dates) use the real zone.
-    tz = payload.timezone or user.timezone or "UTC"
-    if payload.timezone and payload.timezone != user.timezone:
-        try:
-            ZoneInfo(payload.timezone)  # validate before storing
-            user.timezone = payload.timezone
-            db.commit()
-        except (ZoneInfoNotFoundError, ValueError):
-            tz = user.timezone or "UTC"
-    now = _now_in_tz(tz)
-    interp = get_llm().interpret_request(text=payload.text, now_iso=now.isoformat(), timezone=tz)
-
-    if interp.intent == "book_calendar" and interp.start and interp.end and interp.title:
-        proposal = propose_action_internal(
-            db,
-            user,
-            action_type=ActionType.create_calendar_event,
-            target={
-                "title": interp.title,
-                "start": interp.start,
-                "end": interp.end,
-            },
-            reason="Booked from an Ask request",
-        )
-        result = execution.execute_proposal(db, user, proposal)
-        return AssistantAskResponse(
-            reply=interp.reply or result.detail,
-            action="booked",
-            detail=result.detail,
-        )
-
-    return AssistantAskResponse(reply=interp.reply, action="none", detail=None)
+    tz = resolve_timezone(db, user, payload.timezone)
+    outcome = interpret_and_book(db, user, text=payload.text, tz=tz)
+    return AssistantAskResponse(
+        reply=outcome.reply,
+        action="booked" if outcome.booked else "none",
+        detail=outcome.detail,
+    )
