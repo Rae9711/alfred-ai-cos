@@ -100,15 +100,19 @@ class CommitmentDraftRequest(BaseModel):
 
 
 class CommitmentDraftOut(BaseModel):
-    """A drafted reply for a commitment. Carries what the approval sheet renders: the
-    recipient, subject, body, tone, and the verbatim source evidence ('why I drafted this').
-    Not persisted yet (DraftReply requires a message_id) — generated on demand."""
+    """A drafted reply for a commitment. Carries what the approval sheet renders.
+
+    When the commitment came from an email (a source Message exists), a real DraftReply
+    is persisted and `draft_reply_id` is set, so the reply can be SENT (threaded onto the
+    original message). For non-email commitments there's no thread to send onto, so
+    draft_reply_id is null and the sheet stays save-only."""
 
     recipient: str | None
     subject: str
     body: str
     tone: str
     evidence: str | None
+    draft_reply_id: str | None = None
 
 
 # --- Action approval (the capability spine) ---

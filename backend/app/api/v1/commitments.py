@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.enums import CommitmentStatus
-from app.db.models import Commitment, User
+from app.db.enums import CommitmentStatus, SourceType
+from app.db.models import Commitment, DraftReply, Message, User
 from app.llm import get_llm
 from app.schemas.api import CommitmentDraftOut, CommitmentDraftRequest, CommitmentOut
 
@@ -72,10 +72,34 @@ def draft_for_commitment(
     )
 
     subject = result.subject or f"Re: {commitment.description}".strip()
+
+    # If this commitment came from an email, persist a real DraftReply tied to that
+    # message so the reply can be SENT (threaded). Otherwise it's save/review only.
+    draft_reply_id: str | None = None
+    if commitment.source_type == SourceType.gmail and commitment.source_id:
+        message = db.scalar(
+            select(Message).where(
+                Message.user_id == user.id,
+                Message.external_id == commitment.source_id,
+            )
+        )
+        if message is not None:
+            draft = DraftReply(
+                user_id=user.id,
+                message_id=message.id,
+                subject=subject,
+                body=result.body,
+                tone=payload.tone,
+            )
+            db.add(draft)
+            db.commit()
+            draft_reply_id = draft.id
+
     return CommitmentDraftOut(
         recipient=commitment.counterparty,
         subject=subject,
         body=result.body,
         tone=payload.tone,
         evidence=commitment.evidence,
+        draft_reply_id=draft_reply_id,
     )

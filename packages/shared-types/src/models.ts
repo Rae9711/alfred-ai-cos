@@ -156,6 +156,9 @@ export interface CommitmentDraft {
   body: string;
   tone: string;
   evidence: string | null;
+  // Set when the commitment came from an email (a real DraftReply was persisted) →
+  // the reply can be SENT. Null for non-email commitments (save/review only).
+  draft_reply_id: string | null;
 }
 
 // One real inbox message. `category` is one of the four UI buckets; `take` is

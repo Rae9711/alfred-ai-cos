@@ -55,8 +55,6 @@ export function ApprovalSheet({
 }) {
   const { closeSheet, showToast } = useShell();
   // Can we actually push this to the user's Gmail drafts? Only when it came from a real
-  // message (the draft is threaded onto it). Otherwise it's a local review-only draft.
-  const canSaveToGmail = messageId != null;
   const generates = messageId != null || commitmentId != null;
 
   const [tone, setTone] = useState<Tone>("concise");
@@ -92,6 +90,8 @@ export function ApprovalSheet({
           setSubject(d.subject);
           setBody(d.body);
           setEvidence(d.evidence);
+          // Email-sourced commitments come with a real draft id → sendable.
+          setDraftId(d.draft_reply_id);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't draft this reply");
@@ -111,13 +111,16 @@ export function ApprovalSheet({
     if (generates) void fetchDraft(next);
   };
 
-  // Save the draft to the user's Gmail drafts (message mode), or just confirm a local
-  // draft (commitment / blank mode). Never sends.
+  // A persisted draft (message- or email-commitment-sourced) can be pushed to Gmail
+  // drafts and sent. A purely local draft (manual/voice commitment, blank) just saves.
+  const canSend = draftId != null;
+
+  // Save: push to the user's Gmail drafts when we have a real draft; else confirm local.
   const save = useCallback(async () => {
     setSaving("save");
     setError(null);
     try {
-      if (canSaveToGmail && draftId) {
+      if (draftId) {
         const proposal = await api.proposeDraftToGmail(draftId);
         await api.approveAction(proposal.id);
         showToast("Saved to your Gmail drafts.");
@@ -130,7 +133,7 @@ export function ApprovalSheet({
       setError(e instanceof Error ? e.message : "Couldn't save the draft");
       setSaving(null);
     }
-  }, [canSaveToGmail, draftId, closeSheet, onDone, showToast]);
+  }, [draftId, closeSheet, onDone, showToast]);
 
   // Send the reply from the user's Gmail (message mode only — it threads onto the real
   // message). Goes through the level-3 approval path; here we approve immediately since
@@ -150,8 +153,6 @@ export function ApprovalSheet({
       setSaving(null);
     }
   }, [draftId, closeSheet, onDone, showToast]);
-
-  const canSend = canSaveToGmail; // only a real message thread is sendable
 
   return (
     <View style={styles.wrap}>
