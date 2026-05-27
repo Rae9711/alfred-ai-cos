@@ -7,6 +7,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/PROJECT_ID_PLACEHOLDER",
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.albert.app"
@@ -20,7 +27,8 @@
       "expo-notifications",
       "expo-audio",
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "expo-updates"
     ],
     "extra": {
       "apiBaseUrl": "https://albert.alfredassistants.com"
