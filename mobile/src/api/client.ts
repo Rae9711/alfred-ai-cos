@@ -28,11 +28,18 @@ import type {
   WaitingView,
 } from "@albert/shared-types";
 
-import { getToken } from "./auth";
+import { clearToken, getToken } from "./auth";
 
 const BASE_URL: string =
   (Constants.expoConfig?.extra?.apiBaseUrl as string) ??
   "http://localhost:8000";
+
+// The AuthContext registers a handler so a 401 (expired/invalid token, or a rotated
+// server secret) drops the user back to Connect instead of looping on dead requests.
+let onAuthExpired: (() => void) | null = null;
+export function setOnAuthExpired(fn: (() => void) | null): void {
+  onAuthExpired = fn;
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getToken();
@@ -47,6 +54,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   if (!res.ok) {
+    // A 401 while we hold a token means it's no longer valid — clear it and bounce to
+    // Connect so the user (and friends) re-auth cleanly instead of looping on 401s.
+    if (res.status === 401 && token) {
+      await clearToken();
+      onAuthExpired?.();
+    }
     const detail = await res.text();
     throw new Error(`API ${res.status}: ${detail}`);
   }

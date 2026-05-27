@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { setOnAuthExpired } from "@/api/client";
 import { clearToken, getToken } from "@/api/auth";
 
 type AuthState = {
@@ -36,6 +37,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // When any API call hits a 401 (token expired/invalid/secret rotated), the client
+  // clears the token and calls this — flip to unauthed so routing falls back to Connect.
+  useEffect(() => {
+    setOnAuthExpired(() => setAuthed(false));
+    return () => setOnAuthExpired(null);
+  }, []);
 
   const value = useMemo(
     () => ({ authed, refresh, signOut }),
