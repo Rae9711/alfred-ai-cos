@@ -12,6 +12,7 @@ from datetime import date
 from typing import Any, Protocol
 
 from app.schemas.llm import (
+    AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
     DraftResult,
@@ -73,5 +74,17 @@ class LLMClient(Protocol):
         """Turn a messy voice/text note into structured tasks (PRD 10.3, journey 6).
 
         reference_date anchors relative dates ("tomorrow", "Friday") to absolute dates.
+        """
+        ...
+
+    def interpret_request(
+        self, *, text: str, now_iso: str, timezone: str
+    ) -> AssistantInterpretation:
+        """Read a free-text Ask request and decide an action (PRD 10.2).
+
+        now_iso is the user's current local time with offset, and timezone is their IANA
+        zone, so relative phrasing ("tomorrow 5 to 6pm") resolves to absolute ISO times
+        in the user's wall clock. v1 handles calendar booking; other intents return
+        intent='none' with an honest reply.
         """
         ...

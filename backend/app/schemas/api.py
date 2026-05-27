@@ -81,6 +81,16 @@ class InboxOut(BaseModel):
     filtered_count: int  # spam/noise filtered out (the "I filtered N" line)
 
 
+class AssistantAskRequest(BaseModel):
+    text: str
+
+
+class AssistantAskResponse(BaseModel):
+    reply: str  # one-line message to show the user
+    action: str  # "booked" | "none"
+    detail: str | None = None  # execution detail when an action ran
+
+
 class CommitmentDraftRequest(BaseModel):
     tone: str = "concise"
     instruction: str | None = None
