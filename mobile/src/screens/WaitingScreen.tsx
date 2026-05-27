@@ -66,7 +66,7 @@ function Entry({
 
 export function WaitingScreen() {
   const router = useRouter();
-  const { openSheet, showToast } = useShell();
+  const { openSheet } = useShell();
   const [view, setView] = useState<WaitingView | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -93,11 +93,10 @@ export function WaitingScreen() {
         <ApprovalSheet
           recipient={entry.counterparty ?? "them"}
           subject={`Following up: ${entry.description}`}
-          onDone={() => showToast("Sent.")}
         />,
       );
     },
-    [openSheet, showToast],
+    [openSheet],
   );
 
   return (

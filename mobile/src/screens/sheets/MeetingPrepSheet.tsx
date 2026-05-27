@@ -40,7 +40,7 @@ function whenLine(iso: string | null): string {
 }
 
 export function MeetingPrepSheet({ eventId }: { eventId: string }) {
-  const { closeSheet, openSheet, showToast } = useShell();
+  const { closeSheet, openSheet } = useShell();
   const [prep, setPrep] = useState<MeetingPrep | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -164,11 +164,7 @@ export function MeetingPrepSheet({ eventId }: { eventId: string }) {
           onPress={() => {
             const attendee = prep.event.attendees[0] ?? "the organizer";
             openSheet(
-              <ApprovalSheet
-                recipient={attendee}
-                subject={`Re: ${title}`}
-                onDone={() => showToast("Sent.")}
-              />,
+              <ApprovalSheet recipient={attendee} subject={`Re: ${title}`} />,
             );
           }}
           style={styles.footerBtn}

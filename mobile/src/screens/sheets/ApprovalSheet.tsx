@@ -1,11 +1,14 @@
-// Action approval sheet — sending an email on the user's behalf. Pixel-matched to
-// the prototype's ScreenApproval: "ready to send" eyebrow, what-will-happen banner,
-// To/Subject/Attached fields, editable body, tone selector (concise/warm/formal),
-// evidence quote, risk note, Save/Send footer.
+// Draft sheet — generate and review a reply, then save it to the user's Gmail drafts.
+// Honest about capability: Albert can create Gmail DRAFTS (gmail.compose), not SEND
+// (no gmail.send scope yet), so the action is "Save to Gmail drafts", never "Send".
 //
-// When opened from a real draft (a DraftCreateRequest result) it uses that; from the
-// Inbox demo it falls back to the scripted Khalil draft. Tone switching uses the
-// scripted variants until the backend supports tone-aware regeneration.
+// Three modes, all real (no demo content):
+//  - messageId  (Inbox "Draft reply") → createDraft from the real message, then push to
+//    Gmail drafts via proposeDraftToGmail → approveAction. Lands in the user's Gmail.
+//  - commitmentId (Today "Act")       → draftForCommitment (real LLM draft from the
+//    priority). No Gmail thread to attach to, so it saves locally (review only).
+//  - neither (Waiting / Meeting prep) → a blank editable draft the user writes; saved
+//    locally. Honest: these targets have no source message to thread a Gmail draft onto.
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -18,7 +21,6 @@ import {
 } from "react-native";
 
 import { api } from "@/api/client";
-import { DEMO_DRAFT, TONE_VARIANTS } from "@/data/demo";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import {
@@ -36,95 +38,109 @@ import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 type Tone = "concise" | "warm" | "formal";
 
-// Two modes:
-//  - commitmentId present (Today "Act") → fetch a REAL draft from the backend; tone
-//    change re-drafts. To/subject/body/evidence all come from the commitment.
-//  - no commitmentId (Inbox demo) → scripted DEMO_DRAFT content, as before.
 export function ApprovalSheet({
+  messageId,
   commitmentId,
   to: toProp,
   subject: subjectProp,
-  recipient: recipientProp = "Prof. Khalil",
-  initialBody,
+  recipient: recipientProp,
   onDone,
 }: {
+  messageId?: string;
   commitmentId?: string;
   to?: string;
   subject?: string;
   recipient?: string;
-  initialBody?: string;
   onDone?: () => void;
 }) {
-  const { closeSheet } = useShell();
-  const real = commitmentId != null;
+  const { closeSheet, showToast } = useShell();
+  // Can we actually push this to the user's Gmail drafts? Only when it came from a real
+  // message (the draft is threaded onto it). Otherwise it's a local review-only draft.
+  const canSaveToGmail = messageId != null;
+  const generates = messageId != null || commitmentId != null;
 
   const [tone, setTone] = useState<Tone>("concise");
-  const [loading, setLoading] = useState(real);
+  const [loading, setLoading] = useState(generates);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [to, setTo] = useState(toProp ?? (real ? "" : DEMO_DRAFT.to));
-  const [subject, setSubject] = useState(
-    subjectProp ?? (real ? "" : DEMO_DRAFT.subject),
-  );
-  const [recipient, setRecipient] = useState(recipientProp);
-  const [evidence, setEvidence] = useState<string | null>(
-    real ? null : DEMO_DRAFT.evidence,
-  );
-  const [body, setBody] = useState(
-    initialBody ?? (real ? "" : (TONE_VARIANTS.concise ?? "")),
-  );
-  const [editing, setEditing] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [to, setTo] = useState(toProp ?? "");
+  const [subject, setSubject] = useState(subjectProp ?? "");
+  const [recipient, setRecipient] = useState(recipientProp ?? toProp ?? "them");
+  const [evidence, setEvidence] = useState<string | null>(null);
+  const [body, setBody] = useState("");
+  const [editing, setEditing] = useState(!generates); // blank modes start editable
 
-  // Fetch a real draft for a commitment (and on tone change).
+  // Generate a real draft for the current tone (message or commitment mode).
   const fetchDraft = useCallback(
     async (nextTone: Tone) => {
-      if (!commitmentId) return;
       setLoading(true);
       setError(null);
       try {
-        const d = await api.draftForCommitment(commitmentId, nextTone);
-        setTo(d.recipient ?? "");
-        setSubject(d.subject);
-        if (d.recipient) setRecipient(d.recipient);
-        setBody(d.body);
-        setEvidence(d.evidence);
+        if (messageId != null) {
+          const d = await api.createDraft({
+            message_id: messageId,
+            tone: nextTone,
+          });
+          setDraftId(d.id);
+          if (d.subject) setSubject(d.subject);
+          setBody(d.body);
+        } else if (commitmentId != null) {
+          const d = await api.draftForCommitment(commitmentId, nextTone);
+          setTo(d.recipient ?? "");
+          if (d.recipient) setRecipient(d.recipient);
+          setSubject(d.subject);
+          setBody(d.body);
+          setEvidence(d.evidence);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't draft this reply");
       } finally {
         setLoading(false);
       }
     },
-    [commitmentId],
+    [messageId, commitmentId],
   );
 
   useEffect(() => {
-    if (real) void fetchDraft("concise");
-  }, [real, fetchDraft]);
+    if (generates) void fetchDraft("concise");
+  }, [generates, fetchDraft]);
 
   const regen = (next: Tone) => {
     setTone(next);
-    if (real) void fetchDraft(next);
-    else setBody(TONE_VARIANTS[next] ?? body);
+    if (generates) void fetchDraft(next);
   };
 
-  const send = () => {
-    setSending(true);
-    setTimeout(() => {
-      setSending(false);
+  // Save: push to Gmail drafts when we have a message-threaded draft; otherwise just
+  // confirm the local draft. Never claims to "send".
+  const save = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (canSaveToGmail && draftId) {
+        const proposal = await api.proposeDraftToGmail(draftId);
+        await api.approveAction(proposal.id);
+        showToast("Saved to your Gmail drafts.");
+      } else {
+        showToast("Draft saved.");
+      }
       closeSheet();
       onDone?.();
-    }, 600);
-  };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the draft");
+      setSaving(false);
+    }
+  }, [canSaveToGmail, draftId, closeSheet, onDone, showToast]);
 
-  const firstName = recipient.split(" ").slice(-1)[0] ?? recipient;
+  const saveLabel = canSaveToGmail ? "Save to Gmail drafts" : "Save draft";
 
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
         <View style={styles.headText}>
-          <Eyebrow color={colors.accent}>Ready to send · approve below</Eyebrow>
+          <Eyebrow color={colors.accent}>Review your draft</Eyebrow>
           <H2 style={styles.title}>
-            Email to <SerifEm>{recipient}</SerifEm>
+            Reply to <SerifEm>{recipient}</SerifEm>
           </H2>
         </View>
         <IconBtn onPress={closeSheet}>
@@ -134,8 +150,12 @@ export function ApprovalSheet({
 
       <View style={styles.willHappen}>
         <Text style={styles.willText}>
-          <Text style={styles.willStrong}>Albert will send</Text> this from your
-          Gmail account — reversible within 30 seconds.
+          <Text style={styles.willStrong}>
+            {canSaveToGmail
+              ? "Albert saves this to your Gmail drafts"
+              : "Albert saves this draft for you"}
+          </Text>
+          . You send it yourself — nothing leaves without you.
         </Text>
       </View>
 
@@ -144,14 +164,8 @@ export function ApprovalSheet({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Field label="To" value={to || "—"} />
-        <Field label="Subject" value={subject || "—"} />
-        {real ? null : (
-          <Field
-            label="Attached"
-            value={DEMO_DRAFT.attachments.join(", ") || "—"}
-          />
-        )}
+        {to ? <Field label="To" value={to} /> : null}
+        {subject ? <Field label="Subject" value={subject} /> : null}
 
         <View style={styles.bodyCard}>
           <View style={styles.bodyHead}>
@@ -182,18 +196,22 @@ export function ApprovalSheet({
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
 
-        <Text style={styles.sectionLabel}>Tone</Text>
-        <View style={styles.toneRow}>
-          {(["concise", "warm", "formal"] as Tone[]).map((opt) => (
-            <Btn
-              key={opt}
-              label={opt[0]!.toUpperCase() + opt.slice(1)}
-              kind={tone === opt ? "ink" : "ghost"}
-              onPress={() => regen(opt)}
-              style={styles.toneBtn}
-            />
-          ))}
-        </View>
+        {generates ? (
+          <>
+            <Text style={styles.sectionLabel}>Tone</Text>
+            <View style={styles.toneRow}>
+              {(["concise", "warm", "formal"] as Tone[]).map((opt) => (
+                <Btn
+                  key={opt}
+                  label={opt[0]!.toUpperCase() + opt.slice(1)}
+                  kind={tone === opt ? "ink" : "ghost"}
+                  onPress={() => regen(opt)}
+                  style={styles.toneBtn}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
 
         {evidence ? (
           <>
@@ -214,29 +232,30 @@ export function ApprovalSheet({
         <View style={styles.risk}>
           <Ic.Lock size={14} color={colors.ink3} stroke={1.6} />
           <Meta style={styles.riskText}>
-            Reversible action · Logged in your activity history · Albert will
-            not send before you press Send.
+            {canSaveToGmail
+              ? "Saved to your Gmail drafts · you review and send it yourself."
+              : "Saved as a draft · nothing is sent."}
           </Meta>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <Btn
-          label="Save draft"
+          label="Discard"
           kind="ghost"
           onPress={closeSheet}
           style={styles.footerSave}
         />
         <Btn
-          label={sending ? "Sending…" : `Send to ${firstName}`}
+          label={saving ? "Saving…" : saveLabel}
           kind="accent"
-          disabled={sending || loading || !body.trim()}
-          onPress={send}
+          disabled={saving || loading || !body.trim()}
+          onPress={() => void save()}
           leading={
-            sending ? (
+            saving ? (
               <Ic.Refresh size={12} color="#fff" />
             ) : (
-              <Ic.Send size={12} color="#fff" />
+              <Ic.Check size={12} color="#fff" stroke={2.4} />
             )
           }
           style={styles.footerSend}
@@ -256,9 +275,6 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  // Fill the sheet so the middle ScrollView can flex between the fixed header and
-  // footer; without this the content overflows the capped sheet and the bottom
-  // (evidence + footer) gets clipped with nothing to scroll.
   wrap: { flexShrink: 1, minHeight: 0 },
   head: {
     flexDirection: "row",

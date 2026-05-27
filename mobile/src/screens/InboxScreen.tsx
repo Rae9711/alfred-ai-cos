@@ -199,9 +199,9 @@ export function InboxScreen() {
           onDraft={() =>
             openSheet(
               <ApprovalSheet
+                messageId={m.id}
                 recipient={m.sender}
                 subject={m.subject ? `Re: ${m.subject}` : "Re:"}
-                onDone={() => showToast("Sent.")}
               />,
             )
           }

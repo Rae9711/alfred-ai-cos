@@ -268,10 +268,7 @@ export function TodayScreen() {
                   <ApprovalSheet
                     commitmentId={item.id}
                     recipient={item.counterparty ?? "them"}
-                    onDone={() => {
-                      showToast("Sent.");
-                      void load();
-                    }}
+                    onDone={() => void load()}
                   />,
                 )
               }
