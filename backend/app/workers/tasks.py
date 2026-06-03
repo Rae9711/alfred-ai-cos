@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.db.base import SessionLocal
+from app.db.enums import NotificationType
 from app.db.models import User
 from app.notifications import get_notifier
 from app.services import briefing, extraction, ingestion, notifications
@@ -54,6 +55,41 @@ def generate_all_briefings() -> int:
     for uid in user_ids:
         generate_briefing.delay(uid)
     return len(user_ids)
+
+
+@celery_app.task(name="albert.dispatch_due_briefings")  # type: ignore[untyped-decorator]
+def dispatch_due_briefings() -> dict[str, int]:
+    """Beat entry point (hourly): generate the morning briefing for each user whose
+    local time has entered the morning window and who has no briefing yet for their
+    local today. Pushes a daily_briefing notification (deep link /today) after each.
+
+    Per-user idempotency comes from briefing.due_briefing_date returning None once a
+    row exists, plus the notification dedup_key on the briefing id."""
+    db = SessionLocal()
+    generated = pushed = 0
+    try:
+        users = list(db.scalars(select(User)))
+        now_utc = datetime.now(UTC)
+        for user in users:
+            target_date = briefing.due_briefing_date(db, user, now_utc=now_utc)
+            if target_date is None:
+                continue
+            result = briefing.generate_briefing(db, user.id, today=target_date)
+            generated += 1
+            created = notifications.enqueue(
+                db,
+                user.id,
+                ntype=NotificationType.daily_briefing,
+                title="Your morning briefing is ready",
+                body=result.summary[:160],
+                payload={"briefing_id": result.id, "deep_link": "/today"},
+                dedup_key=f"briefing:{result.id}",
+            )
+            if created is not None:
+                pushed += 1
+    finally:
+        db.close()
+    return {"generated": generated, "pushed": pushed}
 
 
 @celery_app.task(name="albert.scan_notifications")  # type: ignore[untyped-decorator]

@@ -24,11 +24,12 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     beat_schedule={
-        # Generate every user's morning briefing at 06:00 UTC. Per-user timezone
-        # delivery is a later refinement (briefing carries a date, not a send time).
-        "daily-briefings": {
-            "task": "albert.generate_all_briefings",
-            "schedule": crontab(hour=6, minute=0),
+        # Hourly tick: generate the morning briefing for every user whose local time
+        # has entered their morning window (07:00-09:59) and who has no briefing yet
+        # for their local today. Per-user idempotency makes the overlap safe.
+        "due-briefings": {
+            "task": "albert.dispatch_due_briefings",
+            "schedule": crontab(minute=0),
         },
         # Scan for at-risk loops and dispatch notifications every 30 minutes. The
         # per-user quiet-hours + threshold logic decides what actually sends.
