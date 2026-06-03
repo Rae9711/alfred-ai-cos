@@ -1,0 +1,5 @@
+name = "albert-email-worker"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+# nodejs_compat is needed by postal-mime's MIME parsing internals.
+compatibility_flags = ["nodejs_compat"]

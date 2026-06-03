@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
 
+    # Forward-to-inbox: shared secret the Cloudflare Email Worker presents in
+    # X-Forward-Secret. Empty disables the endpoint entirely (returns 503).
+    forward_inbox_secret: str = ""
+
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",

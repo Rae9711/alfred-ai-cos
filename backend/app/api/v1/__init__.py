@@ -11,6 +11,7 @@ from app.api.v1 import (
     commitments,
     dev,
     drafts,
+    inbox,
     me,
     meetings,
     messages,
@@ -37,4 +38,5 @@ api_router.include_router(capture.router)
 api_router.include_router(waiting.router)
 api_router.include_router(me.router)
 api_router.include_router(notifications.router)
+api_router.include_router(inbox.router)
 api_router.include_router(dev.router)
