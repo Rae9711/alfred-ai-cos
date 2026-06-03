@@ -12,10 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
-from app.db.models import Commitment
+from app.db.models import Commitment, User
 from app.schemas.today import MeetingToPrepare, TodayDashboard, TodayPriority, WaitingItem
 from app.services.meeting_prep import upcoming_events
-from app.services.priority import score_commitment
+from app.services.priority import build_context, score_commitment
 
 
 def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
@@ -27,8 +27,13 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
             )
         )
     )
+    # Build the per-user ranking context once, then score every commitment against
+    # it. The context captures VIP/stranger/engagement/dismissal/thread signals so
+    # the truly important items rise to the top, not just the ones with deadlines.
+    user = db.get(User, user_id)
+    context = build_context(db, user) if user is not None else None
     scored = sorted(
-        (score_commitment(c, today=today) for c in open_commitments),
+        (score_commitment(c, today=today, context=context) for c in open_commitments),
         key=lambda s: s.score,
         reverse=True,
     )

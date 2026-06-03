@@ -19,6 +19,7 @@ from app.db.enums import (
     NotificationImportance,
     NotificationStatus,
     NotificationType,
+    Priority,
 )
 from app.db.models import (
     ActionProposal,
@@ -129,7 +130,9 @@ _IMPORTANCE: dict[NotificationType, NotificationImportance] = {
     NotificationType.schedule_conflict: NotificationImportance.high,
     NotificationType.meeting_prep: NotificationImportance.normal,
     NotificationType.follow_up_due: NotificationImportance.normal,
-    NotificationType.unanswered_email: NotificationImportance.normal,
+    # An unanswered_email push only fires when the priority ranker flags a commitment
+    # as critical; treat it as high-importance so the user sees it past the threshold.
+    NotificationType.unanswered_email: NotificationImportance.high,
     NotificationType.reminder: NotificationImportance.normal,
     NotificationType.daily_briefing: NotificationImportance.low,
 }
@@ -370,6 +373,46 @@ def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
             body=body[:160],
             payload={"commitment_id": c.id, "deep_link": "/waiting"},
             dedup_key=f"aging:{c.id}",
+        )
+        if created is not None:
+            enqueued += 1
+    return enqueued
+
+
+def scan_top_priorities(db: Session, user: User, *, today: date_type) -> int:
+    """Push for open commitments the priority ranker now considers critical. The
+    ranker reads sender history, dismissal patterns, thread depth, and content
+    signals — so this fires only when something genuinely important rises to the
+    top, not for every new email. Dedup per commitment id ensures one push per
+    item across re-scans."""
+    # Local import to avoid the notifications/priority module cycle.
+    from app.services import priority
+
+    context = priority.build_context(db, user)
+    open_commitments = list(
+        db.scalars(
+            select(Commitment).where(
+                Commitment.user_id == user.id,
+                Commitment.status == CommitmentStatus.open,
+            )
+        )
+    )
+    enqueued = 0
+    for c in open_commitments:
+        scored = priority.score_commitment(c, today=today, context=context)
+        if scored.priority != Priority.critical:
+            continue
+        counterparty = c.counterparty or "Someone"
+        title = f"Top priority: {counterparty} — {c.description[:60]}"
+        body = scored.reason
+        created = enqueue(
+            db,
+            user.id,
+            ntype=NotificationType.unanswered_email,
+            title=title[:80],
+            body=body[:160],
+            payload={"commitment_id": c.id, "deep_link": "/today"},
+            dedup_key=f"top:{c.id}",
         )
         if created is not None:
             enqueued += 1

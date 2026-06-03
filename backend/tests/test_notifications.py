@@ -366,3 +366,68 @@ def test_aging_push_deduped(db: Session, user: User) -> None:
     n.scan_waiting_aging(db, user.id, now=now)
     n.scan_waiting_aging(db, user.id, now=now + timedelta(days=1))
     assert db.query(Notification).count() == 1
+
+
+# --- top-priorities push: only fires for ranker-confirmed critical items ---
+
+
+def test_top_priority_push_fires_for_critical(db: Session, user: User) -> None:
+    # An overdue user-owed commitment lands in the critical bucket by baseline alone.
+    today = date(2026, 6, 2)
+    db.add(
+        Commitment(
+            user_id=user.id,
+            description="Sign the contract",
+            owner=CommitmentOwner.user,
+            counterparty="Buyer",
+            due_date=today - timedelta(days=3),
+            status=CommitmentStatus.open,
+            source_type=SourceType.gmail,
+            confidence=0.9,
+        )
+    )
+    db.commit()
+    assert n.scan_top_priorities(db, user, today=today) == 1
+    notif = db.query(Notification).one()
+    assert notif.type == NotificationType.unanswered_email
+    assert notif.payload["deep_link"] == "/today"
+    assert "Sign the contract" in notif.title
+
+
+def test_top_priority_push_skips_low(db: Session, user: User) -> None:
+    today = date(2026, 6, 2)
+    db.add(
+        Commitment(
+            user_id=user.id,
+            description="FYI",
+            owner=CommitmentOwner.counterparty,
+            counterparty="Newsletter",
+            due_date=None,
+            status=CommitmentStatus.open,
+            source_type=SourceType.gmail,
+            confidence=0.4,
+            from_automated=True,
+        )
+    )
+    db.commit()
+    assert n.scan_top_priorities(db, user, today=today) == 0
+
+
+def test_top_priority_push_is_deduped(db: Session, user: User) -> None:
+    today = date(2026, 6, 2)
+    db.add(
+        Commitment(
+            user_id=user.id,
+            description="Sign the contract",
+            owner=CommitmentOwner.user,
+            counterparty="Buyer",
+            due_date=today - timedelta(days=3),
+            status=CommitmentStatus.open,
+            source_type=SourceType.gmail,
+            confidence=0.9,
+        )
+    )
+    db.commit()
+    n.scan_top_priorities(db, user, today=today)
+    n.scan_top_priorities(db, user, today=today)
+    assert db.query(Notification).count() == 1
