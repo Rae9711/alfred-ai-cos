@@ -288,3 +288,81 @@ def test_meeting_prep_deduped(db: Session, user: User) -> None:
     # 5 min later both ticks see the same event; dedup ensures one push.
     n.scan_upcoming_meetings(db, user.id, now=now + timedelta(minutes=5))
     assert db.query(Notification).count() == 1
+
+
+# --- waiting-on-you aging: nudge after 3+ days, skip if a deadline_risk fires instead ---
+
+
+def _stale_commitment(
+    user_id: str,
+    *,
+    age_days: int,
+    now: datetime,
+    owner: CommitmentOwner = CommitmentOwner.user,
+    due_date: date | None = None,
+    counterparty: str | None = "Dana",
+    from_automated: bool = False,
+) -> Commitment:
+    return Commitment(
+        user_id=user_id,
+        description="Reply to the offer",
+        owner=owner,
+        counterparty=counterparty,
+        due_date=due_date,
+        status=CommitmentStatus.open,
+        source_type=SourceType.gmail,
+        confidence=0.9,
+        from_automated=from_automated,
+        created_at=now - timedelta(days=age_days),
+    )
+
+
+def test_aging_push_fires_after_three_days(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=4, now=now))
+    db.commit()
+    assert n.scan_waiting_aging(db, user.id, now=now) == 1
+    notif = db.query(Notification).one()
+    assert notif.type == NotificationType.follow_up_due
+    assert notif.payload["deep_link"] == "/waiting"
+    assert "4 days" in notif.body
+
+
+def test_aging_push_skipped_when_fresh(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=1, now=now))
+    db.commit()
+    assert n.scan_waiting_aging(db, user.id, now=now) == 0
+
+
+def test_aging_push_skipped_when_deadline_imminent(db: Session, user: User) -> None:
+    # Old AND due tomorrow: scan_for_risks owns this push (deadline_risk), so aging
+    # stays out of the way to avoid double-bothering for the same item.
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=5, now=now, due_date=now.date() + timedelta(days=1)))
+    db.commit()
+    assert n.scan_waiting_aging(db, user.id, now=now) == 0
+
+
+def test_aging_push_skipped_for_automated_senders(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=10, now=now, from_automated=True))
+    db.commit()
+    assert n.scan_waiting_aging(db, user.id, now=now) == 0
+
+
+def test_aging_push_skipped_when_user_is_waiter(db: Session, user: User) -> None:
+    # owner=counterparty means THEY owe US — that's "you are waiting on", not pushable.
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=10, now=now, owner=CommitmentOwner.counterparty))
+    db.commit()
+    assert n.scan_waiting_aging(db, user.id, now=now) == 0
+
+
+def test_aging_push_deduped(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_stale_commitment(user.id, age_days=5, now=now))
+    db.commit()
+    n.scan_waiting_aging(db, user.id, now=now)
+    n.scan_waiting_aging(db, user.id, now=now + timedelta(days=1))
+    assert db.query(Notification).count() == 1

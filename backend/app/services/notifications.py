@@ -39,6 +39,10 @@ PENDING_APPROVAL_GRACE = timedelta(minutes=2)
 # guarantees one push per event regardless of how many ticks see it.
 MEETING_PREP_LEAD = timedelta(minutes=35)
 
+# How stale a "user owes someone" commitment has to get before we push a follow-up
+# nudge. Skips items with an imminent due date — those already trigger deadline_risk.
+WAITING_AGING_DAYS = 3
+
 
 def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
     """Enqueue an approval_needed notification for proposals that have been waiting on
@@ -325,4 +329,48 @@ def scan_for_risks(db: Session, user_id: str, *, today: date_type) -> int:
             )
             if created is not None:
                 enqueued += 1
+    return enqueued
+
+
+def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
+    """Push a follow_up_due for commitments the user owes that have been sitting for
+    WAITING_AGING_DAYS+ days. Skips items with an imminent due date (those already get
+    a deadline_risk). Skips automated senders. Deduped per commitment id."""
+    today = now.date()
+    cutoff_dt = now - timedelta(days=WAITING_AGING_DAYS)
+    stale = list(
+        db.scalars(
+            select(Commitment).where(
+                Commitment.user_id == user_id,
+                Commitment.status == CommitmentStatus.open,
+                Commitment.owner == CommitmentOwner.user,
+                Commitment.counterparty.is_not(None),
+                Commitment.from_automated.is_(False),
+                Commitment.created_at <= cutoff_dt,
+            )
+        )
+    )
+    enqueued = 0
+    for c in stale:
+        # Skip when deadline_risk would (or will) fire for the same commitment.
+        if c.due_date is not None and (c.due_date - today).days <= 1:
+            continue
+        # _age_days mirrors waiting.build_waiting so the push text matches the screen.
+        created_at = c.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        age = max((now - created_at).days, 0)
+        title = f"{c.counterparty} is still waiting"
+        body = f"{age} days on: {c.description[:80]}"
+        created = enqueue(
+            db,
+            user_id,
+            ntype=NotificationType.follow_up_due,
+            title=title[:80],
+            body=body[:160],
+            payload={"commitment_id": c.id, "deep_link": "/waiting"},
+            dedup_key=f"aging:{c.id}",
+        )
+        if created is not None:
+            enqueued += 1
     return enqueued
