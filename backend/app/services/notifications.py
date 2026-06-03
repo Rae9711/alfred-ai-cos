@@ -20,12 +20,24 @@ from app.db.enums import (
     NotificationStatus,
     NotificationType,
 )
-from app.db.models import ActionProposal, Commitment, Device, Notification, User
+from app.db.models import (
+    ActionProposal,
+    CalendarEvent,
+    Commitment,
+    Device,
+    Notification,
+    User,
+)
 
 # A proposal must sit pending for at least this long before we push for it. Filters out
 # the synchronous propose-then-approve flows (Ask screen booking, Today Act send) where
 # the user is already looking and a push would be noise.
 PENDING_APPROVAL_GRACE = timedelta(minutes=2)
+
+# How far ahead of an event we push the prep nudge. The window is wide enough to
+# survive a missed beat tick (beat runs every 30 min, the window is 35 min) and dedup
+# guarantees one push per event regardless of how many ticks see it.
+MEETING_PREP_LEAD = timedelta(minutes=35)
 
 
 def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
@@ -59,6 +71,47 @@ def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
             body=body[:160],
             payload={"action_id": p.id, "deep_link": "/approvals"},
             dedup_key=f"approval:{p.id}",
+        )
+        if created is not None:
+            enqueued += 1
+    return enqueued
+
+
+def scan_upcoming_meetings(db: Session, user_id: str, *, now: datetime) -> int:
+    """Enqueue a meeting_prep notification for events starting within MEETING_PREP_LEAD.
+    Deduped per event id so re-scans across overlapping windows do not re-push. Returns
+    the count enqueued.
+
+    The window is `now` → `now + MEETING_PREP_LEAD`: with a 30-min beat cadence and a
+    35-min lead, every event gets exactly one push roughly 5-35 min before it starts."""
+    horizon = now + MEETING_PREP_LEAD
+    events = list(
+        db.scalars(
+            select(CalendarEvent).where(
+                CalendarEvent.user_id == user_id,
+                CalendarEvent.start_time.is_not(None),
+                CalendarEvent.start_time >= now,
+                CalendarEvent.start_time <= horizon,
+            )
+        )
+    )
+    enqueued = 0
+    for e in events:
+        title = e.title or "(untitled meeting)"
+        assert e.start_time is not None
+        # SQLite drops tzinfo on round-trip even with DateTime(timezone=True); treat the
+        # column as UTC if it comes back naive so arithmetic against `now` works.
+        start = e.start_time if e.start_time.tzinfo else e.start_time.replace(tzinfo=UTC)
+        minutes = max(1, int((start - now).total_seconds() // 60))
+        body = f"Starts in {minutes} min" + (f" at {e.location}" if e.location else "")
+        created = enqueue(
+            db,
+            user_id,
+            ntype=NotificationType.meeting_prep,
+            title=f"Prep: {title[:50]}",
+            body=body[:160],
+            payload={"event_id": e.id, "deep_link": f"/meeting/{e.id}"},
+            dedup_key=f"prep:{e.id}",
         )
         if created is not None:
             enqueued += 1

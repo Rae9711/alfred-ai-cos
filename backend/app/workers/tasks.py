@@ -71,6 +71,7 @@ def scan_notifications() -> dict[str, int]:
         for user in users:
             enqueued += notifications.scan_for_risks(db, user.id, today=today)
             enqueued += notifications.scan_pending_approvals(db, user.id, now=now_dt)
+            enqueued += notifications.scan_upcoming_meetings(db, user.id, now=now_dt)
             result = notifications.dispatch_pending(db, user, now=now_t, provider=notifier)
             sent += result["sent"]
             held += result["held"]

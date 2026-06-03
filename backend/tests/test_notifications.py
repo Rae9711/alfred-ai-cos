@@ -15,7 +15,7 @@ from app.db.enums import (
     NotificationType,
     SourceType,
 )
-from app.db.models import ActionProposal, Commitment, Notification, User
+from app.db.models import ActionProposal, CalendarEvent, Commitment, Notification, User
 from app.services import notifications as n
 
 
@@ -31,6 +31,16 @@ def _proposal(
         approval_required=approval_required,
         status=ActionStatus.proposed,
         created_at=created_at,
+    )
+
+
+def _event(user_id: str, *, start: datetime, title: str = "Sync with Lucas") -> CalendarEvent:
+    return CalendarEvent(
+        user_id=user_id,
+        external_id=f"ext-{start.isoformat()}",
+        title=title,
+        start_time=start,
+        end_time=start + timedelta(minutes=30),
     )
 
 
@@ -239,3 +249,42 @@ def test_pending_approval_skipped_when_not_required(db: Session, user: User) -> 
     db.add(_proposal(user.id, created_at=now - timedelta(minutes=10), approval_required=False))
     db.commit()
     assert n.scan_pending_approvals(db, user.id, now=now) == 0
+
+
+# --- meeting prep: push for events inside the 35-min lead window ---
+
+
+def test_meeting_prep_inside_window_enqueues(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_event(user.id, start=now + timedelta(minutes=20)))
+    db.commit()
+    assert n.scan_upcoming_meetings(db, user.id, now=now) == 1
+    notif = db.query(Notification).one()
+    assert notif.type == NotificationType.meeting_prep
+    assert notif.payload["deep_link"].startswith("/meeting/")
+    assert "20 min" in notif.body
+
+
+def test_meeting_prep_outside_window_skipped(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    # 2h out is well past the lead window; nothing fires.
+    db.add(_event(user.id, start=now + timedelta(hours=2)))
+    db.commit()
+    assert n.scan_upcoming_meetings(db, user.id, now=now) == 0
+
+
+def test_meeting_prep_past_event_skipped(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_event(user.id, start=now - timedelta(minutes=10)))
+    db.commit()
+    assert n.scan_upcoming_meetings(db, user.id, now=now) == 0
+
+
+def test_meeting_prep_deduped(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(_event(user.id, start=now + timedelta(minutes=25)))
+    db.commit()
+    n.scan_upcoming_meetings(db, user.id, now=now)
+    # 5 min later both ticks see the same event; dedup ensures one push.
+    n.scan_upcoming_meetings(db, user.id, now=now + timedelta(minutes=5))
+    assert db.query(Notification).count() == 1
