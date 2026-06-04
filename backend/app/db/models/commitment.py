@@ -39,3 +39,11 @@ class Commitment(Base):
 
     # Human-readable priority explanation (PRD principle 3). Set by the priority engine.
     reason: Mapped[str | None] = mapped_column(Text)
+
+    # Smart-snooze wake conditions. Either or both can be set; the first one to
+    # fire re-opens the commitment.
+    #   snooze_until: parsed date — re-open on/after this date.
+    #   snooze_until_reply: True → re-open when ingestion sees a new inbound on
+    #     the source thread (cheap: we already index thread_id on Message).
+    snooze_until: Mapped[date | None] = mapped_column(Date)
+    snooze_until_reply: Mapped[bool] = mapped_column(Boolean, default=False)

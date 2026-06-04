@@ -20,7 +20,7 @@ from app.capabilities.base import (
 )
 from app.db.enums import ActionType, Provider, RiskLevel
 from app.db.models import ConnectedAccount, DraftReply, Message, User
-from app.services import gmail
+from app.services import gmail, outbound_tracking
 from app.services.crypto import decrypt_token
 
 
@@ -55,6 +55,13 @@ class SendEmailCapability:
 
         # Dev seed accounts have no real Gmail token; simulate a send end to end.
         if account.scopes == ["seed"]:
+            outbound_tracking.record_send(
+                db,
+                user,
+                source_message=message,
+                recipient=message.sender,
+                subject=draft.subject,
+            )
             return ExecutionResult(detail="Email sent (dev seed)", reversible=False)
 
         token = decrypt_token(account.token_ciphertext)
@@ -69,6 +76,14 @@ class SendEmailCapability:
                 body=draft.body,
                 thread_id=message.thread_id,
             )
+        # Track the outbound so we can nudge the user if the thread goes silent.
+        outbound_tracking.record_send(
+            db,
+            user,
+            source_message=message,
+            recipient=message.sender,
+            subject=subject,
+        )
         # Sending is not reversible (it left the user's mailbox).
         return ExecutionResult(
             detail=f"Sent to {message.sender}",

@@ -379,14 +379,74 @@ def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
     return enqueued
 
 
+def scan_schedule_conflicts(db: Session, user_id: str, *, now: datetime) -> int:
+    """Detect overlapping calendar events in the next 48 hours and push a
+    schedule_conflict for each pair. Deduped per ordered (id_a, id_b) pair so a
+    later scan doesn't re-fire. Skips all-day events (start_time is required)."""
+    horizon = now + timedelta(hours=48)
+    events = list(
+        db.scalars(
+            select(CalendarEvent)
+            .where(
+                CalendarEvent.user_id == user_id,
+                CalendarEvent.start_time.is_not(None),
+                CalendarEvent.end_time.is_not(None),
+                CalendarEvent.start_time >= now,
+                CalendarEvent.start_time <= horizon,
+            )
+            .order_by(CalendarEvent.start_time)
+        )
+    )
+    enqueued = 0
+    for i, a in enumerate(events):
+        assert a.start_time is not None and a.end_time is not None
+        a_start = a.start_time if a.start_time.tzinfo else a.start_time.replace(tzinfo=UTC)
+        a_end = a.end_time if a.end_time.tzinfo else a.end_time.replace(tzinfo=UTC)
+        for b in events[i + 1 :]:
+            assert b.start_time is not None and b.end_time is not None
+            b_start = b.start_time if b.start_time.tzinfo else b.start_time.replace(tzinfo=UTC)
+            b_end = b.end_time if b.end_time.tzinfo else b.end_time.replace(tzinfo=UTC)
+            # Once a's end <= b's start, all subsequent b's start later → no further
+            # overlap with a is possible (events are sorted by start). Bail early.
+            if a_end <= b_start:
+                break
+            if b_end <= a_start:
+                continue
+            # Overlap. Push one notification per ordered pair (lexicographic on id
+            # so the dedup key is stable regardless of which event we saw first).
+            id_lo, id_hi = sorted([a.id, b.id])
+            title = "Calendar conflict"
+            body = f"{a.title or '(untitled)'} overlaps with {b.title or '(untitled)'}"
+            created = enqueue(
+                db,
+                user_id,
+                ntype=NotificationType.schedule_conflict,
+                title=title,
+                body=body[:160],
+                payload={
+                    "event_ids": [a.id, b.id],
+                    "deep_link": f"/meeting/{a.id}",
+                },
+                dedup_key=f"conflict:{id_lo}:{id_hi}",
+            )
+            if created is not None:
+                enqueued += 1
+    return enqueued
+
+
 def scan_top_priorities(db: Session, user: User, *, today: date_type) -> int:
     """Push for open commitments the priority ranker now considers critical. The
     ranker reads sender history, dismissal patterns, thread depth, and content
     signals — so this fires only when something genuinely important rises to the
     top, not for every new email. Dedup per commitment id ensures one push per
-    item across re-scans."""
-    # Local import to avoid the notifications/priority module cycle.
-    from app.services import priority
+    item across re-scans.
+
+    When the commitment came from an email, pre-generate a draft reply so the
+    push deep-links to a review-and-send screen — the user gets to act in one
+    screen, not bounce through inbox → message → draft."""
+    # Local imports to avoid the notifications/priority + notifications/draft
+    # module cycles.
+    from app.services import prep_draft, priority
 
     context = priority.build_context(db, user)
     open_commitments = list(
@@ -405,13 +465,20 @@ def scan_top_priorities(db: Session, user: User, *, today: date_type) -> int:
         counterparty = c.counterparty or "Someone"
         title = f"Top priority: {counterparty} — {c.description[:60]}"
         body = scored.reason
+        # Try to pre-draft a reply. If anything goes wrong (no source message,
+        # LLM unavailable), fall back to the original "/today" deep link.
+        draft_id = prep_draft.ensure_draft_for(db, user, commitment=c)
+        deep_link = f"/draft/{draft_id}" if draft_id else "/today"
+        payload: dict[str, Any] = {"commitment_id": c.id, "deep_link": deep_link}
+        if draft_id:
+            payload["draft_reply_id"] = draft_id
         created = enqueue(
             db,
             user.id,
             ntype=NotificationType.unanswered_email,
             title=title[:80],
             body=body[:160],
-            payload={"commitment_id": c.id, "deep_link": "/today"},
+            payload=payload,
             dedup_key=f"top:{c.id}",
         )
         if created is not None:

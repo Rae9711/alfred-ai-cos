@@ -61,6 +61,12 @@ export const Ic = {
       <Line x1={5} y1={12} x2={19} y2={12} />
     </Line24>
   ),
+  Search: (p: IconProps) => (
+    <Line24 {...p}>
+      <Circle cx={11} cy={11} r={7} />
+      <Line x1={21} y1={21} x2={16} y2={16} />
+    </Line24>
+  ),
   Check: (p: IconProps) => (
     <Line24 {...p}>
       <Polyline points="20 6 9 17 4 12" />

@@ -39,8 +39,24 @@ class CommitmentOut(BaseModel):
     status: CommitmentStatus
     evidence: str | None
     confidence: float
+    snooze_until: date | None = None
+    snooze_until_reply: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class SnoozeRequest(BaseModel):
+    """Snooze a commitment until a wake condition fires. Either a parsed
+    natural-language phrase or an explicit date / reply flag."""
+
+    phrase: str | None = None  # "monday", "tomorrow", "next week", "until reply", "+3d"
+    until: date | None = None  # explicit date overrides the phrase
+    until_reply: bool = False
+
+
+class SnoozeOut(BaseModel):
+    commitment: CommitmentOut
+    interpreted_as: str
 
 
 # --- Drafts ---

@@ -12,7 +12,14 @@ from app.db.base import SessionLocal
 from app.db.enums import NotificationType
 from app.db.models import User
 from app.notifications import get_notifier
-from app.services import briefing, extraction, ingestion, notifications
+from app.services import (
+    briefing,
+    extraction,
+    ingestion,
+    notifications,
+    outbound_tracking,
+    snooze,
+)
 from app.workers.celery_app import celery_app
 
 
@@ -109,6 +116,11 @@ def scan_notifications() -> dict[str, int]:
             enqueued += notifications.scan_pending_approvals(db, user.id, now=now_dt)
             enqueued += notifications.scan_upcoming_meetings(db, user.id, now=now_dt)
             enqueued += notifications.scan_waiting_aging(db, user.id, now=now_dt)
+            enqueued += notifications.scan_schedule_conflicts(db, user.id, now=now_dt)
+            enqueued += outbound_tracking.scan_silent_threads(db, user, now=now_dt)
+            # Re-open snoozed commitments whose wake condition has fired BEFORE
+            # we run the priority scanner so newly-awake items can be re-ranked.
+            snooze.scan_wakes(db, user.id, today=today)
             enqueued += notifications.scan_top_priorities(db, user, today=today)
             result = notifications.dispatch_pending(db, user, now=now_t, provider=notifier)
             sent += result["sent"]

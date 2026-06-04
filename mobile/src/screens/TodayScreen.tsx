@@ -30,6 +30,7 @@ import { useShell } from "@/components/Shell";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
+import { SnoozeSheet } from "@/screens/sheets/SnoozeSheet";
 import {
   Avatar,
   Card,
@@ -152,9 +153,28 @@ export function TodayScreen() {
   );
 
   const snoozePriority = useCallback(
+    (id: string) => {
+      // Open the smart-snooze sheet so the user picks a wake condition. The
+      // sheet calls the server, the server parses the phrase, the toast shows
+      // the interpreted wake time so the user can see what we recorded.
+      openSheet(
+        <SnoozeSheet
+          commitmentId={id}
+          onDone={() => {
+            void load();
+          }}
+        />,
+      );
+    },
+    [load, openSheet],
+  );
+
+  const dismissPriority = useCallback(
     async (id: string) => {
-      await api.updateCommitmentStatus(id, CommitmentStatus.Snoozed);
-      showToast("Snoozed until tomorrow.");
+      // "Not important" → dismissed. The ranker uses this as negative learning
+      // signal (g) so future items from this sender drift down.
+      await api.updateCommitmentStatus(id, CommitmentStatus.Dismissed);
+      showToast("Got it. I'll stop bringing this up.");
       await load();
     },
     [load, showToast],
@@ -211,7 +231,16 @@ export function TodayScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Eyebrow>{todayLine()}</Eyebrow>
+        <View style={styles.headerTop}>
+          <Eyebrow>{todayLine()}</Eyebrow>
+          <Pressable
+            onPress={() => router.push("/search")}
+            hitSlop={10}
+            accessibilityLabel="Search"
+          >
+            <Ic.Search size={18} color={colors.ink3} stroke={1.5} />
+          </Pressable>
+        </View>
         <Serif size={36} style={styles.greeting}>
           {greetingFor(new Date().getHours())}{" "}
           {firstName ? (
@@ -273,7 +302,8 @@ export function TodayScreen() {
                 )
               }
               onMarkDone={() => void markPriorityDone(item.id)}
-              onSnooze={() => void snoozePriority(item.id)}
+              onSnooze={() => snoozePriority(item.id)}
+              onDismiss={() => void dismissPriority(item.id)}
             />
           ))}
         </View>
@@ -419,6 +449,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper,
   },
   header: { gap: 10, paddingBottom: 14 },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   greeting: { marginTop: 2 },
   subtitle: { fontSize: 15, lineHeight: 22, color: colors.ink3, maxWidth: 320 },
   error: { color: colors.warn, fontSize: 13, marginTop: spacing.sm },

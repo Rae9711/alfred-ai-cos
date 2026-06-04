@@ -11,7 +11,15 @@ from app.db.base import get_db
 from app.db.enums import CommitmentStatus, SourceType
 from app.db.models import Commitment, DraftReply, Message, User
 from app.llm import get_llm
-from app.schemas.api import CommitmentDraftOut, CommitmentDraftRequest, CommitmentOut
+from app.schemas.api import (
+    CommitmentDraftOut,
+    CommitmentDraftRequest,
+    CommitmentOut,
+    SnoozeOut,
+    SnoozeRequest,
+)
+from app.services import learning
+from app.services import snooze as snooze_service
 
 router = APIRouter(prefix="/commitments", tags=["commitments"])
 
@@ -37,6 +45,18 @@ def update_status(
         raise HTTPException(status_code=404, detail="Commitment not found")
     commitment.status = status
     db.commit()
+    # Feed the learning loop AFTER the commit so the recorded behavior reflects
+    # what's actually persisted. done = act (positive); dismissed = vote "not
+    # this"; snoozed = parked (neutral, but tracked for visibility).
+    event: learning.Event | None = None
+    if status == CommitmentStatus.done:
+        event = "act"
+    elif status == CommitmentStatus.dismissed:
+        event = "dismiss"
+    elif status == CommitmentStatus.snoozed:
+        event = "snooze"
+    if event is not None:
+        learning.record_event(db, user, event=event, commitment=commitment)
     return commitment
 
 
@@ -102,4 +122,45 @@ def draft_for_commitment(
         tone=payload.tone,
         evidence=commitment.evidence,
         draft_reply_id=draft_reply_id,
+    )
+
+
+@router.post("/{commitment_id}/snooze", response_model=SnoozeOut)
+def snooze_commitment(
+    commitment_id: str,
+    payload: SnoozeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SnoozeOut:
+    """Smart snooze with wake conditions. Accepts a natural-language phrase
+    (parsed in-house), an explicit ISO date, or an until-reply flag. Either
+    parameter wins over the others in the order: explicit until > until_reply >
+    phrase. If nothing parses, 400."""
+    from datetime import datetime as _dt
+
+    commitment = db.get(Commitment, commitment_id)
+    if commitment is None or commitment.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Commitment not found")
+
+    spec: snooze_service.SnoozeSpec | None = None
+    today = _dt.now().date()
+    if payload.until is not None or payload.until_reply:
+        spec = snooze_service.SnoozeSpec(
+            until_date=payload.until,
+            until_reply=payload.until_reply,
+            interpreted_as=(payload.until.isoformat() if payload.until else "when they reply"),
+        )
+    elif payload.phrase:
+        spec = snooze_service.parse(payload.phrase, today=today)
+
+    if spec is None or (spec.until_date is None and not spec.until_reply):
+        raise HTTPException(
+            status_code=400,
+            detail="Could not interpret snooze condition — pass a date or 'until reply'",
+        )
+
+    snooze_service.snooze(db, commitment, spec=spec)
+    return SnoozeOut(
+        commitment=CommitmentOut.model_validate(commitment),
+        interpreted_as=spec.interpreted_as,
     )

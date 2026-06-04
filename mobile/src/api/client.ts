@@ -115,6 +115,30 @@ export const api = {
     request<Commitment>(`/commitments/${id}/status?status=${status}`, {
       method: "POST",
     }),
+  // Smart snooze: park a commitment until a wake condition fires. `phrase`
+  // accepts "monday", "tomorrow", "+3d", "next week", "until reply", or an
+  // ISO date. Server returns the parsed interpretation so the UI can confirm.
+  snoozeCommitment: (
+    id: string,
+    body: { phrase?: string; until?: string; until_reply?: boolean },
+  ) =>
+    request<{ commitment: Commitment; interpreted_as: string }>(
+      `/commitments/${id}/snooze`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  search: (q: string, limit = 20) =>
+    request<{
+      query: string;
+      results: Array<{
+        kind: "message" | "commitment";
+        id: string;
+        title: string;
+        snippet: string;
+        sender: string | null;
+        when: string | null;
+        score: number;
+      }>;
+    }>(`/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   // Draft a reply for a Today priority ("Act"). Returns real recipient/subject/body/
   // evidence generated from the commitment, not a stored Gmail draft.
   draftForCommitment: (id: string, tone = "concise") =>

@@ -16,6 +16,7 @@ from app.api.v1 import (
     meetings,
     messages,
     notifications,
+    search,
     sync,
     tasks,
     today,
@@ -39,4 +40,5 @@ api_router.include_router(waiting.router)
 api_router.include_router(me.router)
 api_router.include_router(notifications.router)
 api_router.include_router(inbox.router)
+api_router.include_router(search.router)
 api_router.include_router(dev.router)

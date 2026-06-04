@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
 from app.db.models import Commitment, Message, User
+from app.services.learning import LearningView, adjustment_for, get_learning
 
 # ---------- weights (one place to tune the ranker) ----------
 
@@ -88,6 +89,11 @@ class ScoringContext:
     # Map commitment.source_id → (sender, thread_id) so the scorer can find the
     # message context for a commitment in O(1).
     commitment_context: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    # Per-user learning snapshot. Bounded score adjustments per sender and per
+    # keyword category, derived from the user's accept/dismiss/snooze/act history.
+    # The ranker adds adjustment_for(...) to the final score so learning shows up
+    # as a small, explainable shift on top of the deterministic rules.
+    learning: LearningView | None = None
 
 
 def build_context(db: Session, user: User, *, now: datetime | None = None) -> ScoringContext:
@@ -97,6 +103,7 @@ def build_context(db: Session, user: User, *, now: datetime | None = None) -> Sc
     window_start = now - timedelta(days=30)
     user_email = (user.email or "").lower()
     ctx = ScoringContext()
+    ctx.learning = get_learning(user)
 
     # 1) Messages in the recent window: drive inbound_count, thread_depth, and
     # user_replies_to. One scan, all three indexes.
@@ -288,6 +295,22 @@ def score_commitment(
         # Phrased as part of the reason rather than its own clause — feels less robotic.
         if not any("waiting" in r for r in reasons):
             reasons.append("a direct ask")
+
+    # --- learned per-user adjustment (small, bounded, explainable) ---
+    if context is not None and context.learning is not None:
+        from app.services.learning import _categories_in
+
+        sender = None
+        if commitment.source_id:
+            sender, _ = context.commitment_context.get(commitment.source_id, (None, None))
+        cats = _categories_in(text)
+        learn_delta = adjustment_for(context.learning, sender=sender, categories=cats)
+        if abs(learn_delta) >= 1.0:
+            score += learn_delta
+            if learn_delta > 0:
+                reasons.append("learned: matches what you usually act on")
+            else:
+                reasons.append("learned: similar items you usually dismiss")
 
     # --- confidence dampener ---
     score *= 0.5 + 0.5 * commitment.confidence

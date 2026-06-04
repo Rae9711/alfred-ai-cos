@@ -413,6 +413,74 @@ def test_top_priority_push_skips_low(db: Session, user: User) -> None:
     assert n.scan_top_priorities(db, user, today=today) == 0
 
 
+# --- schedule-conflict detection ---
+
+
+def _ev(
+    user_id: str, *, start: datetime, end: datetime, title: str = "Meeting", ext: str = "e"
+) -> "CalendarEvent":
+    from app.db.models import CalendarEvent
+
+    return CalendarEvent(
+        user_id=user_id,
+        external_id=ext,
+        title=title,
+        start_time=start,
+        end_time=end,
+    )
+
+
+def test_overlap_fires_one_push(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 4, 12, 0, tzinfo=UTC)
+    db.add(_ev(user.id, start=now + timedelta(hours=1), end=now + timedelta(hours=2), ext="e1"))
+    db.add(
+        _ev(
+            user.id,
+            start=now + timedelta(hours=1, minutes=30),
+            end=now + timedelta(hours=2, minutes=30),
+            ext="e2",
+            title="Second",
+        )
+    )
+    db.commit()
+    assert n.scan_schedule_conflicts(db, user.id, now=now) == 1
+    notif = db.query(Notification).one()
+    assert notif.type == NotificationType.schedule_conflict
+    assert "overlaps" in notif.body
+
+
+def test_non_overlap_no_push(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 4, 12, 0, tzinfo=UTC)
+    db.add(_ev(user.id, start=now + timedelta(hours=1), end=now + timedelta(hours=2), ext="e1"))
+    db.add(
+        _ev(
+            user.id,
+            start=now + timedelta(hours=2),  # touches but doesn't overlap
+            end=now + timedelta(hours=3),
+            ext="e2",
+        )
+    )
+    db.commit()
+    assert n.scan_schedule_conflicts(db, user.id, now=now) == 0
+
+
+def test_conflict_is_deduped(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 4, 12, 0, tzinfo=UTC)
+    db.add(_ev(user.id, start=now + timedelta(hours=1), end=now + timedelta(hours=2), ext="e1"))
+    db.add(
+        _ev(
+            user.id,
+            start=now + timedelta(hours=1, minutes=15),
+            end=now + timedelta(hours=2, minutes=15),
+            ext="e2",
+        )
+    )
+    db.commit()
+    n.scan_schedule_conflicts(db, user.id, now=now)
+    n.scan_schedule_conflicts(db, user.id, now=now)
+    assert db.query(Notification).count() == 1
+
+
 def test_top_priority_push_is_deduped(db: Session, user: User) -> None:
     today = date(2026, 6, 2)
     db.add(

@@ -42,10 +42,16 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "forward", label: "Forward" },
 ];
 
-export function CaptureScreen({ onClose }: { onClose: () => void }) {
+export function CaptureScreen({
+  onClose,
+  initialText,
+}: {
+  onClose: () => void;
+  initialText?: string;
+}) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [mode, setMode] = useState<Mode>("voice");
-  const [text, setText] = useState("");
+  const [mode, setMode] = useState<Mode>(initialText ? "text" : "voice");
+  const [text, setText] = useState(initialText ?? "");
   const [result, setResult] = useState<CaptureResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +86,18 @@ export function CaptureScreen({ onClose }: { onClose: () => void }) {
     setResult(null);
     setError(null);
   };
+
+  // Auto-submit when invoked with an `initialText` (e.g. an iOS Shortcut sent
+  // dictated text via albert://capture?text=...). The shortcut user wants the
+  // capture to happen, not to land on the type box and tap submit themselves.
+  useEffect(() => {
+    if (initialText && initialText.trim().length > 0) {
+      void submitText();
+    }
+    // Intentional: run once on mount per deep-link arrival. submitText is
+    // stable within the closure of `text` which we already set above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={[styles.screen, dark && styles.screenDark]}>
