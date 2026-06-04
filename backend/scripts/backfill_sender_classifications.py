@@ -8,8 +8,16 @@ Usage:
 
 from __future__ import annotations
 
-from app.db.base import SessionLocal
-from app.services import sender_class
+import sys
+from pathlib import Path
+
+# Make the script runnable from anywhere (e.g. systemd, cron) without needing
+# PYTHONPATH=. The script lives at backend/scripts/, so the backend dir (which
+# contains the `app` package) is its parent.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.db.base import SessionLocal  # noqa: E402
+from app.services import sender_class  # noqa: E402
 
 
 def main() -> None:
