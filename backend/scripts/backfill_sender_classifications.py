@@ -21,12 +21,15 @@ from app.services import sender_class  # noqa: E402
 
 
 def main() -> None:
+    # Pass --force to re-classify EVERY row (used after the classifier rules
+    # change). Default touches only NULL rows.
+    force = "--force" in sys.argv
     db = SessionLocal()
     try:
-        n = sender_class.backfill_classifications(db)
+        n = sender_class.backfill_classifications(db, force=force)
     finally:
         db.close()
-    print(f"Classified {n} message(s).")
+    print(f"Classified {n} message(s).{' (force=True)' if force else ''}")
 
 
 if __name__ == "__main__":

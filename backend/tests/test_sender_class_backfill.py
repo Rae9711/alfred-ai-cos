@@ -112,3 +112,31 @@ def test_backfill_handles_large_batches(db: Session, user: User) -> None:
     assert n == 25
     remaining = db.query(Message).filter(Message.sender_classification.is_(None)).count()
     assert remaining == 0
+
+
+def test_force_backfill_re_classifies_existing_rows(db: Session, user: User) -> None:
+    """force=True touches EVERY row, not just NULL ones. Used after the
+    classifier rules change so existing rows pick up the new behavior."""
+    msg = _msg(user.id, ext="m1", sender="Mary <mary@buyer.co>")
+    db.add(msg)
+    db.commit()
+    # First pass writes 'person'.
+    n1 = sender_class.backfill_classifications(db)
+    assert n1 == 1
+    # Manually set to a wrong value, then force-reclassify.
+    msg.sender_classification = "automated"
+    db.commit()
+    n2 = sender_class.backfill_classifications(db, force=True)
+    assert n2 == 1
+    db.refresh(msg)
+    assert msg.sender_classification == "person"
+
+
+def test_force_backfill_terminates(db: Session, user: User) -> None:
+    """Keyset pagination guards against the obvious bug: force=True must
+    not loop forever on rows it just wrote."""
+    for i in range(5):
+        db.add(_msg(user.id, ext=f"m{i}", sender=f"x{i}@brand.io"))
+    db.commit()
+    n = sender_class.backfill_classifications(db, force=True, batch_size=2)
+    assert n == 5

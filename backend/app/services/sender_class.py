@@ -828,25 +828,44 @@ PRIORITY_CEILING_FOR_CLASS: dict[SenderClass, str] = {
 }
 
 
-def backfill_classifications(db, *, user_id: str | None = None, batch_size: int = 500) -> int:
-    """One-shot backfill that classifies every Message with a null
-    sender_classification. Runs after the migration adds the column so existing
-    rows pick up the shield without a re-ingest.
+def backfill_classifications(
+    db,
+    *,
+    user_id: str | None = None,
+    batch_size: int = 500,
+    force: bool = False,
+) -> int:
+    """Classify Messages and write Message.sender_classification.
 
-    Safe to call repeatedly: only NULL rows are touched. Returns the number of
-    messages classified."""
+    Default (force=False): only touch rows where sender_classification IS NULL.
+    Used after adding the column or after re-ingesting old messages.
+
+    force=True: re-classify EVERY row. Used after the classifier itself gets
+    smarter and we want existing rows to pick up the new rules without a
+    full re-ingest.
+
+    Both modes are safe to call repeatedly. Returns the number of messages
+    classified in this run."""
     from sqlalchemy import select  # local import: keeps `sender_class` framework-free
 
     from app.db.models import Message, User
 
     classified = 0
+    # Keyset pagination by id so force=True doesn't infinite-loop on rows it
+    # just wrote. We always advance past the highest id we've seen.
+    last_id: str | None = None
     while True:
-        stmt = select(Message).where(Message.sender_classification.is_(None)).limit(batch_size)
+        stmt = select(Message).order_by(Message.id).limit(batch_size)
+        if not force:
+            stmt = stmt.where(Message.sender_classification.is_(None))
         if user_id is not None:
             stmt = stmt.where(Message.user_id == user_id)
+        if last_id is not None:
+            stmt = stmt.where(Message.id > last_id)
         batch = list(db.scalars(stmt))
         if not batch:
             break
+        last_id = batch[-1].id
         # Cache users per batch so we don't refetch the same user for every row.
         users: dict[str, User | None] = {}
         for m in batch:
