@@ -72,17 +72,33 @@ def _dedup_key(owner: str, counterparty: str | None, description: str) -> str:
     return f"{owner}|{cp}|{' '.join(content)}"
 
 
+_EXTRACTION_BLOCKED_CLASSES = {"automated", "bulk", "suspicious", "muted"}
+
+
 def process_message(db: Session, message: Message, *, body: str | None = None) -> list[Commitment]:
     """Classify one message and extract its commitments. Persists results.
 
     The body is fetched from Gmail in-process when not supplied, so it is never
     stored. Callers that already hold the body (e.g. the dev seed path) pass it
     in to avoid a Gmail round trip.
-    """
+
+    Extraction guard: messages from automated / bulk / suspicious / muted senders
+    skip the LLM extraction entirely. The spam shield would cap any commitments
+    they produced at `low` anyway, and the LLM is prone to extracting fake
+    "Sign by Friday!" commitments from marketing copy. Skipping saves money AND
+    keeps Today free of spam-derived clutter. transactional_critical and the
+    person/role_account/vip classes still extract normally."""
     llm = get_llm()
     user = db.get(User, message.user_id)
     if user is None:
         raise ValueError("Missing user for extraction")
+
+    # Extraction guard — applied before the LLM runs. The classifier ran at
+    # ingest time and wrote sender_classification. If it's in the blocked set,
+    # we skip extraction entirely and return zero commitments. The Message row
+    # itself stays (so search + inbox views still see it).
+    if message.sender_classification in _EXTRACTION_BLOCKED_CLASSES:
+        return []
 
     if body is None:
         account = (

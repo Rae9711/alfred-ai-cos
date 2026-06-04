@@ -40,7 +40,16 @@ from typing import Literal
 
 from app.db.models import Message, User
 
-SenderClass = Literal["person", "role_account", "automated", "bulk", "suspicious", "vip", "muted"]
+SenderClass = Literal[
+    "person",
+    "role_account",
+    "automated",
+    "transactional_critical",
+    "bulk",
+    "suspicious",
+    "vip",
+    "muted",
+]
 
 
 @dataclass
@@ -173,6 +182,32 @@ _AUTOMATED_LOCAL_PREFIXES = (
     "blast",
     "mail-",
     "list-",
+    "store-",  # store-news@amazon.com
+)
+
+# Suffix patterns: a local part ending in any of these is automated even if
+# the prefix is generic. Catches messages-noreply@linkedin.com,
+# editors-noreply@linkedin.com, billing-noreply@stripe.com,
+# notifications-noreply, etc.
+_AUTOMATED_LOCAL_SUFFIXES = (
+    "-noreply",
+    "-no-reply",
+    "-donotreply",
+    "-do-not-reply",
+    "-notifications",
+    "-notification",
+    "-alerts",
+    "-news",
+    "-newsletter",
+    "-mailer",
+    "-marketing",
+    "-campaign",
+    "-promo",
+    "-digest",
+    "-bounces",
+    "-updates",
+    ".noreply",  # no.reply.alerts@chase.com
+    ".no-reply",
 )
 
 # Domain patterns that are bulk-mail platforms — anything sent from these is
@@ -219,11 +254,29 @@ _BULK_DOMAIN_PATTERNS = (
 # updates.github.com. These often deliver legitimate transactional mail too,
 # so this knocks the class down to automated rather than spam.
 _TRANSACTIONAL_SUBDOMAINS = (
+    # Single-letter / abbreviation prefixes commonly used by ESPs to obscure
+    # that the mail is bulk: em.linkedin.com, e.zoom.us, eg.expedia.com.
+    "e.",
+    "em.",
+    "ec.",
+    "eg.",
+    "ep.",
+    "eu.",
+    "ms.",
+    "mt.",
+    "mx.",
+    "mk.",
+    "n.",
+    "p.",
+    "t.",
+    # Word prefixes
     "email.",
+    "enews.",
     "news.",
     "newsletter.",
     "marketing.",
     "promo.",
+    "promotions.",
     "offers.",
     "info.",
     "mail.",
@@ -233,8 +286,29 @@ _TRANSACTIONAL_SUBDOMAINS = (
     "smtp.",
     "notify.",
     "notifications.",
+    "notification.",
     "alerts.",
+    "alert.",
     "messages.",
+    "message.",
+    "link.",
+    "links.",
+    "trk.",
+    "track.",
+    "tracking.",
+    "click.",
+    "campaign.",
+    "campaigns.",
+    "store-news.",
+    "updates.",
+    "update.",
+    "events.",
+    "post.",  # info@post.tommy.com pattern
+    "broadcast.",
+    "deals.",
+    "digest.",
+    "weekly.",
+    "daily.",
 )
 
 # Free-mail providers that DO host real people. Used to skip the "no first.last
@@ -271,6 +345,143 @@ _SUSPICIOUS_DOMAINS = {
     "mail.ru",
     "yandex.ru",
 }
+
+
+# Verified-issuer root domains for transactional_critical. A message can only
+# be promoted to transactional_critical when its sender's root domain is in
+# this set AND its subject matches a critical-action pattern. This combo
+# blocks the obvious phishing exploit (claiming to be Stripe from
+# stripe-secure.tk) because the domain check is strict and pre-empts the
+# brand-impersonation check.
+_VERIFIED_TRANSACTIONAL_ISSUERS = {
+    # Payments / billing
+    "stripe.com",
+    "paypal.com",
+    "square.com",
+    "squareup.com",
+    "intuit.com",
+    "quickbooks.com",
+    "wise.com",
+    "revolut.com",
+    "ramp.com",
+    "brex.com",
+    "mercury.com",
+    "chase.com",
+    "bankofamerica.com",
+    "wellsfargo.com",
+    "citi.com",
+    "hsbc.com",
+    "barclays.com",
+    "americanexpress.com",
+    "amex.com",
+    "capitalone.com",
+    # Cloud / infra (failed payments, expiring credit cards, deletion notices)
+    "aws.amazon.com",
+    "amazonaws.com",
+    "google.com",
+    "googlecloud.com",
+    "cloud.google.com",
+    "microsoft.com",
+    "azure.com",
+    "digitalocean.com",
+    "linode.com",
+    "vercel.com",
+    "netlify.com",
+    "hetzner.com",
+    "cloudflare.com",
+    # Identity / compliance
+    "docusign.com",
+    "hellosign.com",
+    "dropboxsign.com",
+    "okta.com",
+    "auth0.com",
+    "1password.com",
+    "lastpass.com",
+    # Government — anything ending in .gov / .gov.uk / similar is added by
+    # suffix check, see _is_government_domain below.
+}
+
+
+# Subject patterns that ARE legitimately critical. Each must combine WITH a
+# verified-issuer domain. A subject alone never triggers this class — a
+# personal email that happens to say "payment failed" is still personal.
+_TRANSACTIONAL_CRITICAL_SUBJECTS = re.compile(
+    r"\b("
+    r"(payment|charge|transfer) (failed|declined|reversed|disputed)|"
+    r"insufficient funds|"
+    r"card (expired|expiring|declined)|"
+    r"account (suspended|locked|closed|on hold|frozen|deactivated|will be)|"
+    r"action required (today|now|by|before|to)|"
+    r"final notice (before|to|of)|"
+    r"(verification|identity) (required|needed|pending|on hold)|"
+    r"(deletion|cancellation) scheduled|"
+    r"(invoice|subscription) (overdue|past due|unpaid)|"
+    r"(security|fraud) alert|"
+    r"(unusual|suspicious) (login|sign[- ]?in|activity) (detected|from)|"
+    r"document (ready|awaiting) (to sign|signature)|"
+    r"signature requested|"
+    r"please sign|"
+    r"data breach|"
+    r"production (outage|incident)|"
+    r"sla (breach|miss)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _root_domain(dom: str) -> str:
+    """Reduce 'email.notifications.stripe.com' to 'stripe.com'. Naive: just
+    the last two labels. Good enough for the verified-issuer match because
+    every issuer in the list is a 2-label registered domain."""
+    parts = dom.split(".")
+    if len(parts) < 2:
+        return dom
+    # Handle the common 2-part TLDs we care about (.co.uk, .gov.uk, .com.au).
+    if len(parts) >= 3 and ".".join(parts[-2:]) in {
+        "co.uk",
+        "gov.uk",
+        "ac.uk",
+        "com.au",
+        "co.jp",
+        "com.br",
+    }:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
+def _is_government_domain(dom: str) -> bool:
+    """Government domains globally. These can be transactional_critical when
+    paired with an action subject — a real IRS / HMRC notice is important."""
+    if not dom:
+        return False
+    return (
+        dom.endswith(".gov")
+        or dom.endswith(".gov.uk")
+        or dom.endswith(".gov.au")
+        or dom.endswith(".gouv.fr")
+        or dom.endswith(".gob.es")
+        or dom.endswith(".gc.ca")
+        or dom.endswith(".gov.in")
+        or dom.endswith(".gov.sg")
+    )
+
+
+def _is_transactional_critical(*, dom: str, subject: str | None) -> bool:
+    """A message is transactional_critical when its root domain is on the
+    verified-issuer list (or is a government domain) AND its subject matches
+    a critical-action pattern. Both checks required — defends against
+    impersonation."""
+    if not subject:
+        return False
+    root = _root_domain(dom)
+    in_issuer_list = (
+        root in _VERIFIED_TRANSACTIONAL_ISSUERS
+        or dom in _VERIFIED_TRANSACTIONAL_ISSUERS
+        or _is_government_domain(dom)
+    )
+    if not in_issuer_list:
+        return False
+    return bool(_TRANSACTIONAL_CRITICAL_SUBJECTS.search(subject))
 
 
 # --- header signals ---
@@ -417,20 +628,56 @@ def classify(
     if _matches_override(email, overrides.vip):
         return Classification(cls="vip", reasons=["you marked this sender VIP"])
 
-    # 2) suspicious patterns.
-    susp = _suspicious_signals(display=display, email=email, subject=subject, snippet=snippet)
-    if susp:
-        return Classification(cls="suspicious", reasons=susp)
+    # 2) Hard-blacklist + brand impersonation. These are FRAUD signals — they
+    # take precedence over everything else because they're independent of
+    # whether the sender is bulk: a sendinblue email is suspicious AND a
+    # Mailchimp blast pretending to be PayPal is also suspicious.
+    if dom in _SUSPICIOUS_DOMAINS:
+        return Classification(
+            cls="suspicious", reasons=[f"sender domain {dom} is on the suspicious list"]
+        )
+    if display:
+        brand = _impersonated_brand(display, dom)
+        if brand:
+            return Classification(
+                cls="suspicious",
+                reasons=[f"display name claims '{brand}' but the email domain is {dom}"],
+            )
+    # Phishing snippet from a no-display-name sender — actual phishing.
+    if snippet and _is_phishy_snippet(snippet) and (not display or dom == ""):
+        return Classification(
+            cls="suspicious", reasons=["phishing-style content from a no-name sender"]
+        )
 
-    # 3) bulk headers.
+    # 3) transactional_critical: a verified-issuer domain with a critical-
+    # action subject. Stripe failed-payment, AWS service deletion notice,
+    # DocuSign signature requested, IRS notice. Must run BEFORE the bulk-
+    # headers and automated-local-part rules because legitimate Stripe
+    # alerts ARE sent via SendGrid with automated local parts. The strict
+    # domain check (root in verified-issuer list OR government suffix)
+    # prevents phishers from claiming "Stripe failed payment" from a
+    # look-alike domain.
+    if _is_transactional_critical(dom=dom, subject=subject):
+        reasons.append(f"verified-issuer ({_root_domain(dom)}) with critical-action subject")
+        return Classification(cls="transactional_critical", reasons=reasons)
+
+    # 4) bulk headers.
     is_bulk, bulk_reasons = _has_bulk_headers(headers)
     if is_bulk:
         return Classification(cls="bulk", reasons=bulk_reasons)
 
-    # 4) automated local part or platform domain.
+    # 5) automated local part or platform domain.
     local = email.split("@", 1)[0] if "@" in email else ""
-    if local in _AUTOMATED_LOCAL_PARTS or any(
-        local.startswith(p) for p in _AUTOMATED_LOCAL_PREFIXES
+    # Normalize dots → dashes so suffix patterns catch dot-separated locals
+    # like no.reply.alerts@chase.com (→ no-reply-alerts, ends in -alerts).
+    local_norm = local.replace(".", "-")
+    if (
+        local in _AUTOMATED_LOCAL_PARTS
+        or local_norm in _AUTOMATED_LOCAL_PARTS
+        or any(local.startswith(p) for p in _AUTOMATED_LOCAL_PREFIXES)
+        or any(local_norm.startswith(p) for p in _AUTOMATED_LOCAL_PREFIXES)
+        or any(local.endswith(s) for s in _AUTOMATED_LOCAL_SUFFIXES)
+        or any(local_norm.endswith(s) for s in _AUTOMATED_LOCAL_SUFFIXES)
     ):
         reasons.append(f"sender local part '{local}' is an automated address")
         return Classification(cls="automated", reasons=reasons)
@@ -438,29 +685,34 @@ def classify(
         reasons.append(f"sent through a bulk-mail platform ({dom})")
         return Classification(cls="automated", reasons=reasons)
 
-    # 5) transactional subdomain + transactional subject = automated.
+    # 6) transactional / marketing subdomain → automated. A long tail of
+    # marketing-specialized subdomains (em., eg., enews., offers., promo.,
+    # store-news., link., trk., e.) and the EXPECTED case for any of them
+    # is bulk mail. A real human emailing from a subdomain like that is
+    # overwhelmingly rare; if it ever happens, the user can VIP-override.
     if dom and any(dom.startswith(prefix) for prefix in _TRANSACTIONAL_SUBDOMAINS):
-        if subject and _TRANSACTIONAL_SUBJECT_RE.search(subject):
-            reasons.append(f"transactional subdomain + transactional subject ({dom})")
-            return Classification(cls="automated", reasons=reasons)
-        # A transactional subdomain without a matching subject is still suspicious
-        # for ranking purposes, but downgrade only to role_account so a real
-        # support reply from email.company.co doesn't get buried.
-        reasons.append(f"sent from transactional subdomain ({dom})")
-        return Classification(cls="role_account", reasons=reasons)
+        reasons.append(f"sent from transactional / marketing subdomain ({dom})")
+        return Classification(cls="automated", reasons=reasons)
 
-    # Newsletter / digest subjects from any sender → automated.
+    # 7) Newsletter / digest subjects from any sender → automated.
     if subject and _NEWSLETTER_SUBJECT_RE.search(subject):
         reasons.append("subject reads as a newsletter / digest")
         return Classification(cls="automated", reasons=reasons)
 
-    # 6) role local part.
+    # 8) role local part.
     if local in _ROLE_LOCAL_PARTS:
         reasons.append(f"shared-inbox local part '{local}'")
         return Classification(cls="role_account", reasons=reasons)
 
-    # 7) urgency-spam — flagged as suspicious so the ranker hard-floors it.
-    # Real people don't write subjects in all caps demanding immediate action.
+    # 9) All-caps screaming subject from a sender that PASSED every bulk /
+    # automated filter — i.e., looks personal but writes like a spammer.
+    # Treat as suspicious because that's almost always phishing/scam.
+    if subject and _is_screaming(subject):
+        return Classification(cls="suspicious", reasons=["subject is all-caps / screaming"])
+
+    # 10) urgency-spam phrasing from a personal-looking sender — same
+    # reasoning as 9. Verify-your-account from a real-looking address is
+    # phishing.
     if subject and _URGENCY_SPAM_RE.search(subject):
         reasons.append("urgency-spam phrasing in the subject")
         return Classification(cls="suspicious", reasons=reasons)
@@ -469,84 +721,49 @@ def classify(
     return Classification(cls="person", reasons=reasons or ["normal sender pattern"])
 
 
-def _suspicious_signals(
-    *, display: str, email: str, subject: str | None, snippet: str | None
-) -> list[str]:
-    """Return non-empty list when the message looks like phishing or scam.
-    Any single signal in this list is enough to floor priority to noise — we
-    err on the side of letting a real ask through with low priority rather
-    than push a phishing test to the top."""
-    reasons: list[str] = []
-    dom = domain_of(email)
-
-    # Explicit blacklist of platforms over-represented in cold/phishing outreach.
-    if dom in _SUSPICIOUS_DOMAINS:
-        reasons.append(f"sender domain {dom} is on the suspicious list")
-        return reasons
-
-    # Display-name impersonation: display claims a well-known brand but the
-    # email is on a different domain.
-    if display:
-        brand = _impersonated_brand(display, dom)
-        if brand:
-            reasons.append(f"display name claims '{brand}' but the email domain is {dom}")
-            return reasons
-
-    # All-caps subject screaming for attention. A real human almost never
-    # writes a subject in all caps; if 70%+ of letter characters in a long
-    # enough subject are uppercase, treat as spam-style urgency.
-    if subject and _is_screaming(subject):
-        reasons.append("subject is all-caps / screaming")
-        return reasons
-
-    # Phishing-style snippet content: "verify your account", "click here to
-    # unlock", etc., combined with a non-personal sender (any of: short local
-    # part, no display name, free-mail domain pretending to be corporate).
-    if snippet and _is_phishy_snippet(snippet) and (not display or dom == ""):
-        reasons.append("phishing-style content from a no-name sender")
-        return reasons
-
-    return reasons
-
-
 # Reduce a display name to a key, then compare against domain. A display name
 # that claims "PayPal" must come from a paypal.com address; otherwise it's
 # impersonation. The list is intentionally short — only obvious global brands
 # people get phished about.
-_IMPERSONATED_BRANDS = {
-    "paypal": "paypal.com",
-    "stripe": "stripe.com",
-    "google": "google.com",
-    "gmail": "google.com",
-    "microsoft": "microsoft.com",
-    "apple": "apple.com",
-    "icloud": "apple.com",
-    "amazon": "amazon.com",
-    "facebook": "facebook.com",
-    "meta": "fb.com",
-    "instagram": "instagram.com",
-    "twitter": "twitter.com",
-    "x corp": "x.com",
-    "linkedin": "linkedin.com",
-    "github": "github.com",
-    "dropbox": "dropbox.com",
-    "docusign": "docusign.com",
-    "intuit": "intuit.com",
-    "irs": "irs.gov",
-    "hmrc": "hmrc.gov.uk",
+_IMPERSONATED_BRANDS: dict[str, tuple[str, ...]] = {
+    # Each brand maps to a tuple of legitimate sending domains. Many large
+    # brands use a dedicated mailing domain (facebookmail.com, mlbemail.com,
+    # tmomail.net) that isn't the main brand's website domain.
+    "paypal": ("paypal.com",),
+    "stripe": ("stripe.com",),
+    "google": ("google.com", "googlemail.com", "accounts.google.com"),
+    "gmail": ("google.com", "googlemail.com"),
+    "microsoft": ("microsoft.com", "microsoftonline.com", "office.com"),
+    "apple": ("apple.com", "icloud.com", "me.com"),
+    "icloud": ("apple.com", "icloud.com"),
+    "amazon": ("amazon.com", "amazonses.com", "marketplace.amazon.com"),
+    "facebook": ("facebook.com", "facebookmail.com", "fb.com"),
+    "meta": ("fb.com", "facebookmail.com", "meta.com"),
+    "instagram": ("instagram.com", "mail.instagram.com", "facebookmail.com"),
+    "twitter": ("twitter.com", "x.com"),
+    "x corp": ("x.com",),
+    "linkedin": ("linkedin.com",),
+    "github": ("github.com",),
+    "dropbox": ("dropbox.com", "dropboxmail.com"),
+    "docusign": ("docusign.com", "docusign.net"),
+    "intuit": ("intuit.com",),
+    "irs": ("irs.gov",),
+    "hmrc": ("hmrc.gov.uk", "tax.service.gov.uk"),
 }
 
 
 def _impersonated_brand(display: str, dom: str) -> str | None:
-    """If display name claims a famous brand and the domain isn't a subdomain
-    of that brand's real domain, return the brand name. Else None."""
+    """If display name claims a famous brand and the domain isn't one of
+    that brand's known sending domains (or a subdomain of one), return the
+    brand name. Else None."""
     if not display or not dom:
         return None
     lc = display.lower()
-    for brand, real_dom in _IMPERSONATED_BRANDS.items():
+    for brand, real_doms in _IMPERSONATED_BRANDS.items():
         if brand in lc:
-            if dom == real_dom or dom.endswith("." + real_dom):
-                return None  # legitimate
+            for real_dom in real_doms:
+                if dom == real_dom or dom.endswith("." + real_dom):
+                    return None  # legitimate
             return brand
     return None
 
@@ -599,6 +816,10 @@ def classify_message(message: Message, *, user: User | None) -> Classification:
 PRIORITY_CEILING_FOR_CLASS: dict[SenderClass, str] = {
     "vip": "critical",  # VIPs can hit critical
     "person": "critical",  # everyone else who's a person too
+    # Real failed-payment / security / signature-requested alerts from verified
+    # issuers — these CAN reach critical because they have legitimate action
+    # items the user must handle today (card declined, account suspended).
+    "transactional_critical": "critical",
     "role_account": "high",  # shared inboxes cap at high
     "automated": "low",  # mailers can't push you
     "bulk": "low",
@@ -653,6 +874,11 @@ def backfill_classifications(db, *, user_id: str | None = None, batch_size: int 
 SCORE_MULTIPLIER_FOR_CLASS: dict[SenderClass, float] = {
     "vip": 1.15,  # mild lift for VIPs
     "person": 1.0,
+    # Transactional_critical from a verified issuer is genuine urgency that
+    # the user almost certainly needs to handle today — slightly lifted so
+    # a "payment failed" alert with a thin LLM-extracted commitment still
+    # clears the high → critical threshold.
+    "transactional_critical": 1.10,
     "role_account": 0.85,
     "automated": 0.45,
     "bulk": 0.40,

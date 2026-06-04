@@ -266,16 +266,18 @@ def test_transactional_subdomain_with_receipt_is_automated() -> None:
     assert out.cls == "automated"
 
 
-def test_transactional_subdomain_with_personal_subject_is_role_account() -> None:
-    # A real human at a marketing subdomain (e.g., a salesperson) is still
-    # role_account, not person.
+def test_transactional_subdomain_is_always_automated() -> None:
+    # A marketing-specialized subdomain (email., em., e., news., etc.) is
+    # treated as automated regardless of subject. Real humans almost never
+    # email from these subdomains; if they do, the user can VIP-override.
+    # Catches LinkedIn-Ads-style senders that previously slipped to `person`.
     out = sc.classify(
         sender="Jane Doe <jane@email.startup.io>",
         subject="Can we hop on a call?",
         snippet="Hi Adam",
         headers={},
     )
-    assert out.cls == "role_account"
+    assert out.cls == "automated"
 
 
 # --- suspicious ---
@@ -343,6 +345,131 @@ def test_real_email_with_question_mark_is_not_suspicious() -> None:
         headers={},
     )
     assert out.cls == "person"
+
+
+# --- regression fixtures: real misclassifications found in prod inbox ---
+
+
+def test_zoom_marketing_via_e_dot_subdomain_is_automated() -> None:
+    """Was wrongly suspicious. e.zoom.us is a marketing subdomain; the
+    'Don't miss' subject is marketing, not phishing."""
+    out = sc.classify(
+        sender="Zoom <teamzoom@e.zoom.us>",
+        subject="Don't miss summer savings! ⏰",
+        snippet="ok",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_linkedin_messages_noreply_is_automated() -> None:
+    """Was wrongly person. messages-noreply ends in -noreply suffix → auto."""
+    out = sc.classify(
+        sender="LinkedIn <messages-noreply@linkedin.com>",
+        subject="Marta is popular in your network",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_linkedin_ads_em_subdomain_is_automated() -> None:
+    """em.linkedin.com is a marketing subdomain."""
+    out = sc.classify(
+        sender="LinkedIn Ads <linkedin@em.linkedin.com>",
+        subject="Reach verified decision-makers on LinkedIn",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_expedia_eg_subdomain_is_automated() -> None:
+    out = sc.classify(
+        sender='"Expedia.com" <mail@eg.expedia.com>',
+        subject="The secret to earning more OneKeyCash",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_united_enews_subdomain_is_automated() -> None:
+    out = sc.classify(
+        sender='"United News & Deals" <UnitedAirlines@enews.united.com>',
+        subject="Where will you fly next?",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_amazon_store_news_prefix_is_automated() -> None:
+    """store-news@ — the store- prefix is now in the automated prefix list."""
+    out = sc.classify(
+        sender='"Amazon.com" <store-news@amazon.com>',
+        subject="Find 4+ star gifts for dads",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_chase_dot_separated_noreply_is_automated() -> None:
+    """no.reply.alerts@chase.com — dot-separated local; dots normalize to
+    dashes so the -alerts suffix matches."""
+    out = sc.classify(
+        sender="Chase <no.reply.alerts@chase.com>",
+        subject="You received money with Zelle",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_brooksbrothers_offers_subdomain_is_automated() -> None:
+    """offers.brooksbrothers.com is a marketing subdomain."""
+    out = sc.classify(
+        sender="Brooks Brothers <brooksbrothers@offers.brooksbrothers.com>",
+        subject="New styles added to sale",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_facebook_notification_priority_is_automated() -> None:
+    out = sc.classify(
+        sender="Facebook <notification@priority.facebookmail.com>",
+        subject="About Nashwa: 1 other new notification",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_tommy_hilfiger_post_subdomain_is_automated() -> None:
+    """post.tommy.com is now in the marketing subdomain list."""
+    out = sc.classify(
+        sender='"Tommy Hilfiger" <info@post.tommy.com>',
+        subject="TRENDING NOW",
+        snippet="...",
+        headers={},
+    )
+    assert out.cls == "automated"
+
+
+def test_screaming_subject_from_personal_address_is_still_suspicious() -> None:
+    """If the screaming subject IS from a real-looking personal sender (no
+    automated signals), it's still phishing. The reorder didn't disable
+    that defense — it just made bulk-mail markers win first."""
+    out = sc.classify(
+        sender="John Smith <john@startup.io>",
+        subject="URGENT ACT NOW LIMITED TIME OFFER",
+        snippet="claim now",
+        headers={},
+    )
+    assert out.cls == "suspicious"
 
 
 # --- user overrides ---

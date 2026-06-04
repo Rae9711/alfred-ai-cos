@@ -94,10 +94,15 @@ class ScoringContext:
     # message context for a commitment in O(1).
     commitment_context: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
     # Map commitment.source_id → sender_classification (one of person/role_account/
-    # automated/bulk/suspicious/vip/muted). The classifier ran at ingest time so this
-    # is a pure dict lookup. The ranker uses it to apply hard ceilings and score
-    # multipliers — the spam shield that prevents marketing from reaching critical.
+    # automated/bulk/suspicious/vip/muted/transactional_critical). The classifier
+    # ran at ingest time so this is a pure dict lookup. The ranker uses it to apply
+    # hard ceilings and score multipliers — the spam shield.
     sender_class: dict[str, str] = field(default_factory=dict)
+    # Outbound replies the user has sent to anyone at a given DOMAIN over the recent
+    # window. Used for warm-up detection: if the user has talked with mary@buyer.co,
+    # a NEW inbound from john@buyer.co isn't really a "first-time sender" — it's
+    # someone at an established contact's company. Halves the cold-contact penalty.
+    user_replies_to_domain: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     # Per-user learning snapshot. Bounded score adjustments per sender and per
     # keyword category, derived from the user's accept/dismiss/snooze/act history.
     # The ranker adds adjustment_for(...) to the final score so learning shows up
@@ -129,10 +134,15 @@ def build_context(db: Session, user: User, *, now: datetime | None = None) -> Sc
     for msg in recent_messages:
         sender = (msg.sender or "").lower()
         # Outbound messages are messages the user sent — recipients are the senders
-        # the user "replies to" by getting back in touch.
+        # the user "replies to" by getting back in touch. Track both the exact
+        # address (for VIP boost) and the domain (for warm-up detection of any
+        # new contact at the same company).
         if user_email and sender == user_email:
             for r in msg.recipients or []:
-                ctx.user_replies_to[str(r).lower()] += 1
+                recipient = str(r).lower()
+                ctx.user_replies_to[recipient] += 1
+                if "@" in recipient:
+                    ctx.user_replies_to_domain[recipient.split("@", 1)[1]] += 1
         else:
             if sender:
                 ctx.inbound_count[sender] += 1
@@ -278,11 +288,28 @@ def score_commitment(
                 score -= 10
                 reasons.append(f"you usually don't reply to {sender}")
 
-            # Stranger: first time ever (inbound exactly 1, no prior replies) →
-            # small penalty so unknowns don't outrank real conversations.
+            # Stranger penalty — with two warm-up exceptions:
+            # (a) Same-domain warm-up: if the user has replied to ANYONE at this
+            #     sender's domain (mary@buyer.co), a new sender at that domain
+            #     (john@buyer.co) isn't really a stranger — it's an extended
+            #     contact at the same company. Halve the penalty.
+            # (b) Repeat-cold warm-up: if the SAME unknown sender has written
+            #     2+ times (inbound > 1) and we still haven't replied, drop
+            #     the penalty entirely — they're an active conversation we
+            #     haven't engaged yet, which is more important than a one-off.
             if inbound <= 1 and replies == 0:
-                score -= 10
-                reasons.append("first-time sender")
+                sender_dom = sender.split("@", 1)[1] if "@" in sender else ""
+                same_domain_replies = (
+                    context.user_replies_to_domain.get(sender_dom, 0) if sender_dom else 0
+                )
+                if same_domain_replies >= 1:
+                    score -= 5
+                    reasons.append(f"new contact at {sender_dom} (you talk with colleagues there)")
+                else:
+                    score -= 10
+                    reasons.append("first-time sender")
+            # No `elif`: if inbound >= 2 the stranger penalty doesn't fire at
+            # all — repeat-cold warm-up is the absence of a penalty, not a bonus.
 
             # Dismissal history: each prior dismissal from this sender is -5,
             # capped at -20 so the ranker doesn't bury a genuine new ask buried
