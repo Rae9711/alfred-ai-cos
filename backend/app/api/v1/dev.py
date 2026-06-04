@@ -19,7 +19,7 @@ from app.db.base import get_db
 from app.db.enums import Provider, SyncStatus
 from app.db.models import ConnectedAccount, Message, User
 from app.schemas.api import SyncResponse
-from app.services import calendar, extraction
+from app.services import calendar, extraction, sender_class
 from app.services.crypto import encrypt_token
 
 router = APIRouter(prefix="/dev", tags=["dev"])
@@ -147,6 +147,15 @@ def seed_emails(
         )
         if exists:
             continue
+        # Classify the seed sender so the dev path mirrors prod: the spam
+        # shield gets the same `sender_classification` it would have in life.
+        cls = sender_class.classify(
+            sender=seed["sender"],
+            subject=seed["subject"],
+            snippet=seed["body"][:120],
+            headers=None,
+            user=user,
+        )
         message = Message(
             user_id=user.id,
             source="gmail",
@@ -157,6 +166,7 @@ def seed_emails(
             subject=seed["subject"],
             snippet=seed["body"][:120],
             sent_at=datetime.now(UTC),
+            sender_classification=cls.cls,
         )
         db.add(message)
         db.flush()

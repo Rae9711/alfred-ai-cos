@@ -31,6 +31,10 @@ from sqlalchemy.orm import Session
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
 from app.db.models import Commitment, Message, User
 from app.services.learning import LearningView, adjustment_for, get_learning
+from app.services.sender_class import (
+    PRIORITY_CEILING_FOR_CLASS,
+    SCORE_MULTIPLIER_FOR_CLASS,
+)
 
 # ---------- weights (one place to tune the ranker) ----------
 
@@ -89,6 +93,11 @@ class ScoringContext:
     # Map commitment.source_id → (sender, thread_id) so the scorer can find the
     # message context for a commitment in O(1).
     commitment_context: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    # Map commitment.source_id → sender_classification (one of person/role_account/
+    # automated/bulk/suspicious/vip/muted). The classifier ran at ingest time so this
+    # is a pure dict lookup. The ranker uses it to apply hard ceilings and score
+    # multipliers — the spam shield that prevents marketing from reaching critical.
+    sender_class: dict[str, str] = field(default_factory=dict)
     # Per-user learning snapshot. Bounded score adjustments per sender and per
     # keyword category, derived from the user's accept/dismiss/snooze/act history.
     # The ranker adds adjustment_for(...) to the final score so learning shows up
@@ -164,13 +173,20 @@ def build_context(db: Session, user: User, *, now: datetime | None = None) -> Sc
     source_ids = [c.source_id for c in open_commitments if c.source_id]
     if source_ids:
         rows = db.execute(
-            select(Message.id, Message.sender, Message.thread_id).where(Message.id.in_(source_ids))
+            select(
+                Message.id,
+                Message.sender,
+                Message.thread_id,
+                Message.sender_classification,
+            ).where(Message.id.in_(source_ids))
         ).all()
-        for src_id, sender, thread_id in rows:
+        for src_id, sender, thread_id, cls in rows:
             ctx.commitment_context[src_id] = (
                 (sender or "").lower() or None,
                 thread_id,
             )
+            if cls:
+                ctx.sender_class[src_id] = cls
     return ctx
 
 
@@ -312,6 +328,36 @@ def score_commitment(
             else:
                 reasons.append("learned: similar items you usually dismiss")
 
+    # --- bonus cap (anti-stacking guard rail) ---
+    # Without a cap, a marketing email can fire money + ask + urgency + LLM-critical
+    # + low-stakes deadline and stack to ~90. Capping the ADDITIVE score (before
+    # baseline urgency) at 80 means even worst-case stacking can't push spam to
+    # critical on its own; the sender class still has to allow it.
+    score = min(score, 95.0)
+
+    # --- sender class shield: multiplier + hard ceiling ---
+    # The deterministic classifier ran at ingest time. Look it up and apply the
+    # class-specific multiplier BEFORE confidence dampening so the score that
+    # gets logged in the reason already reflects the spam shield.
+    cls = "person"
+    if context is not None and commitment.source_id:
+        cls = context.sender_class.get(commitment.source_id, "person") or "person"
+    multiplier = SCORE_MULTIPLIER_FOR_CLASS.get(cls, 1.0)
+    if multiplier != 1.0:
+        score *= multiplier
+        # Surface the shield in the reason so the user knows WHY a hyped item
+        # didn't rank — and so they can VIP the sender if they disagree.
+        if cls in {"automated", "bulk"}:
+            reasons.append("from an automated / bulk sender (capped)")
+        elif cls == "suspicious":
+            reasons.append("looks like spam or phishing (suppressed)")
+        elif cls == "muted":
+            reasons.append("you muted this sender (capped)")
+        elif cls == "role_account":
+            reasons.append("from a shared inbox / role address")
+        elif cls == "vip":
+            reasons.append("from a sender you marked VIP")
+
     # --- confidence dampener ---
     score *= 0.5 + 0.5 * commitment.confidence
     if commitment.confidence < 0.6:
@@ -320,9 +366,89 @@ def score_commitment(
     score = max(0.0, score)
 
     priority = _label(score)
+
+    # --- HARD CEILING by sender class ---
+    # This is the no-questions-asked spam shield: an automated sender CANNOT
+    # produce a critical-priority push, no matter how the additive bonuses
+    # stacked. The user retains control via the VIP/muted overrides.
+    ceiling_name = PRIORITY_CEILING_FOR_CLASS.get(cls, "critical")
+    priority = _apply_ceiling(priority, ceiling_name)
+
+    # --- HARD FLOOR for low-confidence items ---
+    # Extraction confidence is the LLM's own self-rated certainty. Anything
+    # below 0.5 stays a suggestion (medium at most) even if the keyword signals
+    # fired — too uncertain to ping the user.
+    if commitment.confidence < 0.5:
+        priority = _apply_ceiling(priority, "medium")
+
+    # If the spam shield demoted the bucket, clamp the score to the FLOOR of
+    # the new bucket so shield-demoted items always sort BELOW organic items
+    # in the same bucket. A "low"-priority real-person item (score 12) will
+    # sort above a "low"-priority shielded spam item (score floored to ~5.01).
+    organic_bucket = _label(score)
+    if _PRIORITY_ORDER[priority] < _PRIORITY_ORDER[organic_bucket]:
+        # Shield kicked in. Pin to the floor of the demoted bucket + a small
+        # fractional residual derived from raw score, so different spam items
+        # still have meaningful within-bucket ordering.
+        floor = _SCORE_FLOOR_FOR_BUCKET[priority]
+        ceiling = _SCORE_CEILING_FOR_BUCKET[priority]
+        residual = min(score, ceiling - floor) * 0.01
+        score = floor + residual
+    else:
+        # Organic — clamp to the top of the bucket so a critical organic item
+        # can't outrank a critical organic item from a higher class.
+        score = min(score, _SCORE_CEILING_FOR_BUCKET[priority])
+
     reason = "High priority because " if priority in (Priority.critical, Priority.high) else ""
     reason += ", and ".join(reasons) + "." if reasons else "No strong urgency signals."
     return ScoredCommitment(commitment=commitment, score=score, priority=priority, reason=reason)
+
+
+# Score ceilings for organic buckets (no shield demotion). Match `_label`'s
+# lower bound for the next bucket up, minus 0.01.
+_SCORE_CEILING_FOR_BUCKET: dict[Priority, float] = {
+    Priority.critical: 100.0,
+    Priority.high: 59.99,
+    Priority.medium: 39.99,
+    Priority.low: 19.99,
+    Priority.noise: 4.99,
+}
+
+# Score floors for SHIELD-DEMOTED items. A spam item pinned to `low` lands at
+# this score plus a tiny residual; this is the floor of the bucket, so any
+# organic item in the same bucket sorts above it.
+_SCORE_FLOOR_FOR_BUCKET: dict[Priority, float] = {
+    Priority.critical: 60.0,
+    Priority.high: 40.0,
+    Priority.medium: 20.0,
+    Priority.low: 5.0,
+    Priority.noise: 0.0,
+}
+
+
+# Priority order for the _apply_ceiling helper. Higher = more important.
+_PRIORITY_ORDER: dict[Priority, int] = {
+    Priority.noise: 0,
+    Priority.low: 1,
+    Priority.medium: 2,
+    Priority.high: 3,
+    Priority.critical: 4,
+}
+
+# Names exactly as the sender_class ceiling table emits them.
+_PRIORITY_BY_NAME: dict[str, Priority] = {
+    "noise": Priority.noise,
+    "low": Priority.low,
+    "medium": Priority.medium,
+    "high": Priority.high,
+    "critical": Priority.critical,
+}
+
+
+def _apply_ceiling(current: Priority, ceiling_name: str) -> Priority:
+    """Clamp `current` down to the named ceiling. Returns the lower of the two."""
+    ceiling = _PRIORITY_BY_NAME.get(ceiling_name, Priority.critical)
+    return current if _PRIORITY_ORDER[current] <= _PRIORITY_ORDER[ceiling] else ceiling
 
 
 def _label(score: float) -> Priority:

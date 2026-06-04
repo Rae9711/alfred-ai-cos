@@ -17,6 +17,7 @@ from app.api.v1 import (
     messages,
     notifications,
     search,
+    senders,
     sync,
     tasks,
     today,
@@ -41,4 +42,5 @@ api_router.include_router(me.router)
 api_router.include_router(notifications.router)
 api_router.include_router(inbox.router)
 api_router.include_router(search.router)
+api_router.include_router(senders.router)
 api_router.include_router(dev.router)

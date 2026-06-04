@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Message, User
-from app.services import extraction
+from app.services import extraction, sender_class
 
 # Forwarded bodies typically start with "---------- Forwarded message ----------"
 # followed by "From: ...", "Date: ...", etc. Pull the original sender out so the
@@ -90,6 +90,17 @@ def ingest_forward(
         return ForwardResult(message_id=existing.id, commitments_extracted=0, deduped=True)
 
     original_sender = _parse_original_sender(body) or forwarder_email
+    snippet = (body or "")[:200]
+    # Forwarded messages don't carry the original headers, so the classifier
+    # works from the parsed sender + subject + snippet only. Still better than
+    # leaving the column NULL.
+    cls = sender_class.classify(
+        sender=original_sender,
+        subject=subject,
+        snippet=snippet,
+        headers=None,
+        user=user,
+    )
     message = Message(
         user_id=user.id,
         source="forwarded",
@@ -98,8 +109,9 @@ def ingest_forward(
         sender=original_sender,
         recipients=[forwarder_email],
         subject=subject,
-        snippet=(body or "")[:200],
+        snippet=snippet,
         sent_at=received_at or datetime.now(UTC),
+        sender_classification=cls.cls,
     )
     db.add(message)
     db.flush()  # populate message.id before extraction reads it

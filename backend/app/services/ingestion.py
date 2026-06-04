@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import Provider, SyncStatus
-from app.db.models import ConnectedAccount, Message
-from app.services import gmail
+from app.db.models import ConnectedAccount, Message, User
+from app.services import gmail, sender_class
 from app.services.crypto import decrypt_token
 
 
@@ -60,7 +60,20 @@ def ingest_recent_messages(db: Session, user_id: str, *, max_results: int = 25) 
                 subject=raw["subject"],
                 snippet=raw["snippet"],
                 sent_at=sent_at,
+                headers=raw.get("headers") or {},
             )
+            # Pre-classify so the ranker can read the sender class without re-deriving
+            # from raw fields. The owning user supplies vip/muted overrides, so we
+            # fetch them once per ingest.
+            user = db.get(User, user_id)
+            cls = sender_class.classify(
+                sender=raw["sender"],
+                subject=raw["subject"],
+                snippet=raw["snippet"],
+                headers=raw.get("headers") or {},
+                user=user,
+            )
+            message.sender_classification = cls.cls
             db.add(message)
             new_messages.append(message)
         account.sync_status = SyncStatus.ok

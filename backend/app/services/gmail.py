@@ -33,10 +33,36 @@ def list_recent_message_ids(token_payload: dict[str, Any], *, max_results: int =
 
 
 def get_message(token_payload: dict[str, Any], message_id: str) -> dict[str, Any]:
-    """Fetch a normalized message: id, threadId, sender, recipients, subject, snippet, body."""
+    """Fetch a normalized message: id, threadId, sender, recipients, subject, snippet,
+    body, plus a small dict of spam-relevant headers (list-unsubscribe, precedence,
+    auto-submitted, reply-to, cc, bcc, x-mailer, feedback-id) that the ranker uses
+    to deterministically classify automated / bulk / suspicious senders."""
     svc = _service(token_payload)
     raw = svc.users().messages().get(userId="me", id=message_id, format="full").execute()
     headers = {h["name"].lower(): h["value"] for h in raw.get("payload", {}).get("headers", [])}
+    # Preserve the subset of headers the sender classifier reads. Keeping this small
+    # so the JSON column stays cheap and the spam signals are auditable per message.
+    _PRESERVED = (
+        "list-unsubscribe",
+        "list-unsubscribe-post",
+        "precedence",
+        "auto-submitted",
+        "reply-to",
+        "cc",
+        "bcc",
+        "x-auto-response-suppress",
+        "feedback-id",
+        "x-mailer",
+        "x-campaign",
+        "x-campaign-id",
+        "x-mailchimp-id",
+        "x-mc-user",
+        "x-sg-eid",
+        "x-sendgrid-id",
+        "return-path",
+        "x-original-sender",
+    )
+    preserved = {k: headers[k] for k in _PRESERVED if k in headers}
     return {
         "external_id": raw["id"],
         "thread_id": raw.get("threadId"),
@@ -46,6 +72,7 @@ def get_message(token_payload: dict[str, Any], message_id: str) -> dict[str, Any
         "snippet": raw.get("snippet"),
         "body": _extract_body(raw.get("payload", {})),
         "internal_date_ms": raw.get("internalDate"),
+        "headers": preserved,
     }
 
 
