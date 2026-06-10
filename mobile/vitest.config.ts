@@ -2,6 +2,9 @@
 // UI-free modules (src/lib, the deterministic helpers in ui/data) without a React
 // Native runtime, so no native-module mocks are needed. Screen render tests would
 // require jest-expo; this config deliberately stays light.
+//
+// Exception: .test.tsx files opt into jsdom per-file (// @vitest-environment jsdom)
+// to exercise pure-React pieces like CompanionAvatarProvider — still no RN runtime.
 
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
@@ -18,6 +21,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });
