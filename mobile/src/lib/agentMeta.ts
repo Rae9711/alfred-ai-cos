@@ -169,9 +169,20 @@ const BASE_XP: Record<AgentEventType, number> = {
 };
 
 /** Cumulative XP thresholds: index i is the XP required to reach level i + 1. */
-const LEVEL_THRESHOLDS = [
+// REVISION (typecheck fix): typed as a non-empty tuple ([number, ...number[]])
+// instead of number[]. This repo compiles with `noUncheckedIndexedAccess`, so
+// every plain-array index is `number | undefined`; the tuple type lets the
+// compiler know index 0 always exists, which the fallbacks below rely on.
+const LEVEL_THRESHOLDS: [number, ...number[]] = [
   0, 80, 180, 320, 520, 780, 1120, 1560, 2120, 2820, 3680, 4720,
 ];
+
+// REVISION (typecheck fix): the XP cap once the avatar is max level. Computed
+// once here so nextLevelXp doesn't index the array tail (which the compiler
+// can't prove exists). `?? LEVEL_THRESHOLDS[0]` is unreachable at runtime but
+// narrows the type to plain `number` — index 0 is guaranteed by the tuple type.
+const MAX_LEVEL_THRESHOLD =
+  LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1] ?? LEVEL_THRESHOLDS[0];
 
 function isoDay(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
@@ -181,7 +192,12 @@ function isoDay(ts: number): string {
 export function levelFromXp(xp: number): number {
   let level = 1;
   for (let i = 1; i < LEVEL_THRESHOLDS.length; i += 1) {
-    if (xp >= LEVEL_THRESHOLDS[i]) level = i + 1;
+    // REVISION (typecheck fix): pull the indexed value into a local and guard
+    // it. The loop bound makes `undefined` impossible at runtime, but under
+    // `noUncheckedIndexedAccess` the compiler can't connect `i < length` to
+    // the index expression, so `xp >= LEVEL_THRESHOLDS[i]` failed to compile.
+    const threshold = LEVEL_THRESHOLDS[i];
+    if (threshold !== undefined && xp >= threshold) level = i + 1;
   }
   return level;
 }
@@ -189,7 +205,12 @@ export function levelFromXp(xp: number): number {
 /** XP required to reach the *next* level from the current one. */
 export function nextLevelXp(level: number): number {
   const idx = Math.max(1, level);
-  return LEVEL_THRESHOLDS[idx] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1];
+  // REVISION (typecheck fix): the old fallback re-indexed the array
+  // (`LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]`), which is itself
+  // `number | undefined` under noUncheckedIndexedAccess — so the whole
+  // expression still didn't satisfy the declared `number` return type.
+  // The precomputed MAX_LEVEL_THRESHOLD constant is a plain `number`.
+  return LEVEL_THRESHOLDS[idx] ?? MAX_LEVEL_THRESHOLD;
 }
 
 /** XP floor for the current level (start of the progress bar). */

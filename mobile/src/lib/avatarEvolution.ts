@@ -32,7 +32,12 @@ export type EvolutionState = {
 };
 
 /** Ordered list of forms; getEvolutionForm picks the highest minLevel the agent qualifies for. */
-export const EVOLUTION_FORMS: EvolutionForm[] = [
+// REVISION (typecheck fix): typed as a non-empty tuple rather than
+// EvolutionForm[]. Under this repo's `noUncheckedIndexedAccess` setting,
+// `EVOLUTION_FORMS[0]` on a plain array is `EvolutionForm | undefined`, which
+// broke getEvolutionForm's `EvolutionForm` return type. The tuple type encodes
+// the real invariant — there is always at least the level-1 base form.
+export const EVOLUTION_FORMS: [EvolutionForm, ...EvolutionForm[]] = [
   {
     minLevel: 1,
     name: "Cloud core",
@@ -85,6 +90,8 @@ export const EVOLUTION_STATES: Record<AvatarState, EvolutionState> = {
 
 /** Resolve the best evolution form for the agent's current level. */
 export function getEvolutionForm(level: number): EvolutionForm {
+  // EVOLUTION_FORMS[0] is statically known to exist (non-empty tuple above),
+  // so `form` is a plain EvolutionForm and the return type is satisfied.
   let form = EVOLUTION_FORMS[0];
   for (const item of EVOLUTION_FORMS) {
     if (level >= item.minLevel) form = item;

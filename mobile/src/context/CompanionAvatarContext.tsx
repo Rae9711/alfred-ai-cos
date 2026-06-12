@@ -87,8 +87,16 @@ export function CompanionAvatarProvider({ children }: { children: ReactNode }) {
     setMeta(result.meta);
   }, []);
 
-  // Persist + sync: without the setMeta the avatar would keep its old tint
-  // until the next app launch (storage and context would disagree).
+  // REVISION (stale-UI bug fix): the original PR exposed updateCompanionColor as
+  // a bare module function. Calling it wrote the new tint to SecureStore but
+  // never touched this provider's `meta` state, so the avatar kept rendering the
+  // old color until the next app launch — storage and the on-screen UI disagreed.
+  //
+  // Fix: color changes now flow through this provider method, which (1) persists
+  // via the serialized queue in companionMeta and (2) pushes the returned meta
+  // into React state with setMeta so every subscribed screen re-renders with the
+  // new tint immediately. Regression-tested in CompanionAvatarContext.test.tsx
+  // ("updates the in-memory context, not just storage").
   const setColor = useCallback<CompanionAvatarApi["setColor"]>(
     async (color) => {
       const next = await updateCompanionColor(color);
