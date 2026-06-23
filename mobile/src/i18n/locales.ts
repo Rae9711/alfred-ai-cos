@@ -1,0 +1,228 @@
+// App strings — English + 简体中文. Workflow screens + tab bar + settings language UI.
+
+export type Locale = "en" | "zh";
+
+export type Translation = (typeof translations)[Locale];
+
+export const translations = {
+  en: {
+    tabs: {
+      today: "Today",
+      inbox: "Inbox",
+      ask: "Ask",
+      you: "You",
+    },
+    greeting: {
+      stillUp: "Still up,",
+      morning: "Good morning,",
+      afternoon: "Good afternoon,",
+      evening: "Good evening,",
+    },
+    home: {
+      butlerLabel: "Alfred",
+      speechHi: "Hi!",
+      sectionToday: "Today",
+      composerPlaceholder: "Anything you need handled…",
+      proactiveEmpty: "Pull to sync — I'll surface what matters once your inbox is connected.",
+      proactiveAct: "Act on this",
+      proactiveInbox: "Open inbox",
+      sectionPriorities: "Also on your plate",
+      scheduleEmpty: "Nothing on the calendar for today.",
+      prepRequired: "Prep",
+      askFailed: "Couldn't reach Albert — try again.",
+      pendingApprovals: (n: number) =>
+        `${n} action${n === 1 ? "" : "s"} await your approval`,
+    },
+    inbox: {
+      titleEm: "attention",
+      titlePlain: "Needs your",
+      unread: (n: number) => `${n} unread`,
+      sectionReply: "Needs reply",
+      sectionFyi: "Good to know",
+      reply: "Reply",
+      later: "Later",
+      handToAlfred: "Hand to Alfred",
+      view: "View",
+      dismiss: "Dismiss",
+      wechatEmpty: "WeChat isn't connected yet.",
+      wechatEmptySub: "Email and calendar items still show under All.",
+      inboxZero: "Inbox zero in this view.",
+      syncing: "Syncing your inbox…",
+      retry: "Tap to retry",
+      filters: {
+        all: "All",
+        email: "Email",
+        wechat: "WeChat",
+        calendar: "Calendar",
+      },
+      sources: {
+        email: "Email",
+        wechat: "WeChat",
+        calendar: "Calendar",
+      },
+    },
+    ask: {
+      alfred: "Alfred",
+      workingOnIt: "Working on it",
+      draftReply: "Draft reply",
+      draftTo: (to: string, subject: string) => `To ${to} · ${subject}`,
+      sendDirectly: "Send directly",
+      reviseWording: "Revise wording",
+      cancel: "Cancel",
+      revisePlaceholder: "Tell Alfred how to adjust…",
+      freeTitleEm: "mind?",
+      freeTitlePlain: "What's on your",
+      freePlaceholder: "Ask Alfred anything…",
+      tryAsking: "Try asking",
+      thinking: "Alfred · thinking…",
+      taskOpenReply: (sender: string) =>
+        `Got it. I'll help you reply to ${sender} — I've read the thread.`,
+      taskOpenDelegate: (sender: string) =>
+        `On it — I'll draft a reply to ${sender} and queue it for your review.`,
+      taskRevised: "Updated the draft — take another look.",
+      reviseNote: (note: string) => `\n\n—\n(Revised per your note: "${note}")`,
+      toastSent: "Sent — returning to inbox.",
+      toastCancelled: "Cancelled.",
+      toastSendFailed: "Couldn't send — try again.",
+      drafting: "Drafting your reply…",
+    },
+    settings: {
+      you: "You",
+      language: "Language",
+      languageDetail: "App display language",
+      english: "English",
+      chinese: "中文",
+    },
+    a11y: {
+      captureHome: "Alfred companion home — open capture",
+      captureAway: "Alfred away working — open capture",
+      back: "Back",
+      send: "Send",
+      voiceSoon: "Voice input (coming soon)",
+    },
+    suggest: [
+      "What am I forgetting?",
+      "Who's waiting on me?",
+      "Help me prep for office hours",
+      "What should I do first?",
+    ],
+    freeChat: {
+      seed:
+        "Morning. Quieter than yesterday — three things matter, and one of them is a one-line reply. Ask me anything, or tap a suggestion.",
+      fallback: "I can do that. Want me to look at Today, the inbox, or your calendar?",
+    },
+  },
+  zh: {
+    tabs: {
+      today: "首页",
+      inbox: "收件箱",
+      ask: "对话",
+      you: "我的",
+    },
+    greeting: {
+      stillUp: "还没睡呀，",
+      morning: "早上好，",
+      afternoon: "下午好，",
+      evening: "晚上好，",
+    },
+    home: {
+      butlerLabel: "管家",
+      speechHi: "Hi!",
+      sectionToday: "今天",
+      composerPlaceholder: "有什么需要帮您处理的…",
+      proactiveEmpty: "下拉同步 — 连接邮箱后我会告诉您今天最重要的事。",
+      proactiveAct: "处理这件事",
+      proactiveInbox: "打开收件箱",
+      sectionPriorities: "其他待办",
+      scheduleEmpty: "今天日历上没有安排。",
+      prepRequired: "需准备",
+      askFailed: "无法连接管家 — 请重试。",
+      pendingApprovals: (n: number) => `${n} 项操作等待您批准`,
+    },
+    inbox: {
+      titleEm: "处理",
+      titlePlain: "需要您",
+      unread: (n: number) => `${n} 未读`,
+      sectionReply: "需要回复",
+      sectionFyi: "知晓即可",
+      reply: "回复",
+      later: "稍后",
+      handToAlfred: "转交管家",
+      view: "查看",
+      dismiss: "忽略",
+      wechatEmpty: "微信尚未连接。",
+      wechatEmptySub: "邮件和日历项目仍会在「全部」中显示。",
+      inboxZero: "此视图下收件箱已清空。",
+      syncing: "正在同步收件箱…",
+      retry: "点击重试",
+      filters: {
+        all: "全部",
+        email: "邮件",
+        wechat: "微信",
+        calendar: "日历邀请",
+      },
+      sources: {
+        email: "邮件",
+        wechat: "微信",
+        calendar: "日历",
+      },
+    },
+    ask: {
+      alfred: "管家",
+      workingOnIt: "正在处理任务",
+      draftReply: "起草回复",
+      draftTo: (to: string, subject: string) => `收件人 ${to} · ${subject}`,
+      sendDirectly: "直接发送",
+      reviseWording: "修改措辞",
+      cancel: "取消",
+      revisePlaceholder: "告诉管家如何调整…",
+      freeTitleEm: "什么？",
+      freeTitlePlain: "想聊点",
+      freePlaceholder: "问管家任何问题…",
+      tryAsking: "试试这样问",
+      thinking: "管家 · 思考中…",
+      taskOpenReply: (sender: string) =>
+        `收到。我来帮您回复${sender}，已读取邮件内容。`,
+      taskOpenDelegate: (sender: string) =>
+        `好的。我来帮您回复${sender}，起草后会放在这里等您确认。`,
+      taskRevised: "已按您的意见更新草稿，请再看一下。",
+      reviseNote: (note: string) => `\n\n—\n（已按您的意见修改："${note}"）`,
+      toastSent: "已发送 — 返回收件箱。",
+      toastCancelled: "已取消。",
+      toastSendFailed: "发送失败 — 请重试。",
+      drafting: "正在起草回复…",
+    },
+    settings: {
+      you: "我的",
+      language: "语言",
+      languageDetail: "应用显示语言",
+      english: "English",
+      chinese: "中文",
+    },
+    a11y: {
+      captureHome: "管家在家 — 打开速记",
+      captureAway: "管家外出工作中 — 打开速记",
+      back: "返回",
+      send: "发送",
+      voiceSoon: "语音输入（即将推出）",
+    },
+    suggest: [
+      "我忘了什么？",
+      "谁在等我回复？",
+      "帮我准备答疑",
+      "我应该先做什么？",
+    ],
+    freeChat: {
+      seed: "上午好。今天比昨天安静一些 — 有三件事值得处理，其中一件只需一行回复。随便问，或点下面的建议。",
+      fallback: "好的。需要我看一下首页、收件箱，还是日历？",
+    },
+  },
+} as const;
+
+export function greetingForLocale(hour: number, locale: Locale): string {
+  const g = translations[locale].greeting;
+  if (hour < 5) return g.stillUp;
+  if (hour < 12) return g.morning;
+  if (hour < 18) return g.afternoon;
+  return g.evening;
+}

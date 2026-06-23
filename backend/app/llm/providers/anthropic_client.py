@@ -35,7 +35,40 @@ settings = get_settings()
 _CLASSIFY_SYSTEM = (
     "You are Albert's classification agent. Classify a single email into exactly one "
     "category and a priority. Optimize for precision: prefer low_priority over a false "
-    "urgent. Always explain your reasoning in one sentence."
+    "urgent. Always explain your reasoning in one sentence.\n\n"
+    "The message is addressed TO the user (their email is given when available). Classify "
+    "from the user's perspective: who must act next?\n\n"
+    "Category rules:\n"
+    "- needs_reply: a real person expects the USER to reply or provide something "
+    "(documents, answers, confirmation). Use when the ball is in the user's court.\n"
+    "- needs_decision: the USER must choose among options (approve/decline, pick a path, "
+    "archive vs continue). Not when someone else must decide.\n"
+    "- meeting_scheduling: the USER must pick/confirm a time or date that is still open. "
+    "NOT for meetings already agreed — see informational below.\n"
+    "- follow_up_needed: the user should chase a delegated or stalled thread, but no "
+    "immediate reply is strictly required.\n"
+    "- waiting_for_response: the USER already acted and is waiting on someone else; "
+    "no user action is needed right now. Never use this if the user still owes a reply "
+    "or a decision.\n"
+    "- informational: FYI only — case closed, receipt, confirmed appointment reminder, "
+    "Zoom/calendar link for an already-scheduled meeting, 'see you then', logistics "
+    "with no open choice. Set action_required=false.\n"
+    "- low_priority: optional/vanity contact (thank-you, survey, referral) with no real "
+    "obligation.\n"
+    "- deadline: explicit due date the user must meet.\n"
+    "- spam_noise: marketing, newsletters, bulk promos.\n\n"
+    "Disambiguation:\n"
+    "- Confirmed time + reminder ('see you tomorrow at 9am', 'sounds good see you then') "
+    "→ informational, not meeting_scheduling.\n"
+    "- Zoom link / calendar invite for a fixed date-time already set → informational.\n"
+    "- 'Please let me know which dates work' / pick 1 of N slots → meeting_scheduling.\n"
+    "- Request directed at user ('please provide the letter', 'send your hours') → "
+    "needs_reply, even if a third party must eventually approve.\n"
+    "- Counterparty just said 'no' or closed a request → not waiting_for_response; use "
+    "needs_decision (what next) or informational if truly done.\n"
+    "- Email primarily TO someone else with user only CC'd → informational unless the "
+    "user is explicitly asked.\n\n"
+    "In reason: refer to 'you' or the user's name from the To field — never 'Albert'."
 )
 _EXTRACT_SYSTEM = (
     "You are Albert's extraction agent. Find commitments (open loops) in an email: things "
@@ -113,12 +146,15 @@ class AnthropicLLMClient:
         raise ValueError("Anthropic response contained no tool_use block")
 
     def classify_message(
-        self, *, subject: str | None, body: str, sender: str
+        self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
     ) -> ClassificationResult:
+        user_line = f"The user's email: {user_email}\n" if user_email else ""
         raw = self._structured(
             model=settings.llm_classify_model,
             system=_CLASSIFY_SYSTEM,
-            user_content=f"From: {sender}\nSubject: {subject or '(none)'}\n\n{body}",
+            user_content=(
+                f"{user_line}From: {sender}\nSubject: {subject or '(none)'}\n\n{body}"
+            ),
             tool=_tool_for(ClassificationResult, "classify", "Record the classification."),
         )
         return ClassificationResult.model_validate(raw)

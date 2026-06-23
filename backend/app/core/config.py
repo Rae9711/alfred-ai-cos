@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     # X-Forward-Secret. Empty disables the endpoint entirely (returns 503).
     forward_inbox_secret: str = ""
 
+    # Gmail sync: first connect backfills Primary inbox; later syncs use history API.
+    sync_initial_max_results: int = 50
+    sync_incremental_fallback_max: int = 20
+
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [
         "https://www.googleapis.com/auth/gmail.readonly",

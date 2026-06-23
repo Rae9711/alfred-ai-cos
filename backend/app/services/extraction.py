@@ -114,7 +114,12 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
         token = decrypt_token(account.token_ciphertext)
         body = gmail.get_message(token, message.external_id)["body"]
 
-    classification = llm.classify_message(subject=message.subject, body=body, sender=message.sender)
+    classification = llm.classify_message(
+        subject=message.subject,
+        body=body,
+        sender=message.sender,
+        user_email=user.email,
+    )
     message.classification = classification.classification
     message.priority = classification.priority
     message.action_required = classification.action_required

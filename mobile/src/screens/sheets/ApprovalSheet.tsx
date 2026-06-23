@@ -1,7 +1,5 @@
-// Draft sheet — generate and review a reply, then save it to the user's Gmail drafts.
-// Honest about capability: Albert can create Gmail DRAFTS (gmail.compose), not SEND
-// (no gmail.send scope yet), so the action is "Save to Gmail drafts", never "Send".
-//
+// Draft sheet — generate and review a reply, then save to Gmail drafts or send.
+// Uses gmail.compose for drafts and gmail.send (approval-gated) for send.
 // Three modes, all real (no demo content):
 //  - messageId  (Inbox "Draft reply") → createDraft from the real message, then push to
 //    Gmail drafts via proposeDraftToGmail → approveAction. Lands in the user's Gmail.

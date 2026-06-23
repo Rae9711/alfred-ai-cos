@@ -25,14 +25,21 @@ from app.workers.celery_app import celery_app
 
 @celery_app.task(name="albert.sync_user")  # type: ignore[untyped-decorator]
 def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
-    """Ingest recent messages for a user and run extraction over the new ones."""
+    """Ingest new Gmail for a user and run extraction over unprocessed messages."""
+    del max_results  # policy lives in ingestion.sync_messages / settings
     db = SessionLocal()
     try:
-        messages = ingestion.ingest_recent_messages(db, user_id, max_results=max_results)
+        result = ingestion.sync_messages(db, user_id)
+        to_process = ingestion.messages_to_process(db, user_id, result.new_messages)
         commitments = 0
-        for message in messages:
+        for message in to_process:
             commitments += len(extraction.process_message(db, message))
-        return {"ingested": len(messages), "commitments_found": commitments}
+        return {
+            "ingested": len(result.new_messages),
+            "processed": len(to_process),
+            "commitments_found": commitments,
+            "initial_backfill": int(result.initial_backfill),
+        }
     finally:
         db.close()
 

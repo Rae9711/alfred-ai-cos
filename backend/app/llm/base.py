@@ -30,7 +30,7 @@ class LLMClient(Protocol):
     """
 
     def classify_message(
-        self, *, subject: str | None, body: str, sender: str
+        self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
     ) -> ClassificationResult:
         """Classify one email into a category + priority (PRD 12.2)."""
         ...

@@ -17,6 +17,8 @@ dist/
 # --- Env & secrets ---
 .env
 .env.*
+# Classification QA reports (may contain email metadata).
+backend/reports/
 # ...but always keep *.example templates (no real secrets in them).
 !.env.example
 !.env.*.example

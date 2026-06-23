@@ -14,7 +14,9 @@ class ClassificationResult(BaseModel):
     classification: MessageClassification
     priority: Priority
     action_required: bool
-    reason: str = Field(description="Why this classification, in one sentence.")
+    reason: str = Field(
+        description="Why this classification, in one sentence. Address the recipient as 'you'."
+    )
 
 
 class ExtractedCommitment(BaseModel):

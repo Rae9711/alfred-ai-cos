@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import base64
 from email.message import EmailMessage
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from googleapiclient.discovery import build
 
@@ -20,13 +20,101 @@ def _service(token_payload: dict[str, Any]) -> Any:
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def list_recent_message_ids(token_payload: dict[str, Any], *, max_results: int = 25) -> list[str]:
-    """Return ids of recent inbox messages, newest first."""
+InboxTab = Literal["all", "primary"]
+
+_PRIMARY_LABEL = "CATEGORY_PERSONAL"
+
+
+class HistoryExpiredError(Exception):
+    """Gmail no longer has history before startHistoryId; caller should fall back."""
+
+
+def get_history_id(token_payload: dict[str, Any]) -> str:
+    """Return the mailbox's current historyId (cursor for incremental sync)."""
     svc = _service(token_payload)
+    profile = svc.users().getProfile(userId="me").execute()
+    history_id = profile.get("historyId")
+    if not history_id:
+        raise ValueError("Gmail profile did not return historyId")
+    return str(history_id)
+
+
+def get_message_label_ids(token_payload: dict[str, Any], message_id: str) -> list[str]:
+    """Return label ids for a message without fetching the full body."""
+    svc = _service(token_payload)
+    raw = svc.users().messages().get(userId="me", id=message_id, format="minimal").execute()
+    return list(raw.get("labelIds") or [])
+
+
+def is_primary_inbox(labels: list[str]) -> bool:
+    return "INBOX" in labels and _PRIMARY_LABEL in labels
+
+
+def list_history_added_message_ids(
+    token_payload: dict[str, Any],
+    start_history_id: str,
+    *,
+    label_id: str = "INBOX",
+) -> tuple[list[str], str]:
+    """Return message ids added since start_history_id and the latest historyId.
+
+    Raises HistoryExpiredError when Gmail has dropped the start cursor (404).
+    """
+    svc = _service(token_payload)
+    seen: list[str] = []
+    page_token: str | None = None
+    latest_history_id = start_history_id
+    while True:
+        try:
+            resp = (
+                svc.users()
+                .history()
+                .list(
+                    userId="me",
+                    startHistoryId=start_history_id,
+                    labelId=label_id,
+                    historyTypes=["messageAdded"],
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+        except Exception as exc:
+            # googleapiclient raises HttpError with status 404 when the cursor expired.
+            if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
+                raise HistoryExpiredError(str(exc)) from exc
+            raise
+        latest_history_id = str(resp.get("historyId") or latest_history_id)
+        for record in resp.get("history") or []:
+            for added in record.get("messagesAdded") or []:
+                msg = added.get("message") or {}
+                mid = msg.get("id")
+                if mid and mid not in seen:
+                    seen.append(mid)
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return seen, latest_history_id
+
+
+def list_recent_message_ids(
+    token_payload: dict[str, Any],
+    *,
+    max_results: int = 25,
+    inbox_tab: InboxTab = "all",
+) -> list[str]:
+    """Return ids of recent inbox messages, newest first.
+
+    inbox_tab='primary' limits to Gmail's Primary category (excludes Promotions,
+    Social, Updates, Forums tabs).
+    """
+    svc = _service(token_payload)
+    label_ids = ["INBOX"]
+    if inbox_tab == "primary":
+        label_ids.append("CATEGORY_PERSONAL")
     resp = (
         svc.users()
         .messages()
-        .list(userId="me", labelIds=["INBOX"], maxResults=max_results)
+        .list(userId="me", labelIds=label_ids, maxResults=max_results)
         .execute()
     )
     return [m["id"] for m in resp.get("messages", [])]

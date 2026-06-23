@@ -23,13 +23,16 @@ def sync_now(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SyncResponse:
-    messages = ingestion.ingest_recent_messages(db, user.id)
+    result = ingestion.sync_messages(db, user.id)
+    to_process = ingestion.messages_to_process(db, user.id, result.new_messages)
     commitments_found = 0
-    for message in messages:
+    for message in to_process:
         commitments_found += len(extraction.process_message(db, message))
     events = calendar.sync_calendar(db, user.id)
     return SyncResponse(
-        ingested=len(messages),
+        ingested=len(result.new_messages),
+        processed=len(to_process),
         commitments_found=commitments_found,
         events_synced=len(events),
+        initial_backfill=result.initial_backfill,
     )

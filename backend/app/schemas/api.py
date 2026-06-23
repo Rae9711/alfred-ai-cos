@@ -171,6 +171,8 @@ class SyncResponse(BaseModel):
     ingested: int
     commitments_found: int
     events_synced: int = 0
+    processed: int = 0
+    initial_backfill: bool = False
 
 
 # --- Meetings ---

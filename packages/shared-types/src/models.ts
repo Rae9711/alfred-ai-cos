@@ -219,7 +219,10 @@ export interface ProposeActionRequest {
 
 export interface SyncResponse {
   ingested: number;
+  processed: number;
   commitments_found: number;
+  events_synced: number;
+  initial_backfill: boolean;
 }
 
 export interface SessionToken {

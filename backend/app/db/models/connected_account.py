@@ -26,3 +26,5 @@ class ConnectedAccount(Base):
     sync_status: Mapped[SyncStatus] = mapped_column(String(16), default=SyncStatus.never)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sync_error: Mapped[str | None] = mapped_column(Text)
+    # Gmail users.history.list cursor. Null until the first Primary backfill completes.
+    gmail_history_id: Mapped[str | None] = mapped_column(String(32))

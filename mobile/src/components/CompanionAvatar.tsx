@@ -1,14 +1,10 @@
-// Alfred's companion avatar — placeholder visual until Lottie animations ship.
+// Alfred's companion avatar — "Light Airy Butler" + cloud cottage home.
 //
-// Design reference: Alfred-MVP evo-core-lv1.svg (concentric cloud orb with accent
-// glow). This component renders that orb with react-native-svg and optional speech
-// bubble / mood face text. When Lottie is wired up, swap CloudCoreOrb for a Lottie
-// view driven by EVOLUTION_STATES segments from avatarEvolution.ts.
-//
+// Vector art ported from mobile/demo/avatar-sim/sim.ts (react-native-svg).
 // Placements (controlled by parent screens):
 //   • today  — top-right greeting chip ("Hi!")
 //   • ask    — bottom-right while chatting
-//   • home   — inside the center + tab button
+//   • home   — cloud cottage in the center tab slot (butler peeks out on Inbox / You)
 
 import { useEffect, useRef } from "react";
 import {
@@ -21,28 +17,23 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
-import {
-  AVATAR_STATE_FACE,
-  getFormByLevel,
-  getLevelFx,
-  type AvatarState,
-} from "@/lib/agentMeta";
+import { ButlerSvg, CloudHomeSvg } from "@/components/butlerAvatarArt";
+import { getFormByLevel, getLevelFx, type AvatarState } from "@/lib/agentMeta";
 import { colors, fonts } from "@/theme/theme";
 
 export type CompanionAvatarProps = {
-  /** Diameter of the orb in logical pixels. */
+  /** Character height in logical pixels. */
   size?: number;
-  /** Agent level — selects evolution form styling (lv1 / lv5 / lv10 rings). */
+  /** Agent level — selects evolution halo styling. */
   level?: number;
-  /** Theme tint for glow; defaults to accent blue. */
+  /** Theme tint for bow tie / flag; defaults to accent blue. */
   color?: string;
-  /** Current mood — affects face glyph and subtle pulse animation. */
+  /** Current mood — affects face and subtle motion. */
   state?: AvatarState;
   /** Optional speech bubble text (e.g. "Hi!" on Today). */
   speech?: string;
-  /** When true, hides the mood face label (cleaner in the Ask dock). */
+  /** When true, hides extra chrome (Ask dock). */
   compact?: boolean;
   /** Called when the user taps the avatar (future: open growth hub). */
   onPress?: () => void;
@@ -52,7 +43,7 @@ export type CompanionAvatarProps = {
 };
 
 /**
- * Floating companion avatar: orb + optional speech bubble.
+ * Floating companion avatar: butler + optional speech bubble.
  * Wrap in a positioned parent (absolute top-right, bottom-right, etc.).
  */
 export function CompanionAvatar({
@@ -68,9 +59,8 @@ export function CompanionAvatar({
 }: CompanionAvatarProps) {
   const levelFx = getLevelFx(level);
   const form = getFormByLevel(level);
-  const face = AVATAR_STATE_FACE[state];
 
-  // Gentle "breathing" scale — stronger while thinking (matches web AgentAvatarCard).
+  // Breathing scale — stronger while thinking (matches the design sim).
   const breath = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const toValue = state === "thinking" ? 1.06 : 1.03;
@@ -95,11 +85,9 @@ export function CompanionAvatar({
   }, [breath, state]);
 
   const scaledSize = size * levelFx.scale;
-  const ringCount = level >= 10 ? 3 : level >= 5 ? 2 : 1;
 
   const body = (
     <View style={[styles.wrap, style]} accessibilityLabel={accessibilityLabel}>
-      {/* Speech bubble sits to the left of the orb on Today header. */}
       {speech ? (
         <View style={styles.bubble}>
           <Text style={styles.bubbleText}>{speech}</Text>
@@ -116,21 +104,14 @@ export function CompanionAvatar({
           shadowOffset: { width: 0, height: 4 },
         }}
       >
-        <CloudCoreOrb
+        <ButlerSvg
           size={scaledSize}
           color={color}
-          ringCount={ringCount}
+          level={level}
           state={state}
         />
       </Animated.View>
 
-      {/* Tiny mood face under the orb — hidden in compact mode (Ask dock). */}
-      {!compact ? (
-        <Text style={styles.face} numberOfLines={1}>
-          {face}
-        </Text>
-      ) : null}
-      {/* Hidden form name for screen readers / dev sanity while assets are stubbed. */}
       <Text style={styles.srOnly}>{form.name}</Text>
     </View>
   );
@@ -151,118 +132,28 @@ export function CompanionAvatar({
   return body;
 }
 
-/** SVG cloud-core orb — visual stand-in for evo-core-lv*.svg + future Lottie. */
-function CloudCoreOrb({
-  size,
-  color,
-  ringCount,
-  state,
-}: {
-  size: number;
-  color: string;
-  ringCount: number;
-  state: AvatarState;
-}) {
-  // Thinking state gets a dashed outer ring (evo-core-lv1 pattern).
-  const outerDash = state === "thinking" ? "4 6" : undefined;
-  const outerOpacity = state === "sleep" ? 0.35 : 0.55;
-
-  return (
-    <Svg width={size} height={size} viewBox="0 0 240 240">
-      <Defs>
-        <RadialGradient
-          id="companionBg"
-          cx="120"
-          cy="126"
-          rx="92"
-          ry="92"
-          gradientUnits="userSpaceOnUse"
-        >
-          <Stop offset="0" stopColor={color} stopOpacity="0.35" />
-          <Stop offset="1" stopColor={color} stopOpacity="0.08" />
-        </RadialGradient>
-      </Defs>
-
-      {/* Soft radial fill */}
-      <Circle cx="120" cy="120" r="82" fill="url(#companionBg)" />
-
-      {/* Outermost ring — dashed at lv1+, solid when evolved */}
-      {ringCount >= 1 ? (
-        <Circle
-          cx="120"
-          cy="120"
-          r="74"
-          stroke={color}
-          strokeWidth="3"
-          strokeDasharray={outerDash}
-          strokeOpacity={outerOpacity}
-          fill="none"
-        />
-      ) : null}
-
-      {/* Mid ring — appears at lv5+ */}
-      {ringCount >= 2 ? (
-        <Circle
-          cx="120"
-          cy="120"
-          r="64"
-          stroke={color}
-          strokeWidth="2.5"
-          strokeOpacity="0.65"
-          fill="none"
-        />
-      ) : null}
-
-      {/* Inner ring — appears at lv10 */}
-      {ringCount >= 3 ? (
-        <Circle
-          cx="120"
-          cy="120"
-          r="54"
-          stroke={color}
-          strokeWidth="2"
-          strokeOpacity="0.85"
-          fill="none"
-        />
-      ) : null}
-
-      {/* Core dot */}
-      <Circle
-        cx="120"
-        cy="120"
-        r={state === "success" ? 12 : 8}
-        fill={color}
-        opacity={state === "sleep" ? 0.5 : 1}
-      />
-    </Svg>
-  );
-}
-
-/** Compact orb for the tab bar "home" slot — no face label, fits inside the + circle. */
+/** Cloud cottage for the tab bar — butler peeks out when occupied (Inbox / You). */
 export function CompanionAvatarHome({
-  size = 28,
-  level = 1,
+  size = 54,
   color = colors.accent,
   state = "idle",
-}: Pick<CompanionAvatarProps, "size" | "level" | "color" | "state">) {
-  const levelFx = getLevelFx(level);
-  const ringCount = level >= 10 ? 3 : level >= 5 ? 2 : 1;
-
+  occupied = false,
+}: Pick<CompanionAvatarProps, "size" | "color" | "state"> & {
+  occupied?: boolean;
+}) {
   return (
     <View
-      style={{
-        width: size,
-        height: size,
-        alignItems: "center",
-        justifyContent: "center",
-        transform: [{ scale: levelFx.scale * 0.92 }],
-      }}
-      accessibilityLabel="Alfred companion home"
+      style={styles.homeSlot}
+      accessibilityLabel={
+        occupied
+          ? "Alfred companion home — open capture"
+          : "Alfred away working — open capture"
+      }
     >
-      <CloudCoreOrb
+      <CloudHomeSvg
         size={size}
         color={color}
-        ringCount={ringCount}
+        occupied={occupied}
         state={state}
       />
     </View>
@@ -276,6 +167,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   pressed: { opacity: 0.85 },
+  homeSlot: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   bubble: {
     position: "absolute",
@@ -293,6 +188,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
+    zIndex: 2,
   },
   bubbleText: {
     fontFamily: fonts.serif,
@@ -313,11 +209,6 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "45deg" }],
   },
 
-  face: {
-    fontSize: 11,
-    color: colors.ink3,
-    marginTop: -2,
-  },
   srOnly: {
     position: "absolute",
     width: 1,

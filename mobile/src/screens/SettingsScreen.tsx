@@ -19,6 +19,7 @@ import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
 import { Ic } from "@/components/icons";
+import { useLocale } from "@/context/LocaleContext";
 import {
   Btn,
   Eyebrow,
@@ -32,6 +33,7 @@ import { colors, fonts, layout, spacing } from "@/theme/theme";
 
 export function SettingsScreen() {
   const { signOut } = useAuth();
+  const { locale, setLocale, t } = useLocale();
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -143,7 +145,7 @@ export function SettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Eyebrow>You</Eyebrow>
+        <Eyebrow>{t.settings.you}</Eyebrow>
         <Serif size={32} style={styles.name}>
           <SerifEm>{firstName}</SerifEm>
           {rest}
@@ -152,6 +154,22 @@ export function SettingsScreen() {
       </View>
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
+
+      <SectionTitle label={t.settings.language} />
+      <View style={styles.group}>
+        <LanguageRow
+          label={t.settings.english}
+          selected={locale === "en"}
+          onPress={() => setLocale("en")}
+        />
+        <LanguageRow
+          label={t.settings.chinese}
+          selected={locale === "zh"}
+          onPress={() => setLocale("zh")}
+          isLast
+        />
+      </View>
+      <Meta style={styles.langHint}>{t.settings.languageDetail}</Meta>
 
       {/* Integrations */}
       <SectionTitle label="Integrations" />
@@ -234,6 +252,34 @@ export function SettingsScreen() {
 
       <Meta style={styles.version}>Albert · 阿福 · made calmly</Meta>
     </ScrollView>
+  );
+}
+
+function LanguageRow({
+  label,
+  selected,
+  onPress,
+  isLast = false,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  isLast?: boolean;
+}) {
+  return (
+    <Pressable
+      style={[styles.row, !isLast && styles.rowDivider]}
+      onPress={onPress}
+    >
+      <Text style={styles.rowLabel}>{label}</Text>
+      {selected ? (
+        <View style={styles.langCheck}>
+          <View style={styles.langCheckDot} />
+        </View>
+      ) : (
+        <View style={styles.langCheckEmpty} />
+      )}
+    </Pressable>
   );
 }
 
@@ -400,6 +446,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   approvalDesc: { fontSize: 13, color: colors.ink2, marginTop: 4 },
+
+  langHint: { marginTop: 8, marginBottom: 4 },
+  langCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  langCheckDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.paper,
+  },
+  langCheckEmpty: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+  },
 
   version: { textAlign: "center", marginTop: 24 },
 });
