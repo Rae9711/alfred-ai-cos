@@ -19,6 +19,7 @@ from app.schemas.api import (
     InboxOut,
 )
 from app.services.assistant import interpret_and_book, resolve_timezone
+from app.services.inbox_filter import message_in_primary_inbox
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -54,6 +55,9 @@ def list_inbox(
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
+        if not message_in_primary_inbox(m):
+            filtered += 1
+            continue
         if m.classification in _FILTERED:
             filtered += 1
             continue

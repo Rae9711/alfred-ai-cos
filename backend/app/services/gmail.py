@@ -23,6 +23,9 @@ def _service(token_payload: dict[str, Any]) -> Any:
 InboxTab = Literal["all", "primary"]
 
 _PRIMARY_LABEL = "CATEGORY_PERSONAL"
+_NON_PRIMARY_TABS = frozenset(
+    {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS"}
+)
 
 
 class HistoryExpiredError(Exception):
@@ -46,8 +49,16 @@ def get_message_label_ids(token_payload: dict[str, Any], message_id: str) -> lis
     return list(raw.get("labelIds") or [])
 
 
-def is_primary_inbox(labels: list[str]) -> bool:
+def is_primary_inbox(labels: list[str] | None) -> bool:
+    if not labels:
+        return False
     return "INBOX" in labels and _PRIMARY_LABEL in labels
+
+
+def is_non_primary_tab(labels: list[str] | None) -> bool:
+    if not labels:
+        return False
+    return bool(_NON_PRIMARY_TABS.intersection(labels))
 
 
 def list_history_added_message_ids(

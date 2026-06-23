@@ -45,3 +45,7 @@ class Message(Base):
     # Stored so per-commitment scoring is O(1) and the dashboard renders the
     # same answer the ranker uses.
     sender_classification: Mapped[str | None] = mapped_column(String(32))
+
+    # Gmail label ids at ingest (INBOX, CATEGORY_PERSONAL, …). Inbox API shows
+    # only Primary-tab mail (CATEGORY_PERSONAL + INBOX).
+    gmail_labels: Mapped[list[str] | None] = mapped_column(JSON)

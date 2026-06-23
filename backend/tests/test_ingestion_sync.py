@@ -63,6 +63,7 @@ def test_initial_backfill_uses_primary_and_sets_history(
         return ["m1", "m2"]
 
     monkeypatch.setattr(gmail, "list_recent_message_ids", fake_list)
+    monkeypatch.setattr(gmail, "get_message_label_ids", lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"])
     monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
     monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-99")
 
@@ -89,7 +90,7 @@ def test_incremental_uses_history_and_filters_primary(
     monkeypatch.setattr(
         gmail,
         "get_message_label_ids",
-        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"] if mid == "m-new" else ["INBOX"],
+        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"] if mid == "m-new" else ["INBOX", "CATEGORY_PROMOTIONS"],
     )
     monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
     monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-99")
@@ -114,6 +115,11 @@ def test_incremental_history_expired_falls_back_to_recent_primary(
         gmail,
         "list_recent_message_ids",
         lambda _t, *, max_results, inbox_tab: ["m-fallback"],
+    )
+    monkeypatch.setattr(
+        gmail,
+        "get_message_label_ids",
+        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"],
     )
     monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
     monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-fresh")
@@ -162,6 +168,11 @@ def test_sync_dedupes_existing_messages(
     db.commit()
 
     monkeypatch.setattr(gmail, "list_recent_message_ids", lambda *_a, **_k: ["m1", "m2"])
+    monkeypatch.setattr(
+        gmail,
+        "get_message_label_ids",
+        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"],
+    )
     monkeypatch.setattr(
         gmail,
         "get_message",

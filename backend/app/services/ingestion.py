@@ -6,6 +6,7 @@ Sync policy:
   - First connect (no gmail_history_id): backfill the newest Primary inbox messages.
   - Later syncs: Gmail history API for new inbox mail, Primary tab only.
   - On expired history: fall back to a small recent Primary poll.
+  - Inbox UI: only messages with CATEGORY_PERSONAL (+ INBOX) are stored/shown.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from app.services import gmail, sender_class
 from app.services.crypto import decrypt_token
 from app.services.extraction import _EXTRACTION_BLOCKED_CLASSES
 from app.services.gmail import HistoryExpiredError
+from app.services.inbox_filter import message_in_primary_inbox
 
 
 @dataclass(frozen=True)
@@ -60,8 +62,6 @@ def _ingest_message_ids(
     user_id: str,
     token: dict,
     message_ids: list[str],
-    *,
-    primary_only: bool,
 ) -> list[Message]:
     user = db.get(User, user_id)
     if user is None:
@@ -71,10 +71,9 @@ def _ingest_message_ids(
     for message_id in message_ids:
         if _message_exists(db, user_id, message_id):
             continue
-        if primary_only:
-            labels = gmail.get_message_label_ids(token, message_id)
-            if not gmail.is_primary_inbox(labels):
-                continue
+        labels = gmail.get_message_label_ids(token, message_id)
+        if not gmail.is_primary_inbox(labels):
+            continue
         raw = gmail.get_message(token, message_id)
         sent_at = None
         if raw.get("internal_date_ms"):
@@ -90,6 +89,7 @@ def _ingest_message_ids(
             snippet=raw["snippet"],
             sent_at=sent_at,
             headers=raw.get("headers") or {},
+            gmail_labels=labels,
         )
         cls = sender_class.classify(
             sender=raw["sender"],
@@ -104,9 +104,26 @@ def _ingest_message_ids(
     return new_messages
 
 
+def _refresh_gmail_labels(db: Session, user_id: str, token: dict, *, limit: int = 120) -> None:
+    """Backfill Gmail labels on recent rows so legacy Promotions drop out of Inbox."""
+    rows = list(
+        db.scalars(
+            select(Message)
+            .where(Message.user_id == user_id)
+            .order_by(Message.sent_at.desc().nullslast())
+            .limit(limit)
+        )
+    )
+    for message in rows:
+        try:
+            message.gmail_labels = gmail.get_message_label_ids(token, message.external_id)
+        except Exception:
+            continue
+
+
 def messages_pending_extraction(db: Session, user_id: str) -> list[Message]:
     """Rows ingested earlier that never finished classification/extraction."""
-    return list(
+    rows = list(
         db.scalars(
             select(Message).where(
                 Message.user_id == user_id,
@@ -118,6 +135,7 @@ def messages_pending_extraction(db: Session, user_id: str) -> list[Message]:
             )
         )
     )
+    return [m for m in rows if message_in_primary_inbox(m)]
 
 
 def messages_to_process(
@@ -146,9 +164,7 @@ def sync_messages(db: Session, user_id: str) -> SyncIngestResult:
                 max_results=settings.sync_initial_max_results,
                 inbox_tab="primary",
             )
-            new_messages = _ingest_message_ids(
-                db, user_id, token, message_ids, primary_only=False
-            )
+            new_messages = _ingest_message_ids(db, user_id, token, message_ids)
         else:
             try:
                 message_ids, _latest = gmail.list_history_added_message_ids(
@@ -156,19 +172,16 @@ def sync_messages(db: Session, user_id: str) -> SyncIngestResult:
                     account.gmail_history_id,
                     label_id="INBOX",
                 )
-                new_messages = _ingest_message_ids(
-                    db, user_id, token, message_ids, primary_only=True
-                )
+                new_messages = _ingest_message_ids(db, user_id, token, message_ids)
             except HistoryExpiredError:
                 message_ids = gmail.list_recent_message_ids(
                     token,
                     max_results=settings.sync_incremental_fallback_max,
                     inbox_tab="primary",
                 )
-                new_messages = _ingest_message_ids(
-                    db, user_id, token, message_ids, primary_only=False
-                )
+                new_messages = _ingest_message_ids(db, user_id, token, message_ids)
 
+        _refresh_gmail_labels(db, user_id, token)
         account.gmail_history_id = gmail.get_history_id(token)
         account.sync_status = SyncStatus.ok
         account.last_synced_at = datetime.now(UTC)
