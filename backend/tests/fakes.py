@@ -36,7 +36,7 @@ class FakeLLM:
         self.interpret_calls: list[dict] = []
 
     def classify_message(
-        self, *, subject: str | None, body: str, sender: str
+        self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
     ) -> ClassificationResult:
         return ClassificationResult(
             classification=MessageClassification.needs_reply,
