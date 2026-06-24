@@ -8,6 +8,7 @@ import { Slot, router } from "expo-router";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 import {
   useFonts,
   InstrumentSerif_400Regular,
@@ -79,6 +80,21 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) void SplashScreen.hideAsync();
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    if (!Updates.isEnabled) return;
+    void (async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {
+        // Dev / Expo Go — updates not available.
+      }
+    })();
+  }, []);
 
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
