@@ -42,6 +42,8 @@ def create_draft(
         instruction=payload.instruction,
         tone=payload.tone,
         user_name=user.name,
+        current_draft=payload.current_draft_body,
+        revision_history=payload.revision_history or None,
     )
 
     draft = DraftReply(

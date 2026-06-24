@@ -57,8 +57,16 @@ class FakeLLM:
         return self._commitments
 
     def draft_reply(
-        self, *, thread_context: str, instruction: str | None, tone: str, user_name: str | None
+        self,
+        *,
+        thread_context: str,
+        instruction: str | None,
+        tone: str,
+        user_name: str | None,
+        current_draft: str | None = None,
+        revision_history: list[str] | None = None,
     ) -> DraftResult:
+        del current_draft, revision_history
         sig = f"\n{user_name}" if user_name else ""
         return DraftResult(subject="Re: test", body=f"[{tone}] drafted reply{sig}")
 

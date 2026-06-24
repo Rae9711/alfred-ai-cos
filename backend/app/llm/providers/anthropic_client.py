@@ -21,6 +21,7 @@ from anthropic.types import (
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.services.draft_revision import build_draft_user_content
 from app.schemas.llm import (
     AssistantInterpretation,
     CaptureResult,
@@ -94,7 +95,9 @@ _DRAFT_SYSTEM = (
     "You are Albert's drafting agent. Write a reply that matches the requested tone, is "
     "concise by default, and never invents facts not present in the thread. Sign off as "
     "the user whose name is given; if no name is given, omit the signature line entirely "
-    "rather than inventing one. Do not send; you only draft."
+    "rather than inventing one. Do not send; you only draft. When revising an existing "
+    "draft, keep what already works and apply every user note from the conversation — "
+    "do not drop earlier preferences when a new note arrives."
 )
 _CAPTURE_SYSTEM = (
     "You are Albert's capture agent. The user dumped a messy note (typed or transcribed "
@@ -190,18 +193,27 @@ class AnthropicLLMClient:
         return _Wrapper.model_validate(raw).commitments
 
     def draft_reply(
-        self, *, thread_context: str, instruction: str | None, tone: str, user_name: str | None
+        self,
+        *,
+        thread_context: str,
+        instruction: str | None,
+        tone: str,
+        user_name: str | None,
+        current_draft: str | None = None,
+        revision_history: list[str] | None = None,
     ) -> DraftResult:
-        instruction_line = f"\nUser instruction: {instruction}" if instruction else ""
-        name_line = (
-            f"\nSign off as: {user_name}"
-            if user_name
-            else "\nThe user's name is unknown; omit the signature line."
+        user_content = build_draft_user_content(
+            thread_context=thread_context,
+            tone=tone,
+            user_name=user_name,
+            instruction=instruction,
+            current_draft=current_draft,
+            revision_history=revision_history,
         )
         raw = self._structured(
             model=settings.llm_draft_model,
             system=_DRAFT_SYSTEM,
-            user_content=f"Tone: {tone}{name_line}{instruction_line}\n\nThread:\n{thread_context}",
+            user_content=user_content,
             tool=_tool_for(DraftResult, "record_draft", "Record the drafted reply."),
         )
         return DraftResult.model_validate(raw)

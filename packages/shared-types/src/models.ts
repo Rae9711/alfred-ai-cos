@@ -223,6 +223,8 @@ export interface DraftCreateRequest {
   message_id: string;
   tone?: string;
   instruction?: string | null;
+  current_draft_body?: string | null;
+  revision_history?: string[];
 }
 
 export interface ActionProposal {

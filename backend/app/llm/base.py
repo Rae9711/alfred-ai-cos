@@ -52,12 +52,19 @@ class LLMClient(Protocol):
         ...
 
     def draft_reply(
-        self, *, thread_context: str, instruction: str | None, tone: str, user_name: str | None
+        self,
+        *,
+        thread_context: str,
+        instruction: str | None,
+        tone: str,
+        user_name: str | None,
+        current_draft: str | None = None,
+        revision_history: list[str] | None = None,
     ) -> DraftResult:
         """Draft a reply to an email thread in the requested tone (PRD 12.9).
 
-        user_name is the signature the draft should sign off as; None means omit the
-        signature rather than invent one."""
+        When current_draft and revision notes are set, revise that draft while
+        honoring the full revision history, not just the latest note."""
         ...
 
     def generate_daily_briefing(self, *, today_payload: dict[str, Any]) -> str:

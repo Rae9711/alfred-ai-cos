@@ -36,6 +36,7 @@ export type WorkflowThread = {
   draftId: string | null;
   draftLoading: boolean;
   draftError: string | null;
+  revisionHistory: string[];
 };
 
 type WorkflowApi = {
@@ -103,6 +104,7 @@ export function WorkflowProvider({
         draftId: null,
         draftLoading: true,
         draftError: null,
+        revisionHistory: [],
       });
       setTab("ask");
       void (async () => {
@@ -178,6 +180,7 @@ export function WorkflowProvider({
       draftId: null,
       draftLoading: false,
       draftError: null,
+      revisionHistory: [],
     });
     setTab("ask");
   }, [setTab, locale]);
@@ -212,6 +215,8 @@ export function WorkflowProvider({
           message_id: thread.messageId,
           tone: "concise",
           instruction: trimmed,
+          current_draft_body: thread.draft.body || null,
+          revision_history: thread.revisionHistory,
         });
         setThread((t) =>
           t
@@ -223,6 +228,7 @@ export function WorkflowProvider({
                   body: d.body,
                 },
                 draftId: d.id,
+                revisionHistory: [...t.revisionHistory, trimmed],
                 draftLoading: false,
               }
             : t,

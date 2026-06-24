@@ -64,6 +64,8 @@ class DraftCreateRequest(BaseModel):
     message_id: str
     tone: str = "concise"
     instruction: str | None = None
+    current_draft_body: str | None = None
+    revision_history: list[str] = []
 
 
 class DraftOut(BaseModel):
