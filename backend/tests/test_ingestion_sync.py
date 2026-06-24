@@ -15,6 +15,16 @@ from app.services.crypto import encrypt_token
 from app.services.gmail import HistoryExpiredError
 
 
+@pytest.fixture(autouse=True)
+def _patch_unread_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gmail, "list_unread_primary_message_ids", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        gmail,
+        "list_history_label_affected_message_ids",
+        lambda *_a, **_k: (set(), "hist"),
+    )
+
+
 def _connect(db: Session, user: User, *, history_id: str | None = None) -> ConnectedAccount:
     account = ConnectedAccount(
         user_id=user.id,
@@ -153,10 +163,11 @@ def test_messages_to_process_includes_pending_unclassified(
 def test_sync_dedupes_existing_messages(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _connect(db, user, history_id=None)
+    account = _connect(db, user, history_id=None)
     db.add(
         Message(
             user_id=user.id,
+            connected_account_id=account.id,
             source="gmail",
             external_id="m1",
             sender="a@b.com",

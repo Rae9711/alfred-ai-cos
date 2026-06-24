@@ -27,6 +27,10 @@ export type WorkflowThread = {
   messageId: string;
   sender: string;
   subject: string;
+  summary: string | null;
+  body: string;
+  bodyLoading: boolean;
+  bodyError: string | null;
   mode: ChatMode;
   draft: WorkflowDraft;
   draftId: string | null;
@@ -90,6 +94,10 @@ export function WorkflowProvider({
         messageId,
         sender: item?.sender ?? "Contact",
         subject: item?.title ?? "Message",
+        summary: item?.take || null,
+        body: "",
+        bodyLoading: true,
+        bodyError: null,
         mode,
         draft: { to: item?.sender ?? "", subject: "", body: "" },
         draftId: null,
@@ -98,15 +106,52 @@ export function WorkflowProvider({
       });
       setTab("ask");
       void (async () => {
-        try {
-          const { draft, draftId } = await loadDraft(messageId, mode);
+        const detailPromise = api.getMessage(messageId);
+        const draftPromise = loadDraft(messageId, mode);
+
+        const [detailResult, draftResult] = await Promise.allSettled([
+          detailPromise,
+          draftPromise,
+        ]);
+
+        if (detailResult.status === "fulfilled") {
+          const detail = detailResult.value;
+          setThread((current) =>
+            current?.messageId === messageId
+              ? {
+                  ...current,
+                  sender: detail.sender,
+                  subject: detail.subject?.trim() || current.subject,
+                  summary: detail.take?.trim() || current.summary,
+                  body: detail.body,
+                  bodyLoading: false,
+                }
+              : current,
+          );
+        } else {
+          const message =
+            detailResult.reason instanceof Error
+              ? detailResult.reason.message
+              : "Couldn't load email";
+          setThread((current) =>
+            current?.messageId === messageId
+              ? { ...current, bodyLoading: false, bodyError: message }
+              : current,
+          );
+        }
+
+        if (draftResult.status === "fulfilled") {
+          const { draft, draftId } = draftResult.value;
           setThread((current) =>
             current?.messageId === messageId
               ? { ...current, draft, draftId, draftLoading: false }
               : current,
           );
-        } catch (e) {
-          const message = e instanceof Error ? e.message : "Couldn't draft reply";
+        } else {
+          const message =
+            draftResult.reason instanceof Error
+              ? draftResult.reason.message
+              : "Couldn't draft reply";
           setThread((current) =>
             current?.messageId === messageId
               ? { ...current, draftLoading: false, draftError: message }
@@ -124,6 +169,10 @@ export function WorkflowProvider({
       messageId: p.messageId,
       sender: p.sender,
       subject: p.subject,
+      summary: null,
+      body: "",
+      bodyLoading: false,
+      bodyError: null,
       mode: "proactive",
       draft: draftForMessage(p.messageId, locale),
       draftId: null,

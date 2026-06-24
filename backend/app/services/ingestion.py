@@ -99,9 +99,14 @@ def _ingest_message_ids(
 
 
 def _refresh_gmail_labels(
-    db: Session, account: ConnectedAccount, token: dict, *, limit: int = 120
+    db: Session,
+    account: ConnectedAccount,
+    token: dict,
+    *,
+    limit: int = 120,
+    priority_external_ids: list[str] | None = None,
 ) -> None:
-    """Backfill Gmail labels (and sender class) for one mailbox."""
+    """Refresh Gmail labels (and sender class) for one mailbox."""
     user = db.get(User, account.user_id)
     unlabeled = list(
         db.scalars(
@@ -119,9 +124,19 @@ def _refresh_gmail_labels(
             .limit(limit)
         )
     )
+    priority_rows: list[Message] = []
+    if priority_external_ids:
+        priority_rows = list(
+            db.scalars(
+                select(Message).where(
+                    Message.connected_account_id == account.id,
+                    Message.external_id.in_(priority_external_ids),
+                )
+            )
+        )
     seen: set[str] = set()
     rows: list[Message] = []
-    for message in unlabeled + recent:
+    for message in priority_rows + unlabeled + recent:
         if message.id in seen:
             continue
         seen.add(message.id)
@@ -135,6 +150,44 @@ def _refresh_gmail_labels(
             message.sender_classification = sender_class.classify_message(
                 message, user=user
             ).cls
+
+
+def _sync_unread_primary(
+    db: Session, account: ConnectedAccount, token: dict
+) -> list[Message]:
+    """Ingest any unread Primary mail missing from the local store."""
+    settings = get_settings()
+    unread_ids = gmail.list_unread_primary_message_ids(
+        token, max_results=settings.sync_unread_max_results
+    )
+    return _ingest_message_ids(db, account, token, unread_ids)
+
+
+def _apply_history_label_changes(
+    db: Session, account: ConnectedAccount, token: dict, start_history_id: str
+) -> None:
+    """Refresh labels when the user reads/marks unread in Gmail."""
+    try:
+        affected, _latest = gmail.list_history_label_affected_message_ids(
+            token, start_history_id
+        )
+    except HistoryExpiredError:
+        return
+    if not affected:
+        return
+    rows = list(
+        db.scalars(
+            select(Message).where(
+                Message.connected_account_id == account.id,
+                Message.external_id.in_(affected),
+            )
+        )
+    )
+    for message in rows:
+        try:
+            message.gmail_labels = gmail.get_message_label_ids(token, message.external_id)
+        except Exception:
+            continue
 
 
 def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
@@ -170,7 +223,16 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
                 )
                 new_messages = _ingest_message_ids(db, account, token, message_ids)
 
-        _refresh_gmail_labels(db, account, token)
+        unread_new = _sync_unread_primary(db, account, token)
+        new_messages.extend(unread_new)
+
+        if account.gmail_history_id:
+            _apply_history_label_changes(db, account, token, account.gmail_history_id)
+
+        unread_ids = gmail.list_unread_primary_message_ids(
+            token, max_results=settings.sync_unread_max_results
+        )
+        _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
         account.gmail_history_id = gmail.get_history_id(token)
         account.sync_status = SyncStatus.ok
         account.last_synced_at = datetime.now(UTC)

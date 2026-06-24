@@ -52,11 +52,13 @@ export const translations = {
       syncing: "Syncing your inbox…",
       retry: "Tap to retry",
       filters: {
+        unread: "Unread",
         today: "Today",
       },
       unreadLabel: "Unread",
       readLabel: "Read",
       mailboxChip: "Mailbox",
+      albertTake: "Albert's read",
     },
     ask: {
       alfred: "Alfred",
@@ -82,6 +84,9 @@ export const translations = {
       toastCancelled: "Cancelled.",
       toastSendFailed: "Couldn't send — try again.",
       drafting: "Drafting your reply…",
+      originalEmail: "Original email",
+      loadingEmail: "Loading full email…",
+      albertSummary: "Summary",
     },
     settings: {
       you: "You",
@@ -158,11 +163,13 @@ export const translations = {
       syncing: "正在同步收件箱…",
       retry: "点击重试",
       filters: {
+        unread: "未读",
         today: "今天",
       },
       unreadLabel: "未读",
       readLabel: "已读",
       mailboxChip: "邮箱",
+      albertTake: "管家摘要",
     },
     ask: {
       alfred: "管家",
@@ -188,6 +195,9 @@ export const translations = {
       toastCancelled: "已取消。",
       toastSendFailed: "发送失败 — 请重试。",
       drafting: "正在起草回复…",
+      originalEmail: "原始邮件",
+      loadingEmail: "正在加载完整邮件…",
+      albertSummary: "摘要",
     },
     settings: {
       you: "我的",

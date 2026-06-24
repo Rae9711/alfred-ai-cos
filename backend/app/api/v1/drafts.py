@@ -14,6 +14,7 @@ from app.db.base import get_db
 from app.db.models import DraftReply, Message, User
 from app.llm import get_llm
 from app.schemas.api import DraftCreateRequest, DraftOut
+from app.services.message_body import build_draft_context, fetch_message_body
 
 router = APIRouter(prefix="/drafts", tags=["drafts"])
 
@@ -28,9 +29,14 @@ def create_draft(
     if message is None or message.user_id != user.id:
         raise HTTPException(status_code=404, detail="Message not found")
 
-    # Thread context for the slice is the stored snippet + subject. Full-thread
-    # retrieval is a follow-up (see docs/TODO.md).
-    context = f"Subject: {message.subject or '(none)'}\nFrom: {message.sender}\n\n{message.snippet}"
+    try:
+        body = fetch_message_body(db, message)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not load email from Gmail") from exc
+
+    context = build_draft_context(message=message, body=body)
     result = get_llm().draft_reply(
         thread_context=context,
         instruction=payload.instruction,

@@ -18,10 +18,14 @@ from app.schemas.api import (
     BookMessageResponse,
     InboxMessageOut,
     InboxOut,
+    MessageDetailOut,
+    MessageReadOut,
 )
 from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
+from app.services.message_body import fetch_message_body
+from app.services.message_read import mark_message_read
 from app.services.inbox_view import (
     effective_inbox_category,
     is_gmail_unread,
@@ -38,8 +42,9 @@ _FILTERED = {MessageClassification.spam_noise}
 @router.get("", response_model=InboxOut)
 def list_inbox(
     scope: str = Query(
-        default="today",
-        description="'today' = mail since local midnight; 'synced' = latest synced Primary mail (up to 50)",
+        default="unread",
+        description="'unread' = all unread Primary mail; 'today' = since local midnight; "
+        "'synced' = latest synced Primary mail (up to 50)",
     ),
     mailbox: str | None = Query(
         default=None,
@@ -63,6 +68,7 @@ def list_inbox(
     today_start = start_of_today_utc(user.timezone)
     replied_ids = user_replied_message_ids(db, user.id)
     synced_limit = settings.sync_initial_max_results
+    unread_limit = settings.sync_unread_max_results
 
     stmt = (
         select(Message)
@@ -72,6 +78,8 @@ def list_inbox(
     )
     if scope == "today":
         stmt = stmt.where(Message.sent_at >= today_start)
+    elif scope == "unread":
+        stmt = stmt.limit(unread_limit * 2)
     else:
         stmt = stmt.limit(synced_limit * 3)
 
@@ -80,7 +88,9 @@ def list_inbox(
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
-        if scope != "today" and len(messages) >= synced_limit:
+        if scope == "synced" and len(messages) >= synced_limit:
+            break
+        if scope == "unread" and len(messages) >= unread_limit:
             break
         if filter_account_id and m.connected_account_id != filter_account_id:
             continue
@@ -93,6 +103,8 @@ def list_inbox(
 
         category = effective_inbox_category(m)
         is_unread = is_gmail_unread(m.gmail_labels)
+        if scope == "unread" and not is_unread:
+            continue
         user_replied = m.id in replied_ids
         messages.append(
             InboxMessageOut(
@@ -115,6 +127,59 @@ def list_inbox(
         filtered_count=filtered,
         mailboxes=mailbox_emails,
     )
+
+
+@router.get("/{message_id}", response_model=MessageDetailOut)
+def get_message(
+    message_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageDetailOut:
+    """Return one message with the full Gmail body for reply drafting."""
+    message = db.get(Message, message_id)
+    if message is None or message.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    accounts = list_google_accounts(db, user.id)
+    account_by_id = {a.id: a.provider_account_email or "" for a in accounts}
+
+    try:
+        body = fetch_message_body(db, message)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not load email from Gmail") from exc
+
+    return MessageDetailOut(
+        id=message.id,
+        sender=message.sender,
+        subject=message.subject,
+        snippet=message.snippet,
+        take=message.body_summary,
+        body=body,
+        category=effective_inbox_category(message),
+        sent_at=message.sent_at,
+        mailbox_email=account_by_id.get(message.connected_account_id or "", ""),
+    )
+
+
+@router.post("/{message_id}/read", response_model=MessageReadOut)
+def mark_read(
+    message_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageReadOut:
+    """Mark a message read in Gmail and update local label state."""
+    message = db.get(Message, message_id)
+    if message is None or message.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    try:
+        mark_message_read(db, user, message)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not update Gmail") from exc
+    return MessageReadOut(id=message.id, is_unread=is_gmail_unread(message.gmail_labels))
 
 
 @router.post("/{message_id}/book", response_model=BookMessageResponse)

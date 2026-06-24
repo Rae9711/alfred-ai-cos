@@ -35,7 +35,7 @@ type TaskMessage = {
 
 export function AskScreen() {
   const { openSheet, showToast } = useShell();
-  const { syncAndRefresh } = useMailbox();
+  const { syncAndRefresh, markRead } = useMailbox();
   const { meta, state, setThinking } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { thread, completeChat, cancelChat, reviseDraft } = useWorkflow();
@@ -147,6 +147,7 @@ export function AskScreen() {
         const proposal = await api.proposeSendDraft(thread.draftId!);
         await api.approveAction(proposal.id);
         showToast(t.ask.toastSent);
+        await markRead(thread.messageId).catch(() => undefined);
         await syncAndRefresh();
         completeChat();
       } catch (e) {
@@ -200,10 +201,22 @@ export function AskScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() =>
-            scrollRef.current?.scrollToEnd({ animated: true })
-          }
         >
+          {thread.mode !== "proactive" ? (
+            <EmailSourceCard
+              sender={thread.sender}
+              subject={thread.subject}
+              summary={thread.summary}
+              body={thread.body}
+              loading={thread.bodyLoading}
+              error={thread.bodyError}
+              labels={{
+                title: t.ask.originalEmail,
+                loading: t.ask.loadingEmail,
+                summary: t.ask.albertSummary,
+              }}
+            />
+          ) : null}
           {taskChat.map((m, i) => (
             <View key={i} style={styles.taskBubble}>
               <Serif size={16} style={styles.taskText}>
@@ -350,6 +363,50 @@ export function AskScreen() {
   );
 }
 
+function EmailSourceCard({
+  sender,
+  subject,
+  summary,
+  body,
+  loading,
+  error,
+  labels,
+}: {
+  sender: string;
+  subject: string;
+  summary: string | null;
+  body: string;
+  loading: boolean;
+  error: string | null;
+  labels: { title: string; loading: string; summary: string };
+}) {
+  return (
+    <View style={styles.emailCard}>
+      <Text style={styles.emailCardLabel}>{labels.title}</Text>
+      <Text style={styles.emailSubject}>{subject}</Text>
+      <Text style={styles.emailFrom}>{sender}</Text>
+      {loading ? (
+        <View style={styles.emailLoading}>
+          <ActivityIndicator color={colors.accent} size="small" />
+          <Text style={styles.emailLoadingText}>{labels.loading}</Text>
+        </View>
+      ) : error ? (
+        <Text style={styles.draftError}>{error}</Text>
+      ) : (
+        <>
+          {summary ? (
+            <View style={styles.emailSummaryBox}>
+              <Text style={styles.emailSummaryLabel}>{labels.summary}</Text>
+              <Text style={styles.emailSummaryText}>{summary}</Text>
+            </View>
+          ) : null}
+          <Text style={styles.emailBody}>{body}</Text>
+        </>
+      )}
+    </View>
+  );
+}
+
 function FreeBubble({ msg }: { msg: ChatMessage }) {
   const isAlf = msg.role === "alfred";
   return (
@@ -397,6 +454,46 @@ const styles = StyleSheet.create({
   scrollContent: { padding: layout.padX, paddingTop: 12, paddingBottom: 24 },
   taskBubble: { marginBottom: 16, maxWidth: "100%" },
   taskText: { color: colors.ink2, lineHeight: 24 },
+  emailCard: {
+    marginBottom: 20,
+    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    gap: 8,
+  },
+  emailCardLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  emailSubject: { fontSize: 16, fontWeight: "600", color: colors.ink },
+  emailFrom: { fontSize: 13, color: colors.ink3 },
+  emailLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+  },
+  emailLoadingText: { fontSize: 13, color: colors.ink3 },
+  emailSummaryBox: {
+    padding: 10,
+    backgroundColor: colors.paper2,
+    borderRadius: 10,
+    gap: 4,
+  },
+  emailSummaryLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  emailSummaryText: { fontSize: 13, lineHeight: 19, color: colors.ink2 },
+  emailBody: { fontSize: 14, lineHeight: 22, color: colors.ink2 },
   draftLoading: {
     flexDirection: "row",
     alignItems: "center",

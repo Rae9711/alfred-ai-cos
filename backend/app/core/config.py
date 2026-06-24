@@ -63,10 +63,11 @@ class Settings(BaseSettings):
     # Gmail sync: first connect backfills Primary inbox; later syncs use history API.
     sync_initial_max_results: int = 50
     sync_incremental_fallback_max: int = 20
+    sync_unread_max_results: int = 200
 
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [
-        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/gmail.compose",
         # gmail.send: send email on the user's behalf (level-3 approval-gated action).
         # Adding this invalidates existing tokens — users re-consent on next sign-in.

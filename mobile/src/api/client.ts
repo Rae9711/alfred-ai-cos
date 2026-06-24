@@ -17,6 +17,7 @@ import type {
   Draft,
   DraftCreateRequest,
   InboxView,
+  MessageDetail,
   Me,
   MeetingPrep,
   OnboardingPrefs,
@@ -119,13 +120,19 @@ export const api = {
     ),
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
-  getInbox: (opts?: { scope?: "today" | "synced"; mailbox?: string }) => {
+  getInbox: (opts?: { scope?: "unread" | "today" | "synced"; mailbox?: string }) => {
     const params = new URLSearchParams();
     if (opts?.scope) params.set("scope", opts.scope);
     if (opts?.mailbox) params.set("mailbox", opts.mailbox);
     const q = params.toString();
     return request<InboxView>(`/messages${q ? `?${q}` : ""}`);
   },
+  getMessage: (messageId: string) =>
+    request<MessageDetail>(`/messages/${messageId}`),
+  markMessageRead: (messageId: string) =>
+    request<{ id: string; is_unread: boolean }>(`/messages/${messageId}/read`, {
+      method: "POST",
+    }),
   // "Add to calendar" on a message — books it if it describes a timed event.
   bookFromMessage: (messageId: string, timezone: string) =>
     request<BookMessageResponse>(`/messages/${messageId}/book`, {

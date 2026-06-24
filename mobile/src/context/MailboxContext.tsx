@@ -17,7 +17,7 @@ import { registerForPush } from "@/api/push";
 import { useMailAutoSync } from "@/hooks/useMailAutoSync";
 import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
 
-export type InboxScope = "today" | "synced";
+export type InboxScope = "unread" | "today" | "synced";
 
 type MailboxState = {
   items: AppInboxItem[];
@@ -31,6 +31,7 @@ type MailboxState = {
   setInboxFilter: (filter: "today" | string) => Promise<void>;
   refresh: () => Promise<void>;
   syncAndRefresh: () => Promise<void>;
+  markRead: (id: string) => Promise<void>;
   itemById: (id: string) => AppInboxItem | undefined;
 };
 
@@ -40,14 +41,14 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
-  const [inboxScope, setInboxScope] = useState<InboxScope>("today");
+  const [inboxScope, setInboxScope] = useState<InboxScope>("unread");
   const [inboxMailbox, setInboxMailbox] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const filterRef = useRef<{ scope: InboxScope; mailbox?: string }>({
-    scope: "today",
+    scope: "unread",
   });
 
   const loadInbox = useCallback(
@@ -66,10 +67,12 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   );
 
   const setInboxFilter = useCallback(
-    async (filter: "today" | string) => {
+    async (filter: "unread" | "today" | string) => {
       setError(null);
       try {
-        if (filter === "today") {
+        if (filter === "unread") {
+          await loadInbox("unread");
+        } else if (filter === "today") {
           await loadInbox("today");
         } else {
           await loadInbox("synced", filter);
@@ -109,6 +112,16 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     }
   }, [loadInbox]);
 
+  const markRead = useCallback(async (id: string) => {
+    await api.markMessageRead(id);
+    setItems((prev) => {
+      if (filterRef.current.scope === "unread") {
+        return prev.filter((m) => m.id !== id);
+      }
+      return prev.map((m) => (m.id === id ? { ...m, isUnread: false } : m));
+    });
+  }, []);
+
   useEffect(() => {
     if (authed !== true) return;
     let cancelled = false;
@@ -116,7 +129,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         await api.sync();
-        await loadInbox("today");
+        await loadInbox("unread");
         setLastSyncedAt(new Date());
       } catch {
         // error state set in syncAndRefresh
@@ -154,6 +167,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setInboxFilter,
       refresh,
       syncAndRefresh,
+      markRead,
       itemById,
     }),
     [
@@ -168,6 +182,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setInboxFilter,
       refresh,
       syncAndRefresh,
+      markRead,
       itemById,
     ],
   );

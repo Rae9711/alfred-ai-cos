@@ -185,6 +185,19 @@ export interface InboxMessage {
   user_replied: boolean;
 }
 
+/** Full message body for reply drafting (fetched from Gmail on demand). */
+export interface MessageDetail {
+  id: string;
+  sender: string;
+  subject: string | null;
+  snippet: string | null;
+  take: string | null;
+  body: string;
+  category: InboxMessage["category"];
+  sent_at: string | null;
+  mailbox_email: string;
+}
+
 export interface InboxView {
   messages: InboxMessage[];
   filtered_count: number;

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import SourceType
 from app.db.models import Commitment, DraftReply, Message, User
 from app.llm import get_llm
+from app.services.message_body import build_draft_context, fetch_message_body
 
 
 def ensure_draft_for(db: Session, user: User, *, commitment: Commitment) -> str | None:
@@ -50,12 +51,11 @@ def ensure_draft_for(db: Session, user: User, *, commitment: Commitment) -> str 
         return existing.id
 
     try:
-        # Same context shape the manual /commitments/{id}/draft endpoint uses.
-        context = (
-            f"Task: {commitment.description}\n"
-            f"Counterparty: {commitment.counterparty or 'unknown'}\n"
-            f"Source (verbatim): {commitment.evidence or message.snippet or ''}"
-        )
+        try:
+            body = fetch_message_body(db, message)
+        except Exception:
+            body = (commitment.evidence or message.snippet or "").strip()
+        context = build_draft_context(message=message, body=body)
         result = get_llm().draft_reply(
             thread_context=context,
             instruction=None,

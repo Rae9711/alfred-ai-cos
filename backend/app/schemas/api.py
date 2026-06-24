@@ -101,6 +101,25 @@ class InboxOut(BaseModel):
     mailboxes: list[str] = []  # connected Gmail addresses for inbox tabs
 
 
+class MessageDetailOut(BaseModel):
+    """Full message for reply drafting. Body is fetched from Gmail on demand."""
+
+    id: str
+    sender: str
+    subject: str | None
+    snippet: str | None
+    take: str | None
+    body: str
+    category: str
+    sent_at: datetime | None
+    mailbox_email: str = ""
+
+
+class MessageReadOut(BaseModel):
+    id: str
+    is_unread: bool
+
+
 class BookMessageRequest(BaseModel):
     # The device timezone, so the event lands in the user's wall clock.
     timezone: str | None = None

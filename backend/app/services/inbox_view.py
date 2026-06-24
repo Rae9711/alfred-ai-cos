@@ -41,8 +41,10 @@ def start_of_today_utc(timezone: str | None) -> datetime:
 
 def is_gmail_unread(labels: list[str] | None) -> bool:
     """Gmail marks unread mail with the UNREAD label."""
-    if not labels:
+    if labels is None:
         return True
+    if not labels:
+        return False
     return "UNREAD" in labels
 
 

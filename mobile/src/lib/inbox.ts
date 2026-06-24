@@ -5,6 +5,7 @@ export type AppInboxItem = {
   source: "email";
   sender: string;
   title: string;
+  take: string;
   summary: string;
   mailboxEmail: string;
   tags: { label: string; tone: "warn" | "accent" | "muted" }[];
@@ -66,6 +67,7 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     source: "email",
     sender: parseSenderDisplay(message.sender),
     title: message.subject?.trim() || "(No subject)",
+    take: message.take?.trim() || "",
     summary: message.take?.trim() || message.snippet?.trim() || "",
     mailboxEmail: message.mailbox_email?.trim() || "",
     tags: [tagForCategory(message.category)],

@@ -38,6 +38,7 @@ def test_is_gmail_unread() -> None:
     assert is_gmail_unread(["INBOX", "UNREAD"]) is True
     assert is_gmail_unread(["INBOX", "CATEGORY_PERSONAL"]) is False
     assert is_gmail_unread(None) is True
+    assert is_gmail_unread([]) is False
 
 
 def test_message_needs_attention_respects_reply_state() -> None:

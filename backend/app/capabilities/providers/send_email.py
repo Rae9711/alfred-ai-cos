@@ -22,6 +22,7 @@ from app.db.models import DraftReply, Message, User
 from app.services import gmail, outbound_tracking
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
+from app.services.message_read import mark_message_read
 
 
 class SendEmailCapability:
@@ -79,6 +80,10 @@ class SendEmailCapability:
             recipient=message.sender,
             subject=subject,
         )
+        try:
+            mark_message_read(db, user, message)
+        except Exception:
+            pass
         # Sending is not reversible (it left the user's mailbox).
         return ExecutionResult(
             detail=f"Sent to {message.sender}",

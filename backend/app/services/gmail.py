@@ -6,8 +6,10 @@ ActionProposal via the SendEmail capability, never directly from a route."""
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime
 from email.message import EmailMessage
+from html import unescape
 from typing import Any, Literal, cast
 
 from googleapiclient.discovery import build
@@ -108,6 +110,111 @@ def list_history_added_message_ids(
     return seen, latest_history_id
 
 
+def list_message_ids(
+    token_payload: dict[str, Any],
+    *,
+    label_ids: list[str],
+    max_results: int = 50,
+    query: str | None = None,
+) -> list[str]:
+    """Return message ids matching label ids (and optional query), newest first."""
+    svc = _service(token_payload)
+    ids: list[str] = []
+    page_token: str | None = None
+    while len(ids) < max_results:
+        batch = min(max_results - len(ids), 100)
+        kwargs: dict[str, Any] = {
+            "userId": "me",
+            "labelIds": label_ids,
+            "maxResults": batch,
+        }
+        if query:
+            kwargs["q"] = query
+        if page_token:
+            kwargs["pageToken"] = page_token
+        resp = svc.users().messages().list(**kwargs).execute()
+        for item in resp.get("messages", []) or []:
+            mid = item.get("id")
+            if mid and mid not in ids:
+                ids.append(mid)
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return ids
+
+
+def list_unread_primary_message_ids(
+    token_payload: dict[str, Any], *, max_results: int = 200
+) -> list[str]:
+    """All unread Primary-tab inbox messages, newest first."""
+    return list_message_ids(
+        token_payload,
+        label_ids=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
+        max_results=max_results,
+    )
+
+
+def modify_message_labels(
+    token_payload: dict[str, Any],
+    message_id: str,
+    *,
+    add: list[str] | None = None,
+    remove: list[str] | None = None,
+) -> list[str]:
+    """Add/remove Gmail labels on one message; returns the updated label ids."""
+    svc = _service(token_payload)
+    body: dict[str, Any] = {}
+    if add:
+        body["addLabelIds"] = add
+    if remove:
+        body["removeLabelIds"] = remove
+    if not body:
+        return get_message_label_ids(token_payload, message_id)
+    raw = svc.users().messages().modify(userId="me", id=message_id, body=body).execute()
+    return list(raw.get("labelIds") or [])
+
+
+def list_history_label_affected_message_ids(
+    token_payload: dict[str, Any],
+    start_history_id: str,
+) -> tuple[set[str], str]:
+    """Message ids whose labels changed since start_history_id."""
+    svc = _service(token_payload)
+    affected: set[str] = set()
+    page_token: str | None = None
+    latest_history_id = start_history_id
+    while True:
+        try:
+            resp = (
+                svc.users()
+                .history()
+                .list(
+                    userId="me",
+                    startHistoryId=start_history_id,
+                    labelId="INBOX",
+                    historyTypes=["labelAdded", "labelRemoved"],
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+        except Exception as exc:
+            if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
+                raise HistoryExpiredError(str(exc)) from exc
+            raise
+        latest_history_id = str(resp.get("historyId") or latest_history_id)
+        for record in resp.get("history") or []:
+            for key in ("labelsAdded", "labelsRemoved"):
+                for entry in record.get(key) or []:
+                    msg = entry.get("message") or {}
+                    mid = msg.get("id")
+                    if mid:
+                        affected.add(mid)
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return affected, latest_history_id
+
+
 def list_recent_message_ids(
     token_payload: dict[str, Any],
     *,
@@ -121,22 +228,19 @@ def list_recent_message_ids(
     Social, Updates, Forums tabs). Optional `after` limits to mail on/after that
     calendar day (user-local midnight passed as UTC datetime).
     """
-    svc = _service(token_payload)
     label_ids = ["INBOX"]
     if inbox_tab == "primary":
         label_ids.append("CATEGORY_PERSONAL")
     query_parts: list[str] = []
     if after is not None:
         query_parts.append(f"after:{after.strftime('%Y/%m/%d')}")
-    kwargs: dict[str, Any] = {
-        "userId": "me",
-        "labelIds": label_ids,
-        "maxResults": max_results,
-    }
-    if query_parts:
-        kwargs["q"] = " ".join(query_parts)
-    resp = svc.users().messages().list(**kwargs).execute()
-    return [m["id"] for m in resp.get("messages", [])]
+    query = " ".join(query_parts) if query_parts else None
+    return list_message_ids(
+        token_payload,
+        label_ids=label_ids,
+        max_results=max_results,
+        query=query,
+    )
 
 
 def get_message(token_payload: dict[str, Any], message_id: str) -> dict[str, Any]:
@@ -183,16 +287,47 @@ def get_message(token_payload: dict[str, Any], message_id: str) -> dict[str, Any
     }
 
 
-def _extract_body(payload: dict[str, Any]) -> str:
-    """Walk the MIME tree and return the first text/plain body, decoded."""
-    if payload.get("mimeType") == "text/plain":
-        data = payload.get("body", {}).get("data")
-        if data:
-            return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+def _html_to_text(html: str) -> str:
+    """Best-effort HTML → plain text for reply drafting."""
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</p>", "\n\n", text)
+    text = re.sub(r"(?i)</div>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = unescape(text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _decode_part_body(payload: dict[str, Any]) -> str:
+    data = payload.get("body", {}).get("data")
+    if not data:
+        return ""
+    return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+
+
+def _collect_body_parts(
+    payload: dict[str, Any], *, mime_type: str, found: list[str]
+) -> None:
+    if payload.get("mimeType") == mime_type:
+        body = _decode_part_body(payload)
+        if body.strip():
+            found.append(body)
     for part in payload.get("parts", []) or []:
-        body = _extract_body(part)
-        if body:
-            return body
+        _collect_body_parts(part, mime_type=mime_type, found=found)
+
+
+def _extract_body(payload: dict[str, Any]) -> str:
+    """Walk the MIME tree: prefer text/plain, fall back to text/html."""
+    plain_parts: list[str] = []
+    html_parts: list[str] = []
+    _collect_body_parts(payload, mime_type="text/plain", found=plain_parts)
+    _collect_body_parts(payload, mime_type="text/html", found=html_parts)
+    if plain_parts:
+        return plain_parts[0].strip()
+    if html_parts:
+        return _html_to_text(html_parts[0])
     return ""
 
 
