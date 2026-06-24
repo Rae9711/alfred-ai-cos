@@ -609,6 +609,12 @@ def _has_bulk_headers(headers: dict | None) -> tuple[bool, list[str]]:
     return (bool(found), found)
 
 
+def has_bulk_mail_headers(headers: dict | None) -> bool:
+    """True when standard bulk/marketing headers are present on the message."""
+    is_bulk, _ = _has_bulk_headers(headers)
+    return is_bulk
+
+
 # --- subject heuristics ---
 
 _URGENCY_SPAM_RE = re.compile(

@@ -98,6 +98,10 @@ def _ingest_message_ids(
             headers=raw.get("headers") or {},
             user=user,
         )
+        if cls.cls in _EXTRACTION_BLOCKED_CLASSES:
+            continue
+        if sender_class.has_bulk_mail_headers(raw.get("headers")):
+            continue
         message.sender_classification = cls.cls
         db.add(message)
         new_messages.append(message)
@@ -105,8 +109,17 @@ def _ingest_message_ids(
 
 
 def _refresh_gmail_labels(db: Session, user_id: str, token: dict, *, limit: int = 120) -> None:
-    """Backfill Gmail labels on recent rows so legacy Promotions drop out of Inbox."""
-    rows = list(
+    """Backfill Gmail labels (and sender class) so promos drop out of Inbox."""
+    user = db.get(User, user_id)
+    unlabeled = list(
+        db.scalars(
+            select(Message).where(
+                Message.user_id == user_id,
+                Message.gmail_labels.is_(None),
+            )
+        )
+    )
+    recent = list(
         db.scalars(
             select(Message)
             .where(Message.user_id == user_id)
@@ -114,11 +127,22 @@ def _refresh_gmail_labels(db: Session, user_id: str, token: dict, *, limit: int 
             .limit(limit)
         )
     )
+    seen: set[str] = set()
+    rows: list[Message] = []
+    for message in unlabeled + recent:
+        if message.id in seen:
+            continue
+        seen.add(message.id)
+        rows.append(message)
     for message in rows:
         try:
             message.gmail_labels = gmail.get_message_label_ids(token, message.external_id)
         except Exception:
             continue
+        if user is not None:
+            message.sender_classification = sender_class.classify_message(
+                message, user=user
+            ).cls
 
 
 def messages_pending_extraction(db: Session, user_id: str) -> list[Message]:

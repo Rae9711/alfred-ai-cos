@@ -1,4 +1,4 @@
-"""Inbox list shows Primary-tab mail only (no Promotions / Social / Updates)."""
+"""Inbox list shows Primary-tab mail only (no Promotions / marketing)."""
 
 from __future__ import annotations
 
@@ -50,6 +50,52 @@ def test_promotions_tab_hidden(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is False
 
 
+def test_primary_tab_bulk_sender_hidden(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="promo2",
+        sender="beauty@brand.com",
+        recipients=[],
+        subject="A Touch of Sweetness",
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        classification=MessageClassification.informational,
+        sender_classification="bulk",
+    )
+    assert message_in_primary_inbox(m) is False
+
+
+def test_primary_tab_list_unsubscribe_hidden(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="promo3",
+        sender="beauty@brand.com",
+        recipients=[],
+        subject="Sale",
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        classification=MessageClassification.informational,
+        sender_classification="person",
+        headers={"List-Unsubscribe": "<mailto:unsub@brand.com>"},
+    )
+    assert message_in_primary_inbox(m) is False
+
+
+def test_low_priority_hidden_even_on_primary(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="lp1",
+        sender="shop@example.com",
+        recipients=[],
+        subject="Weekly deals",
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        classification=MessageClassification.low_priority,
+        sender_classification="person",
+    )
+    assert message_in_primary_inbox(m) is False
+
+
 def test_legacy_bulk_hidden_without_labels(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,
@@ -64,9 +110,7 @@ def test_legacy_bulk_hidden_without_labels(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is False
 
 
-def test_legacy_person_without_labels_still_visible_until_backfill(
-    db: Session, user: User
-) -> None:
+def test_legacy_without_labels_hidden_until_backfill(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,
         source="gmail",
@@ -78,4 +122,4 @@ def test_legacy_person_without_labels_still_visible_until_backfill(
         sender_classification="person",
         sent_at=datetime.now(UTC),
     )
-    assert message_in_primary_inbox(m) is True
+    assert message_in_primary_inbox(m) is False
