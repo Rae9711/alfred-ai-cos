@@ -5,7 +5,7 @@
 # Limit: 32 KiB. This file is ~3 KiB.
 #
 # BEFORE PASTING — edit the two lines marked EDIT below:
-#   1. albert_domain  — API hostname (default: alfred-ai.com)
+#   1. albert_domain  — API hostname (default: alfredaitech.com)
 #   2. albert_repo    — git URL (default: Rae9711 fork; use Azzbee after merge)
 #
 # What this does on first boot:
@@ -36,7 +36,7 @@ write_files:
       exec > /var/log/albert-first-boot.log 2>&1
 
       # ── API hostname (no https://) ─────────────────────────────────────
-      ALBERT_DOMAIN="alfred-ai.com"
+      ALBERT_DOMAIN="alfredaitech.com"
       # ── EDIT: repo to clone ───────────────────────────────────────────
       ALBERT_REPO="https://github.com/Rae9711/alfred-ai-cos.git"
       # ─────────────────────────────────────────────────────────────────
@@ -71,25 +71,25 @@ write_files:
       cat > /root/ALBERT-NEXT-STEPS.txt <<TXT
       Albert first-boot finished.
 
-      Domain: https://alfred-ai.com
+      Domain: https://alfredaitech.com
 
-      1. DNS: alfred-ai.com A record → this server's public IP
-         (dig +short alfred-ai.com)
+      1. DNS: alfredaitech.com A record → this server's public IP
+         (dig +short alfredaitech.com)
       2. Secrets:
            cd /opt/albert/repo
            cp .env.production.example .env
            chmod 600 .env
            nano .env
-         APP_BASE_URL=https://alfred-ai.com
-         GOOGLE_OAUTH_REDIRECT_URI=https://alfred-ai.com/api/v1/auth/google/callback
+         APP_BASE_URL=https://alfredaitech.com
+         GOOGLE_OAUTH_REDIRECT_URI=https://alfredaitech.com/api/v1/auth/google/callback
          + ANTHROPIC_API_KEY, JWT_SECRET, TOKEN_ENCRYPTION_KEY, POSTGRES_PASSWORD
       3. Google Console → Authorized redirect URI:
-           https://alfred-ai.com/api/v1/auth/google/callback
+           https://alfredaitech.com/api/v1/auth/google/callback
       4. Deploy:
            cd /opt/albert/repo && ./deploy/albert-deploy.sh
       5. Verify:
-           curl -sS https://alfred-ai.com/health
-      6. Mobile: apiBaseUrl = https://alfred-ai.com (app.json) + EAS OTA
+           curl -sS https://alfredaitech.com/health
+      6. Mobile: apiBaseUrl = https://alfredaitech.com (app.json) + EAS OTA
 
       Logs: /var/log/albert-first-boot.log
             /var/log/cloud-init-output.log
