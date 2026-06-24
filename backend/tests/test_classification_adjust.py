@@ -57,3 +57,18 @@ def test_security_override_is_informational() -> None:
     assert result is not None
     assert result.classification.value == "informational"
     assert result.action_required is False
+
+
+def test_upgrade_human_fyi_with_question() -> None:
+    from app.db.enums import MessageClassification
+    from app.services.classification_adjust import upgrade_human_misclassified_as_fyi
+
+    result = upgrade_human_misclassified_as_fyi(
+        classification=MessageClassification.informational,
+        action_required=False,
+        sender_classification="person",
+        subject="Quick question",
+        snippet="Can you send the signed letter today?",
+    )
+    assert result == MessageClassification.needs_reply
+

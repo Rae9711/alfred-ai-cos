@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import MessageClassification
 from app.db.models import Message, OutboundReply, User
+from app.services.classification_adjust import upgrade_human_misclassified_as_fyi
 
-# Backend classification → the Inbox screen's four buckets.
+# Backend classification → the Inbox screen's four buckets (+ Processing while classifying).
 CATEGORY_LABEL = {
     MessageClassification.needs_reply: "Needs Reply",
     MessageClassification.follow_up_needed: "Needs Reply",
@@ -59,6 +60,21 @@ def category_for_message(classification: MessageClassification | None) -> str | 
     return CATEGORY_LABEL.get(classification, "FYI")
 
 
+def effective_inbox_category(message: Message) -> str:
+    """UI category after correcting common LLM FYI mistakes on human mail."""
+    if message.classification is None:
+        return "Processing"
+    stored = upgrade_human_misclassified_as_fyi(
+        classification=message.classification,
+        action_required=message.action_required,
+        sender_classification=message.sender_classification,
+        subject=message.subject,
+        snippet=message.snippet,
+        body=message.body_summary,
+    )
+    return CATEGORY_LABEL.get(stored, "FYI")
+
+
 def message_needs_attention(
     *,
     category: str,
@@ -66,14 +82,13 @@ def message_needs_attention(
     is_unread: bool,
     user_replied: bool,
 ) -> bool:
-    """True when the message belongs in the Reply / Needs attention section."""
-    if user_replied:
+    """True when the message belongs in the Reply section (unread + needs action)."""
+    if not is_unread or user_replied:
         return False
     if category in _ACTION_CATEGORIES:
         return True
-    if action_required and category != "Waiting":
+    if action_required and category not in ("Waiting", "FYI", "Processing"):
         return True
-    # Unread Waiting still surfaces so the user sees open threads.
-    if category == "Waiting" and is_unread:
+    if category == "Waiting":
         return True
     return False

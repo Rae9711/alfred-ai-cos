@@ -177,7 +177,7 @@ export interface InboxMessage {
   subject: string | null;
   snippet: string | null;
   take: string | null;
-  category: "Needs Reply" | "Needs Decision" | "Waiting" | "FYI";
+  category: "Needs Reply" | "Needs Decision" | "Waiting" | "FYI" | "Processing";
   sent_at: string | null; // ISO
   action_required: boolean;
   mailbox_email: string;

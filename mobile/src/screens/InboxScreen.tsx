@@ -286,15 +286,17 @@ function InboxCard({
           <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
         ))}
       </View>
-      <View style={styles.actions}>
-        <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
-        <Pressable style={styles.actionGhost} onPress={onLater}>
-          <Text style={styles.actionGhostText}>{labels.later}</Text>
-        </Pressable>
-        <Pressable style={styles.actionGhost} onPress={onDelegate}>
-          <Text style={styles.actionGhostText}>{labels.delegate}</Text>
-        </Pressable>
-      </View>
+      {item.showReplyActions ? (
+        <View style={styles.actions}>
+          <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
+          <Pressable style={styles.actionGhost} onPress={onLater}>
+            <Text style={styles.actionGhostText}>{labels.later}</Text>
+          </Pressable>
+          <Pressable style={styles.actionGhost} onPress={onDelegate}>
+            <Text style={styles.actionGhostText}>{labels.delegate}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -17,7 +17,8 @@ from app.db.enums import CommitmentStatus, SourceType
 from app.db.models import Commitment, Message, User
 from app.llm import get_llm
 from app.services import gmail
-from app.services.classification_adjust import automated_fyi_override
+from app.schemas.llm import ClassificationResult
+from app.services.classification_adjust import automated_fyi_override, upgrade_human_misclassified_as_fyi
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
 
@@ -126,6 +127,21 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
         sender=message.sender,
         user_email=user.email,
     )
+    adjusted = upgrade_human_misclassified_as_fyi(
+        classification=classification.classification,
+        action_required=classification.action_required,
+        sender_classification=message.sender_classification,
+        subject=message.subject,
+        snippet=message.snippet,
+        body=body,
+    )
+    if adjusted != classification.classification:
+        classification = ClassificationResult(
+            classification=adjusted,
+            priority=classification.priority,
+            action_required=True,
+            reason=classification.reason,
+        )
     message.classification = classification.classification
     message.priority = classification.priority
     message.action_required = classification.action_required

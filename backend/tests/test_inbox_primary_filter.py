@@ -81,7 +81,7 @@ def test_primary_tab_list_unsubscribe_hidden(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is False
 
 
-def test_low_priority_hidden_even_on_primary(db: Session, user: User) -> None:
+def test_low_priority_visible_on_primary(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,
         source="gmail",
@@ -93,7 +93,23 @@ def test_low_priority_hidden_even_on_primary(db: Session, user: User) -> None:
         classification=MessageClassification.low_priority,
         sender_classification="person",
     )
-    assert message_in_primary_inbox(m) is False
+    assert message_in_primary_inbox(m) is True
+
+
+def test_legacy_person_without_labels_visible(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="legacy1",
+        sender="a@b.com",
+        recipients=[],
+        subject="Hello",
+        gmail_labels=None,
+        sender_classification="person",
+        classification=MessageClassification.needs_reply,
+        sent_at=datetime.now(UTC),
+    )
+    assert message_in_primary_inbox(m) is True
 
 
 def test_legacy_bulk_hidden_without_labels(db: Session, user: User) -> None:
@@ -106,20 +122,5 @@ def test_legacy_bulk_hidden_without_labels(db: Session, user: User) -> None:
         subject="Newsletter",
         gmail_labels=None,
         sender_classification="bulk",
-    )
-    assert message_in_primary_inbox(m) is False
-
-
-def test_legacy_without_labels_hidden_until_backfill(db: Session, user: User) -> None:
-    m = Message(
-        user_id=user.id,
-        source="gmail",
-        external_id="legacy1",
-        sender="a@b.com",
-        recipients=[],
-        subject="Hello",
-        gmail_labels=None,
-        sender_classification="person",
-        sent_at=datetime.now(UTC),
     )
     assert message_in_primary_inbox(m) is False

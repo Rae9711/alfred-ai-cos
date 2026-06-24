@@ -24,6 +24,7 @@ describe("mapInboxMessage", () => {
       user_replied: false,
     });
     expect(item.section).toBe("reply");
+    expect(item.showReplyActions).toBe(true);
     expect(item.summary).toBe("You owe a reply");
   });
 
@@ -43,6 +44,25 @@ describe("mapInboxMessage", () => {
     });
     expect(item.section).toBe("fyi");
     expect(item.userReplied).toBe(true);
+    expect(item.showReplyActions).toBe(false);
+  });
+
+  it("moves read needs-reply to fyi without reply actions", () => {
+    const item = mapInboxMessage({
+      id: "4",
+      sender: "a@b.com",
+      subject: "Hi",
+      snippet: "snip",
+      take: "Please reply",
+      category: "Needs Reply",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: false,
+      user_replied: false,
+    });
+    expect(item.section).toBe("fyi");
+    expect(item.showReplyActions).toBe(false);
   });
 
   it("maps FYI to fyi section", () => {

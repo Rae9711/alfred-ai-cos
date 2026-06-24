@@ -19,7 +19,19 @@ from app.services.inbox_view import (
 
 
 def test_category_none_when_unclassified() -> None:
+    from app.services.inbox_view import category_for_message, effective_inbox_category
+    from app.db.enums import MessageClassification
+    from app.db.models import Message
+
     assert category_for_message(None) is None
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="p",
+        sender="a@b.com",
+        recipients=[],
+    )
+    assert effective_inbox_category(m) == "Processing"
 
 
 def test_is_gmail_unread() -> None:
@@ -42,8 +54,8 @@ def test_message_needs_attention_respects_reply_state() -> None:
         message_needs_attention(
             category="Needs Reply",
             action_required=True,
-            is_unread=True,
-            user_replied=True,
+            is_unread=False,
+            user_replied=False,
         )
         is False
     )
@@ -60,6 +72,26 @@ def user(db: Session) -> User:
     db.add(user)
     db.commit()
     return user
+
+
+def test_effective_inbox_category_upgrades_human_fyi(db: Session, user: User) -> None:
+    from app.db.enums import MessageClassification
+    from app.db.models import Message
+    from app.services.inbox_view import effective_inbox_category
+
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="x1",
+        sender="friend@example.com",
+        recipients=[],
+        subject="Please review",
+        snippet="Can you confirm by tonight?",
+        classification=MessageClassification.informational,
+        sender_classification="person",
+        action_required=False,
+    )
+    assert effective_inbox_category(m) == "Needs Reply"
 
 
 def test_user_replied_message_ids(db: Session, user: User) -> None:

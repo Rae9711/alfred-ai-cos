@@ -7,6 +7,18 @@ import re
 from app.db.enums import MessageClassification, Priority
 from app.schemas.llm import ClassificationResult
 
+_PERSON_SENDERS = frozenset({"person", "vip", "role_account"})
+_DIRECT_ASK_RE = re.compile(
+    r"(\?|"
+    r"\bplease (?:reply|respond|send|confirm|review|sign|let me know)\b|"
+    r"\blet me know\b|"
+    r"\bwaiting (?:for|on) your\b|"
+    r"\bcan you\b|"
+    r"\bcould you\b|"
+    r"\bwould you\b"
+    r")",
+    re.IGNORECASE,
+)
 # OTP / email verification — require a strong signal unless the full body is scanned.
 _VERIFICATION_RE = re.compile(
     r"\b("
@@ -116,3 +128,28 @@ def automated_fyi_override(
             reason="Security notification; review only if you did not take this action.",
         )
     return None
+
+
+def upgrade_human_misclassified_as_fyi(
+    *,
+    classification: MessageClassification,
+    action_required: bool,
+    sender_classification: str | None,
+    subject: str | None,
+    snippet: str | None = None,
+    body: str | None = None,
+) -> MessageClassification:
+    """Real people mis-tagged informational/low_priority should surface as needs_reply."""
+    if classification not in (
+        MessageClassification.informational,
+        MessageClassification.low_priority,
+    ):
+        return classification
+    if sender_classification not in _PERSON_SENDERS:
+        return classification
+    if looks_like_automated_fyi(subject=subject, snippet=snippet, body=body):
+        return classification
+    text = " ".join(filter(None, [subject, snippet, body and body[:1500]]))
+    if action_required or (text and _DIRECT_ASK_RE.search(text)):
+        return MessageClassification.needs_reply
+    return classification

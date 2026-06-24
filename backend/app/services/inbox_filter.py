@@ -4,27 +4,17 @@ from __future__ import annotations
 
 from app.db.enums import MessageClassification
 from app.db.models import Message
-from app.services.classification_adjust import (
-    automated_fyi_override,
-    looks_like_automated_fyi,
-)
+from app.services.classification_adjust import looks_like_automated_fyi
 from app.services.gmail import is_non_primary_tab, is_primary_inbox
 from app.services.sender_class import has_bulk_mail_headers
 
 _BULK_SENDER_CLASSES = frozenset({"automated", "bulk", "suspicious", "muted"})
-_HIDDEN_CLASSIFICATIONS = frozenset(
-    {
-        MessageClassification.spam_noise,
-        MessageClassification.low_priority,
-    }
-)
+_HIDDEN_CLASSIFICATIONS = frozenset({MessageClassification.spam_noise})
 
 
 def message_in_primary_inbox(message: Message) -> bool:
     """Return True when this row should appear in the Inbox UI."""
-    if looks_like_automated_fyi(
-        subject=message.subject, snippet=message.snippet
-    ):
+    if looks_like_automated_fyi(subject=message.subject, snippet=message.snippet):
         labels = message.gmail_labels or []
         if labels:
             return "INBOX" in labels and "CATEGORY_PROMOTIONS" not in labels
@@ -36,9 +26,10 @@ def message_in_primary_inbox(message: Message) -> bool:
         return False
     if has_bulk_mail_headers(message.headers):
         return False
-    if not message.gmail_labels:
-        # Hide until sync backfills Gmail labels (avoids legacy promos as FYI).
+    labels = message.gmail_labels
+    if not labels:
+        # Legacy rows: show classified human mail; hide unlabeled bulk/noise.
+        return message.sender_classification not in _BULK_SENDER_CLASSES
+    if not is_primary_inbox(labels):
         return False
-    return is_primary_inbox(message.gmail_labels) and not is_non_primary_tab(
-        message.gmail_labels
-    )
+    return not is_non_primary_tab(labels)

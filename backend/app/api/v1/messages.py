@@ -23,7 +23,7 @@ from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_view import (
-    category_for_message,
+    effective_inbox_category,
     is_gmail_unread,
     start_of_today_utc,
     user_replied_message_ids,
@@ -90,12 +90,8 @@ def list_inbox(
         if m.classification in _FILTERED:
             filtered += 1
             continue
-        category = category_for_message(m.classification)
-        if category is None:
-            # Still classifying — don't show as FYI by default.
-            filtered += 1
-            continue
 
+        category = effective_inbox_category(m)
         is_unread = is_gmail_unread(m.gmail_labels)
         user_replied = m.id in replied_ids
         messages.append(

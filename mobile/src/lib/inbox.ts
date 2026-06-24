@@ -12,6 +12,7 @@ export type AppInboxItem = {
   category: InboxMessage["category"];
   isUnread: boolean;
   userReplied: boolean;
+  showReplyActions: boolean;
 };
 
 /** Strip `Name <email>` down to a display name. */
@@ -33,23 +34,29 @@ function tagForCategory(
       return { label: category, tone: "accent" };
     case "Waiting":
       return { label: category, tone: "muted" };
+    case "Processing":
+      return { label: category, tone: "muted" };
     default:
       return { label: category, tone: "muted" };
   }
 }
 
 function needsAttention(message: InboxMessage): boolean {
-  if (message.user_replied) return false;
+  if (!message.is_unread || message.user_replied) return false;
+  if (message.category === "Processing") return false;
   if (message.category === "Needs Reply" || message.category === "Needs Decision") {
     return true;
   }
-  if (message.action_required && message.category !== "Waiting") {
+  if (message.action_required && message.category !== "Waiting" && message.category !== "FYI") {
     return true;
   }
-  if (message.category === "Waiting" && message.is_unread) {
-    return true;
-  }
+  if (message.category === "Waiting") return true;
   return false;
+}
+
+export function showsReplyActions(message: InboxMessage): boolean {
+  if (!message.is_unread || message.user_replied) return false;
+  return message.category === "Needs Reply" || message.category === "Needs Decision";
 }
 
 export function mapInboxMessage(message: InboxMessage): AppInboxItem {
@@ -66,5 +73,6 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     category: message.category,
     isUnread: message.is_unread ?? true,
     userReplied: message.user_replied ?? false,
+    showReplyActions: showsReplyActions(message),
   };
 }
