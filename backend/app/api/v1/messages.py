@@ -4,7 +4,7 @@ categories and filtering spam/noise (surfaced only as a count)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,36 +19,50 @@ from app.schemas.api import (
     InboxOut,
 )
 from app.services.assistant import interpret_and_book, resolve_timezone
-from app.services.classification_adjust import automated_fyi_override, looks_like_automated_fyi
+from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
+from app.services.inbox_view import (
+    category_for_message,
+    is_gmail_unread,
+    start_of_today_utc,
+    user_replied_message_ids,
+)
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
-# Backend classification → the Inbox screen's four buckets.
-_CATEGORY = {
-    MessageClassification.needs_reply: "Needs Reply",
-    MessageClassification.follow_up_needed: "Needs Reply",
-    MessageClassification.needs_decision: "Needs Decision",
-    MessageClassification.meeting_scheduling: "Needs Decision",
-    MessageClassification.deadline: "Needs Decision",
-    MessageClassification.waiting_for_response: "Waiting",
-    MessageClassification.informational: "FYI",
-    MessageClassification.low_priority: "FYI",
-    MessageClassification.sensitive: "FYI",
-}
 # Classifications that should not appear in the inbox at all (counted as "filtered").
 _FILTERED = {MessageClassification.spam_noise}
 
 
 @router.get("", response_model=InboxOut)
 def list_inbox(
+    mailbox: str | None = Query(
+        default=None,
+        description="Filter by connected mailbox email; omit for all mailboxes",
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> InboxOut:
+    accounts = list_google_accounts(db, user.id)
+    mailbox_emails = sorted({a.provider_account_email for a in accounts if a.provider_account_email})
+    account_by_id = {a.id: a.provider_account_email or "" for a in accounts}
+
+    filter_account_id: str | None = None
+    if mailbox:
+        for account in accounts:
+            if account.provider_account_email == mailbox:
+                filter_account_id = account.id
+                break
+
+    today_start = start_of_today_utc(user.timezone)
+    replied_ids = user_replied_message_ids(db, user.id)
+
     rows = list(
         db.scalars(
             select(Message)
             .where(Message.user_id == user.id)
+            .where(Message.sent_at.is_not(None))
+            .where(Message.sent_at >= today_start)
             .order_by(Message.sent_at.desc().nullslast())
         )
     )
@@ -56,19 +70,22 @@ def list_inbox(
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
+        if filter_account_id and m.connected_account_id != filter_account_id:
+            continue
         if not message_in_primary_inbox(m):
             filtered += 1
             continue
         if m.classification in _FILTERED:
             filtered += 1
             continue
-        # Unclassified (sync ran, extraction pending) → default to FYI rather than drop.
-        effective = m.classification
-        if looks_like_automated_fyi(
-            subject=m.subject, snippet=m.snippet, body=m.body_summary
-        ):
-            effective = MessageClassification.informational
-        category = _CATEGORY.get(effective, "FYI") if effective else "FYI"
+        category = category_for_message(m.classification)
+        if category is None:
+            # Still classifying — don't show as FYI by default.
+            filtered += 1
+            continue
+
+        is_unread = is_gmail_unread(m.gmail_labels)
+        user_replied = m.id in replied_ids
         messages.append(
             InboxMessageOut(
                 id=m.id,
@@ -79,10 +96,17 @@ def list_inbox(
                 category=category,
                 sent_at=m.sent_at,
                 action_required=m.action_required,
+                mailbox_email=account_by_id.get(m.connected_account_id or "", ""),
+                is_unread=is_unread,
+                user_replied=user_replied,
             )
         )
 
-    return InboxOut(messages=messages, filtered_count=filtered)
+    return InboxOut(
+        messages=messages,
+        filtered_count=filtered,
+        mailboxes=mailbox_emails,
+    )
 
 
 @router.post("/{message_id}/book", response_model=BookMessageResponse)

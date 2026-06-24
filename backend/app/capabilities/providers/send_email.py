@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.capabilities.base import (
@@ -18,9 +17,10 @@ from app.capabilities.base import (
     CapabilityError,
     ExecutionResult,
 )
-from app.db.enums import ActionType, Provider, RiskLevel
-from app.db.models import ConnectedAccount, DraftReply, Message, User
+from app.db.enums import ActionType, RiskLevel
+from app.db.models import DraftReply, Message, User
 from app.services import gmail, outbound_tracking
+from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
 
 
@@ -44,12 +44,7 @@ class SendEmailCapability:
         if draft is None or draft.user_id != user.id:
             raise CapabilityError("Draft no longer exists")
         message = db.get(Message, draft.message_id)
-        account = db.scalar(
-            select(ConnectedAccount).where(
-                ConnectedAccount.user_id == user.id,
-                ConnectedAccount.provider == Provider.google,
-            )
-        )
+        account = get_google_account_for_message(db, message) if message else None
         if message is None or account is None:
             raise CapabilityError("Missing source message or connected account")
 

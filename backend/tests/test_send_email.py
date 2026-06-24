@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.capabilities.base import CapabilityError
@@ -30,8 +31,16 @@ def _user_with_message(db: Session, *, seed: bool) -> tuple[User, DraftReply]:
             token_ciphertext=encrypt_token({"token": "x"}),
         )
     )
+    db.flush()
+    account = db.scalar(
+        select(ConnectedAccount).where(
+            ConnectedAccount.user_id == user.id,
+            ConnectedAccount.provider == Provider.google,
+        )
+    )
     msg = Message(
         user_id=user.id,
+        connected_account_id=account.id if account else None,
         external_id="m1",
         thread_id="t1",
         sender="dana@example.com",

@@ -23,7 +23,7 @@ _HIDDEN_CLASSIFICATIONS = frozenset(
 def message_in_primary_inbox(message: Message) -> bool:
     """Return True when this row should appear in the Inbox UI."""
     if looks_like_automated_fyi(
-        subject=message.subject, snippet=message.snippet, body=message.body_summary
+        subject=message.subject, snippet=message.snippet
     ):
         labels = message.gmail_labels or []
         if labels:

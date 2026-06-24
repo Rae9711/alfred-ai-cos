@@ -6,6 +6,7 @@ ActionProposal via the SendEmail capability, never directly from a route."""
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from email.message import EmailMessage
 from typing import Any, Literal, cast
 
@@ -112,22 +113,29 @@ def list_recent_message_ids(
     *,
     max_results: int = 25,
     inbox_tab: InboxTab = "all",
+    after: datetime | None = None,
 ) -> list[str]:
     """Return ids of recent inbox messages, newest first.
 
     inbox_tab='primary' limits to Gmail's Primary category (excludes Promotions,
-    Social, Updates, Forums tabs).
+    Social, Updates, Forums tabs). Optional `after` limits to mail on/after that
+    calendar day (user-local midnight passed as UTC datetime).
     """
     svc = _service(token_payload)
     label_ids = ["INBOX"]
     if inbox_tab == "primary":
         label_ids.append("CATEGORY_PERSONAL")
-    resp = (
-        svc.users()
-        .messages()
-        .list(userId="me", labelIds=label_ids, maxResults=max_results)
-        .execute()
-    )
+    query_parts: list[str] = []
+    if after is not None:
+        query_parts.append(f"after:{after.strftime('%Y/%m/%d')}")
+    kwargs: dict[str, Any] = {
+        "userId": "me",
+        "labelIds": label_ids,
+        "maxResults": max_results,
+    }
+    if query_parts:
+        kwargs["q"] = " ".join(query_parts)
+    resp = svc.users().messages().list(**kwargs).execute()
     return [m["id"] for m in resp.get("messages", [])]
 
 

@@ -7,18 +7,23 @@ import re
 from app.db.enums import MessageClassification, Priority
 from app.schemas.llm import ClassificationResult
 
-# OTP / email verification / sign-in codes — FYI only, never Needs Reply.
+# OTP / email verification — require a strong signal unless the full body is scanned.
 _VERIFICATION_RE = re.compile(
     r"\b("
     r"verification code|"
-    r"verify (?:your )?(?:email|e-mail|login|log-?in|sign-?in|account|identity)|"
-    r"email verification|"
-    r"confirm your (?:email|e-mail|address)|"
     r"one-?time (?:password|code|passcode|pin)|"
     r"sign-?in code|login code|security code|authentication code|"
     r"2fa code|two-?factor(?: code)?|"
     r"your code is|use this code|enter this code|"
     r"do not share this code"
+    r")\b",
+    re.IGNORECASE,
+)
+_VERIFICATION_BODY_RE = re.compile(
+    r"\b("
+    r"verify (?:your )?(?:email|e-mail|login|log-?in|sign-?in|account|identity)|"
+    r"email verification|"
+    r"confirm your (?:email|e-mail|address)"
     r")\b",
     re.IGNORECASE,
 )
@@ -58,7 +63,12 @@ def looks_like_verification_code(
 ) -> bool:
     """True for automated OTP / verify-email / sign-in code messages."""
     text = _message_text(subject=subject, snippet=snippet, body=body)
-    return bool(text and _VERIFICATION_RE.search(text))
+    if not text:
+        return False
+    if _VERIFICATION_RE.search(text):
+        return True
+    # Broader phrases only when scanning the full body (extraction time).
+    return bool(body and _VERIFICATION_BODY_RE.search(text))
 
 
 def looks_like_security_fyi(

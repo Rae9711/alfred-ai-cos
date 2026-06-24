@@ -13,11 +13,12 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import CommitmentStatus, Provider, SourceType
-from app.db.models import Commitment, ConnectedAccount, Message, User
+from app.db.enums import CommitmentStatus, SourceType
+from app.db.models import Commitment, Message, User
 from app.llm import get_llm
 from app.services import gmail
 from app.services.classification_adjust import automated_fyi_override
+from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
 
 # Common filler words that carry no identity for a commitment. Two phrasings of the
@@ -102,14 +103,7 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
         return []
 
     if body is None:
-        account = (
-            db.query(ConnectedAccount)
-            .filter(
-                ConnectedAccount.user_id == message.user_id,
-                ConnectedAccount.provider == Provider.google,
-            )
-            .first()
-        )
+        account = get_google_account_for_message(db, message)
         if account is None:
             raise ValueError("Missing connected account for extraction")
         token = decrypt_token(account.token_ciphertext)

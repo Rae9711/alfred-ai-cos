@@ -109,6 +109,13 @@ export interface OnboardingPrefs {
   proactiveness?: string | null;
 }
 
+export interface ConnectedMailbox {
+  id: string;
+  email: string;
+  sync_status: string;
+  last_synced_at: string | null;
+}
+
 export interface Me {
   id: string;
   email: string;
@@ -116,6 +123,7 @@ export interface Me {
   timezone: string;
   preferences: Record<string, unknown>;
   onboarded: boolean;
+  connected_mailboxes: ConnectedMailbox[];
 }
 
 export interface AppNotification {
@@ -172,11 +180,15 @@ export interface InboxMessage {
   category: "Needs Reply" | "Needs Decision" | "Waiting" | "FYI";
   sent_at: string | null; // ISO
   action_required: boolean;
+  mailbox_email: string;
+  is_unread: boolean;
+  user_replied: boolean;
 }
 
 export interface InboxView {
   messages: InboxMessage[];
   filtered_count: number;
+  mailboxes: string[];
 }
 
 // Result of "Add to calendar" on a message: booked true if an event was created.

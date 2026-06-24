@@ -14,12 +14,15 @@ import {
   View,
 } from "react-native";
 import type { Me } from "@albert/shared-types";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 
 import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
 import { Ic } from "@/components/icons";
 import { useLocale } from "@/context/LocaleContext";
+import { useMailbox } from "@/context/MailboxContext";
 import {
   Btn,
   Eyebrow,
@@ -34,6 +37,7 @@ import { colors, fonts, layout, spacing } from "@/theme/theme";
 export function SettingsScreen() {
   const { signOut } = useAuth();
   const { locale, setLocale, t } = useLocale();
+  const { syncAndRefresh } = useMailbox();
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -78,6 +82,60 @@ export function SettingsScreen() {
       `${name} integration is coming soon. Gmail and Calendar are connected today.`,
     );
   }, []);
+
+  const refreshMe = useCallback(() => {
+    void api
+      .getMe()
+      .then(setMe)
+      .catch(() => setMe(null));
+  }, []);
+
+  const linkGmail = useCallback(async () => {
+    setNote(null);
+    try {
+      const returnUrl = Linking.createURL("settings");
+      const { authorization_url } = await api.startGoogleLinkAuth(returnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(
+        authorization_url,
+        returnUrl,
+      );
+      if (result.type === "success" && result.url.includes("linked=1")) {
+        refreshMe();
+        void syncAndRefresh().catch(() => undefined);
+        setNote("Gmail account linked.");
+      }
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : "Could not link Gmail");
+    }
+  }, [refreshMe, syncAndRefresh]);
+
+  const disconnectMailbox = useCallback(
+    (accountId: string, email: string) => {
+      Alert.alert(
+        t.settings.disconnectMailbox,
+        email,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: t.settings.disconnectMailbox,
+            style: "destructive",
+            onPress: () =>
+              void api
+                .disconnectMailbox(accountId)
+                .then(() => {
+                  refreshMe();
+                  void syncAndRefresh().catch(() => undefined);
+                  setNote(`${email} disconnected.`);
+                })
+                .catch((e: unknown) =>
+                  setNote(e instanceof Error ? e.message : "Disconnect failed"),
+                ),
+          },
+        ],
+      );
+    },
+    [refreshMe, syncAndRefresh, t.settings.disconnectMailbox],
+  );
 
   const enablePush = useCallback(async () => {
     setNote(null);
@@ -137,6 +195,7 @@ export function SettingsScreen() {
   // Real saved quiet hours from preferences (e.g. "22-08"), or null if never set.
   const qh = me?.preferences?.["quiet_hours"];
   const quietHours = typeof qh === "string" && qh ? qh : null;
+  const connectedMailboxes = me?.connected_mailboxes ?? [];
 
   return (
     <ScrollView
@@ -173,12 +232,25 @@ export function SettingsScreen() {
 
       {/* Integrations */}
       <SectionTitle label="Integrations" />
+      <Meta style={styles.langHint}>{t.settings.connectedMailboxes}</Meta>
       <View style={styles.group}>
-        <Integration name="Gmail" detail={me?.email ?? "Connected"} connected />
+        {connectedMailboxes.map((mailbox) => (
+          <Row
+            key={mailbox.id}
+            label={mailbox.email}
+            detail="Gmail · synced"
+            onPress={() => disconnectMailbox(mailbox.id, mailbox.email)}
+          />
+        ))}
+        <Integration
+          name={t.settings.addGmail}
+          detail="Link another inbox"
+          onConnect={() => void linkGmail()}
+        />
         <Integration
           name="Google Calendar"
           detail="Primary calendar"
-          connected
+          connected={connectedMailboxes.length > 0}
         />
         <Integration
           name="Notion"

@@ -44,6 +44,8 @@ export const translations = {
       handToAlfred: "Hand to Alfred",
       view: "View",
       dismiss: "Dismiss",
+      read: "Read",
+      replied: "Replied",
       wechatEmpty: "WeChat isn't connected yet.",
       wechatEmptySub: "Email and calendar items still show under All.",
       inboxZero: "Inbox zero in this view.",
@@ -51,15 +53,8 @@ export const translations = {
       retry: "Tap to retry",
       filters: {
         all: "All",
-        email: "Email",
-        wechat: "WeChat",
-        calendar: "Calendar",
       },
-      sources: {
-        email: "Email",
-        wechat: "WeChat",
-        calendar: "Calendar",
-      },
+      mailboxChip: "Mailbox",
     },
     ask: {
       alfred: "Alfred",
@@ -92,6 +87,9 @@ export const translations = {
       languageDetail: "App display language",
       english: "English",
       chinese: "中文",
+      addGmail: "Add Gmail account",
+      connectedMailboxes: "Connected mailboxes",
+      disconnectMailbox: "Disconnect",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -150,6 +148,8 @@ export const translations = {
       handToAlfred: "转交管家",
       view: "查看",
       dismiss: "忽略",
+      read: "已读",
+      replied: "已回复",
       wechatEmpty: "微信尚未连接。",
       wechatEmptySub: "邮件和日历项目仍会在「全部」中显示。",
       inboxZero: "此视图下收件箱已清空。",
@@ -157,15 +157,8 @@ export const translations = {
       retry: "点击重试",
       filters: {
         all: "全部",
-        email: "邮件",
-        wechat: "微信",
-        calendar: "日历邀请",
       },
-      sources: {
-        email: "邮件",
-        wechat: "微信",
-        calendar: "日历",
-      },
+      mailboxChip: "邮箱",
     },
     ask: {
       alfred: "管家",
@@ -198,6 +191,9 @@ export const translations = {
       languageDetail: "应用显示语言",
       english: "English",
       chinese: "中文",
+      addGmail: "添加 Gmail 邮箱",
+      connectedMailboxes: "已连接邮箱",
+      disconnectMailbox: "断开",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",

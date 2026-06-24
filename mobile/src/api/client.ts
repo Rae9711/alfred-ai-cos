@@ -103,6 +103,10 @@ export const api = {
     request<AuthStartResponse>(
       `/auth/google/start?redirect=${encodeURIComponent(redirect)}`,
     ),
+  startGoogleLinkAuth: (redirect: string) =>
+    request<AuthStartResponse>(
+      `/auth/google/link/start?redirect=${encodeURIComponent(redirect)}`,
+    ),
   // Development only: mint a session for an already-connected account, bypassing the
   // mobile OAuth round-trip (which needs a LAN-reachable redirect URI). The backend
   // returns 404 outside ENVIRONMENT=development.
@@ -245,6 +249,8 @@ export const api = {
       body: JSON.stringify({ quiet_hours }),
     }),
   disconnectAccount: (provider: string) =>
-    request<void>(`/connected-accounts/${provider}`, { method: "DELETE" }),
+    request<void>(`/connected-accounts/provider/${provider}`, { method: "DELETE" }),
+  disconnectMailbox: (accountId: string) =>
+    request<void>(`/connected-accounts/${accountId}`, { method: "DELETE" }),
   deleteAccount: () => request<void>("/me", { method: "DELETE" }),
 };

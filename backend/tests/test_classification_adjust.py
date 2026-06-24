@@ -37,6 +37,21 @@ def test_human_reply_does_not_match() -> None:
     )
 
 
+def test_verify_account_phrase_without_code_does_not_match() -> None:
+    assert not looks_like_verification_code(
+        subject="Action needed",
+        snippet="Please verify your account details before we can proceed.",
+    )
+
+
+def test_verify_account_phrase_matches_with_body() -> None:
+    assert looks_like_verification_code(
+        subject="Confirm your email",
+        snippet="Tap to finish signup.",
+        body="Please verify your email address to activate your account.",
+    )
+
+
 def test_security_override_is_informational() -> None:
     result = automated_fyi_override(subject="A Device Has Been Added To Your Account")
     assert result is not None

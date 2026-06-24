@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -12,9 +12,19 @@ class ConnectedAccount(Base):
 
     OAuth tokens are stored encrypted via app.services.crypto. The encrypted
     blob lives in `token_ciphertext`; raw tokens never touch the database.
+
+    A user may connect multiple Google mailboxes (one row per Gmail address).
     """
 
     __tablename__ = "connected_accounts"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "provider",
+            "provider_account_email",
+            name="uq_connected_account_mailbox",
+        ),
+    )
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     provider: Mapped[Provider] = mapped_column(String(32))

@@ -18,7 +18,6 @@ import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
-import { SOURCE_FILTER_IDS, type InboxSource } from "@/data/workflowDemo";
 import type { AppInboxItem } from "@/lib/inbox";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
@@ -32,12 +31,29 @@ if (
 const ease = () =>
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
+function mailboxTabLabel(email: string): string {
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
+}
+
 export function InboxScreen() {
   const { t } = useLocale();
   const { openChatFromInbox } = useWorkflow();
-  const { items, loading, syncing, error, syncAndRefresh } = useMailbox();
+  const { items, mailboxes, loading, syncing, error, syncAndRefresh } =
+    useMailbox();
   const [filter, setFilter] = useState("all");
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
+
+  const mailboxTabs = useMemo(
+    () => [
+      { id: "all", label: t.inbox.filters.all },
+      ...mailboxes.map((email) => ({
+        id: email,
+        label: mailboxTabLabel(email),
+      })),
+    ],
+    [mailboxes, t.inbox.filters.all],
+  );
 
   const live = useMemo(
     () => items.filter((m) => !deferred.has(m.id)),
@@ -45,26 +61,19 @@ export function InboxScreen() {
   );
 
   const filtered = useMemo(() => {
-    const f = SOURCE_FILTER_IDS.find((x) => x.id === filter);
-    if (!f || f.match === null) return live;
-    return live.filter((m) => m.source === f.match);
+    if (filter === "all") return live;
+    return live.filter((m) => m.mailboxEmail === filter);
   }, [live, filter]);
 
   const replyItems = filtered.filter((m) => m.section === "reply");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
-  const unread = live.filter((m) => m.section === "reply").length;
+  const unread = live.filter((m) => m.isUnread && m.section === "reply").length;
+  const showMailboxChip = mailboxes.length > 1;
 
   const defer = (id: string) => {
     ease();
     setDeferred((s) => new Set(s).add(id));
   };
-
-  const filterLabel = (id: string) => {
-    const key = id as keyof typeof t.inbox.filters;
-    return t.inbox.filters[key] ?? id;
-  };
-
-  const sourceLabel = (source: InboxSource) => t.inbox.sources[source];
 
   if (loading && items.length === 0) {
     return (
@@ -106,30 +115,23 @@ export function InboxScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filters}
-      >
-        {SOURCE_FILTER_IDS.map((f) => (
-          <Pill
-            key={f.id}
-            label={filterLabel(f.id)}
-            kind={filter === f.id ? "accent" : "muted"}
-            mono={false}
-            onPress={() => setFilter(f.id)}
-            style={styles.filterPill}
-          />
-        ))}
-      </ScrollView>
-
-      {filter === "wechat" && filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Serif size={17} italic color={colors.ink3}>
-            {t.inbox.wechatEmpty}
-          </Serif>
-          <Text style={styles.emptySub}>{t.inbox.wechatEmptySub}</Text>
-        </View>
+      {mailboxTabs.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {mailboxTabs.map((f) => (
+            <Pill
+              key={f.id}
+              label={f.label}
+              kind={filter === f.id ? "accent" : "muted"}
+              mono={false}
+              onPress={() => setFilter(f.id)}
+              style={styles.filterPill}
+            />
+          ))}
+        </ScrollView>
       ) : null}
 
       {replyItems.length > 0 ? (
@@ -138,7 +140,11 @@ export function InboxScreen() {
             <InboxCard
               key={m.id}
               item={m}
-              sourceLabel={sourceLabel(m.source)}
+              mailboxLabel={
+                showMailboxChip && m.mailboxEmail
+                  ? mailboxTabLabel(m.mailboxEmail)
+                  : null
+              }
               onReply={() => openChatFromInbox(m.id, "reply")}
               onLater={() => defer(m.id)}
               onDelegate={() => openChatFromInbox(m.id, "delegate")}
@@ -146,6 +152,8 @@ export function InboxScreen() {
                 reply: t.inbox.reply,
                 later: t.inbox.later,
                 delegate: t.inbox.handToAlfred,
+                read: t.inbox.read,
+                replied: t.inbox.replied,
               }}
             />
           ))}
@@ -158,15 +166,19 @@ export function InboxScreen() {
             <FyiCard
               key={m.id}
               item={m}
-              sourceLabel={sourceLabel(m.source)}
+              mailboxLabel={
+                showMailboxChip && m.mailboxEmail
+                  ? mailboxTabLabel(m.mailboxEmail)
+                  : null
+              }
               onDismiss={() => defer(m.id)}
-              labels={{ view: t.inbox.view, dismiss: t.inbox.dismiss }}
+              labels={{ view: t.inbox.view, dismiss: t.inbox.dismiss, read: t.inbox.read, replied: t.inbox.replied }}
             />
           ))}
         </Section>
       ) : null}
 
-      {filtered.length === 0 && filter !== "wechat" ? (
+      {filtered.length === 0 ? (
         <View style={styles.empty}>
           <Serif size={17} italic color={colors.ink3}>
             {t.inbox.inboxZero}
@@ -194,26 +206,39 @@ function Section({
 
 function InboxCard({
   item,
-  sourceLabel,
+  mailboxLabel,
   onReply,
   onLater,
   onDelegate,
   labels,
 }: {
   item: AppInboxItem;
-  sourceLabel: string;
+  mailboxLabel: string | null;
   onReply: () => void;
   onLater: () => void;
   onDelegate: () => void;
-  labels: { reply: string; later: string; delegate: string };
+  labels: { reply: string; later: string; delegate: string; read: string; replied: string };
 }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, !item.isUnread && styles.cardRead]}>
       <View style={styles.cardTop}>
-        <View style={styles.sourceChip}>
-          <Text style={styles.sourceChipText}>{sourceLabel}</Text>
-        </View>
-        <Text style={styles.sender}>{item.sender}</Text>
+        {mailboxLabel ? (
+          <View style={styles.sourceChip}>
+            <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
+          </View>
+        ) : null}
+        {item.userReplied ? (
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>{labels.replied}</Text>
+          </View>
+        ) : !item.isUnread ? (
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>{labels.read}</Text>
+          </View>
+        ) : null}
+        <Text style={[styles.sender, !item.isUnread && styles.senderRead]}>
+          {item.sender}
+        </Text>
       </View>
       <Text style={styles.cardTitle}>{item.title}</Text>
       <Text style={styles.summary}>{item.summary}</Text>
@@ -237,22 +262,35 @@ function InboxCard({
 
 function FyiCard({
   item,
-  sourceLabel,
+  mailboxLabel,
   onDismiss,
   labels,
 }: {
   item: AppInboxItem;
-  sourceLabel: string;
+  mailboxLabel: string | null;
   onDismiss: () => void;
-  labels: { view: string; dismiss: string };
+  labels: { view: string; dismiss: string; read: string; replied: string };
 }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, !item.isUnread && styles.cardRead]}>
       <View style={styles.cardTop}>
-        <View style={styles.sourceChip}>
-          <Text style={styles.sourceChipText}>{sourceLabel}</Text>
-        </View>
-        <Text style={styles.sender}>{item.sender}</Text>
+        {mailboxLabel ? (
+          <View style={styles.sourceChip}>
+            <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
+          </View>
+        ) : null}
+        {item.userReplied ? (
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>{labels.replied}</Text>
+          </View>
+        ) : !item.isUnread ? (
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>{labels.read}</Text>
+          </View>
+        ) : null}
+        <Text style={[styles.sender, !item.isUnread && styles.senderRead]}>
+          {item.sender}
+        </Text>
       </View>
       <Text style={styles.cardTitle}>{item.title}</Text>
       <Text style={styles.summary}>{item.summary}</Text>
@@ -262,9 +300,6 @@ function FyiCard({
         ))}
       </View>
       <View style={styles.actions}>
-        <Pressable style={styles.actionGhost}>
-          <Text style={styles.actionGhostText}>{labels.view}</Text>
-        </Pressable>
         <Pressable style={styles.actionGhost} onPress={onDismiss}>
           <Text style={styles.actionGhostText}>{labels.dismiss}</Text>
         </Pressable>
@@ -275,11 +310,7 @@ function FyiCard({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
-  content: {
-    paddingHorizontal: layout.padX,
-    paddingTop: layout.topPad,
-    paddingBottom: spacing.xl,
-  },
+  content: { paddingBottom: 32 },
   centered: {
     flex: 1,
     alignItems: "center",
@@ -289,114 +320,111 @@ const styles = StyleSheet.create({
   },
   loadingText: { fontSize: 14, color: colors.ink3 },
   header: {
+    paddingHorizontal: layout.padX,
+    paddingTop: layout.topPad,
+    paddingBottom: 8,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 14,
   },
   badge: {
     backgroundColor: colors.accentSoft,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
+    paddingVertical: 4,
+    borderRadius: radius.full,
   },
   badgeText: {
     fontFamily: fonts.mono,
     fontSize: 10,
-    letterSpacing: 0.8,
-    color: colors.accentInk,
+    letterSpacing: 0.6,
+    color: colors.accent,
     textTransform: "uppercase",
   },
   errorBanner: {
-    backgroundColor: colors.warnSoft,
-    borderRadius: 12,
-    padding: 12,
+    marginHorizontal: layout.padX,
     marginBottom: 12,
-    gap: 4,
+    padding: 12,
+    borderRadius: radius.sm,
+    backgroundColor: colors.warnSoft,
   },
-  errorText: { fontSize: 13, color: colors.ink2 },
-  errorRetry: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    color: colors.accentInk,
-    textTransform: "uppercase",
+  errorText: { fontSize: 13, color: colors.warn },
+  errorRetry: { fontSize: 12, color: colors.ink3, marginTop: 4 },
+  filters: {
+    paddingHorizontal: layout.padX,
+    gap: 8,
+    paddingBottom: spacing.md,
   },
-  filters: { gap: 8, paddingBottom: 16 },
   filterPill: { marginRight: 0 },
-  section: { marginBottom: 20 },
+  section: {
+    paddingHorizontal: layout.padX,
+    marginTop: spacing.md,
+    gap: 10,
+  },
   sectionTitle: {
     fontFamily: fonts.mono,
     fontSize: 10,
     letterSpacing: 1.4,
     textTransform: "uppercase",
     color: colors.ink4,
-    marginBottom: 10,
+    marginBottom: 2,
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: radius.card,
+    borderRadius: radius.md,
+    padding: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
-    padding: spacing.md,
-    marginBottom: 10,
     gap: 8,
+  },
+  cardRead: {
+    opacity: 0.72,
+    backgroundColor: colors.paper2,
   },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flexWrap: "wrap",
   },
   sourceChip: {
     backgroundColor: colors.paper2,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radius.full,
   },
   sourceChipText: {
     fontFamily: fonts.mono,
-    fontSize: 9,
-    letterSpacing: 0.6,
+    fontSize: 10,
     color: colors.ink3,
-    textTransform: "uppercase",
   },
-  sender: {
+  statusChip: {
+    backgroundColor: colors.paper,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair,
+  },
+  statusChipText: {
     fontFamily: fonts.mono,
-    fontSize: 11,
-    color: colors.ink3,
+    fontSize: 10,
+    color: colors.ink4,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.ink,
-  },
-  summary: { fontSize: 14, color: colors.ink3, lineHeight: 20 },
+  sender: { fontSize: 13, fontWeight: "600", color: colors.ink2, flex: 1 },
+  senderRead: { fontWeight: "500", color: colors.ink3 },
+  cardTitle: { fontSize: 16, fontWeight: "600", color: colors.ink },
+  summary: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-    alignItems: "center",
-  },
-  actionPrimary: { paddingHorizontal: 16 },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  actionPrimary: { flexGrow: 1 },
   actionGhost: {
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     backgroundColor: colors.paper2,
   },
-  actionGhostText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: colors.ink2,
-  },
-  empty: {
-    marginTop: 40,
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-  },
-  emptySub: { fontSize: 14, color: colors.ink4, textAlign: "center" },
+  actionGhostText: { fontSize: 13, fontWeight: "500", color: colors.ink2 },
+  empty: { padding: layout.padX, paddingTop: 40, alignItems: "center" },
 });

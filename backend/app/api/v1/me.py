@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.enums import Provider
+from app.db.enums import Provider, SyncStatus
 from app.db.models import (
     ActionProposal,
     AuditLog,
@@ -26,8 +26,9 @@ from app.db.models import (
     Task,
     User,
 )
-from app.schemas.api import MeOut, OnboardingPrefs
+from app.schemas.api import ConnectedMailboxOut, MeOut, OnboardingPrefs
 from app.services import google_oauth
+from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 
 router = APIRouter(tags=["account"])
@@ -60,7 +61,17 @@ def _is_onboarded(user: User) -> bool:
     return any(user.preferences.get(k) for k in _ONBOARDING_KEYS)
 
 
-def _me(user: User) -> MeOut:
+def _me(db: Session, user: User) -> MeOut:
+    mailboxes = [
+        ConnectedMailboxOut(
+            id=a.id,
+            email=a.provider_account_email or "",
+            sync_status=a.sync_status,
+            last_synced_at=a.last_synced_at,
+        )
+        for a in list_google_accounts(db, user.id)
+        if a.provider_account_email
+    ]
     return MeOut(
         id=user.id,
         email=user.email,
@@ -68,12 +79,16 @@ def _me(user: User) -> MeOut:
         timezone=user.timezone,
         preferences=dict(user.preferences),
         onboarded=_is_onboarded(user),
+        connected_mailboxes=mailboxes,
     )
 
 
 @router.get("/me", response_model=MeOut)
-def get_me(user: User = Depends(get_current_user)) -> MeOut:
-    return _me(user)
+def get_me(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MeOut:
+    return _me(db, user)
 
 
 @router.post("/onboarding", response_model=MeOut)
@@ -92,7 +107,7 @@ def set_onboarding(
     merged.update(calibration)
     user.preferences = merged
     db.commit()
-    return _me(user)
+    return _me(db, user)
 
 
 def _revoke_account(account: ConnectedAccount) -> None:
@@ -104,22 +119,48 @@ def _revoke_account(account: ConnectedAccount) -> None:
             pass
 
 
-@router.delete("/connected-accounts/{provider}", status_code=204)
+@router.delete("/connected-accounts/{account_id}", status_code=204)
+def disconnect_mailbox(
+    account_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Revoke and delete one linked Gmail mailbox and its synced messages."""
+    account = db.scalar(
+        select(ConnectedAccount).where(
+            ConnectedAccount.id == account_id,
+            ConnectedAccount.user_id == user.id,
+        )
+    )
+    if account is None:
+        raise HTTPException(status_code=404, detail="Mailbox not connected")
+    _revoke_account(account)
+    db.execute(delete(Message).where(Message.connected_account_id == account.id))
+    db.delete(account)
+    db.commit()
+
+
+@router.delete("/connected-accounts/provider/{provider}", status_code=204)
 def disconnect_account(
     provider: Provider,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
-    """Revoke and delete a single integration (PRD 12.1)."""
-    account = db.scalar(
-        select(ConnectedAccount).where(
-            ConnectedAccount.user_id == user.id, ConnectedAccount.provider == provider
+    """Revoke and delete all integrations for a provider (legacy)."""
+    accounts = list(
+        db.scalars(
+            select(ConnectedAccount).where(
+                ConnectedAccount.user_id == user.id,
+                ConnectedAccount.provider == provider,
+            )
         )
     )
-    if account is None:
+    if not accounts:
         raise HTTPException(status_code=404, detail="Account not connected")
-    _revoke_account(account)
-    db.delete(account)
+    for account in accounts:
+        _revoke_account(account)
+        db.execute(delete(Message).where(Message.connected_account_id == account.id))
+        db.delete(account)
     db.commit()
 
 

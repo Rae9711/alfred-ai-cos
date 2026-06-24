@@ -6,9 +6,12 @@ export type AppInboxItem = {
   sender: string;
   title: string;
   summary: string;
+  mailboxEmail: string;
   tags: { label: string; tone: "warn" | "accent" | "muted" }[];
   section: "reply" | "fyi";
   category: InboxMessage["category"];
+  isUnread: boolean;
+  userReplied: boolean;
 };
 
 /** Strip `Name <email>` down to a display name. */
@@ -35,19 +38,33 @@ function tagForCategory(
   }
 }
 
+function needsAttention(message: InboxMessage): boolean {
+  if (message.user_replied) return false;
+  if (message.category === "Needs Reply" || message.category === "Needs Decision") {
+    return true;
+  }
+  if (message.action_required && message.category !== "Waiting") {
+    return true;
+  }
+  if (message.category === "Waiting" && message.is_unread) {
+    return true;
+  }
+  return false;
+}
+
 export function mapInboxMessage(message: InboxMessage): AppInboxItem {
-  const section =
-    message.category === "Needs Reply" || message.category === "Needs Decision"
-      ? "reply"
-      : "fyi";
+  const section = needsAttention(message) ? "reply" : "fyi";
   return {
     id: message.id,
     source: "email",
     sender: parseSenderDisplay(message.sender),
     title: message.subject?.trim() || "(No subject)",
     summary: message.take?.trim() || message.snippet?.trim() || "",
+    mailboxEmail: message.mailbox_email?.trim() || "",
     tags: [tagForCategory(message.category)],
     section,
     category: message.category,
+    isUnread: message.is_unread ?? true,
+    userReplied: message.user_replied ?? false,
   };
 }

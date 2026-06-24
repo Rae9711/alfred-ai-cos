@@ -16,6 +16,7 @@ import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
 
 type MailboxState = {
   items: AppInboxItem[];
+  mailboxes: string[];
   loading: boolean;
   syncing: boolean;
   error: string | null;
@@ -30,6 +31,7 @@ const MailboxContext = createContext<MailboxState | null>(null);
 export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
+  const [mailboxes, setMailboxes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const loadInbox = useCallback(async () => {
     const view = await api.getInbox();
     setItems(view.messages.map(mapInboxMessage));
+    setMailboxes(view.mailboxes ?? []);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -91,6 +94,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       items,
+      mailboxes,
       loading,
       syncing,
       error,
@@ -99,7 +103,17 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       syncAndRefresh,
       itemById,
     }),
-    [items, loading, syncing, error, lastSyncedAt, refresh, syncAndRefresh, itemById],
+    [
+      items,
+      mailboxes,
+      loading,
+      syncing,
+      error,
+      lastSyncedAt,
+      refresh,
+      syncAndRefresh,
+      itemById,
+    ],
   );
 
   return (

@@ -15,9 +15,14 @@ class Message(Base):
     """
 
     __tablename__ = "messages"
-    __table_args__ = (UniqueConstraint("user_id", "external_id", name="uq_message_user_external"),)
+    __table_args__ = (
+        UniqueConstraint("connected_account_id", "external_id", name="uq_message_account_external"),
+    )
 
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    connected_account_id: Mapped[str | None] = mapped_column(
+        ForeignKey("connected_accounts.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     source: Mapped[str] = mapped_column(String(16), default="gmail")
     external_id: Mapped[str] = mapped_column(String(128), index=True)
     thread_id: Mapped[str | None] = mapped_column(String(128), index=True)

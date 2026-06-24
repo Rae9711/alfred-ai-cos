@@ -90,11 +90,15 @@ class InboxMessageOut(BaseModel):
     category: str  # "Needs Reply" | "Needs Decision" | "Waiting" | "FYI"
     sent_at: datetime | None
     action_required: bool
+    mailbox_email: str = ""
+    is_unread: bool = True
+    user_replied: bool = False
 
 
 class InboxOut(BaseModel):
     messages: list[InboxMessageOut]
     filtered_count: int  # spam/noise filtered out (the "I filtered N" line)
+    mailboxes: list[str] = []  # connected Gmail addresses for inbox tabs
 
 
 class BookMessageRequest(BaseModel):
@@ -274,6 +278,16 @@ class MeOut(BaseModel):
     timezone: str
     preferences: dict[str, object]
     onboarded: bool
+    connected_mailboxes: list["ConnectedMailboxOut"] = []
+
+
+class ConnectedMailboxOut(BaseModel):
+    id: str
+    email: str
+    sync_status: str
+    last_synced_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
 
 
 # --- Waiting-for ---

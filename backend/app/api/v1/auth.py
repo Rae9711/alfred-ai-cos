@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.security import create_session_token
+from app.core.security import create_session_token, get_current_user
 from app.db.base import get_db
 from app.db.enums import Provider, SyncStatus
 from app.db.models import ConnectedAccount, User
@@ -81,6 +81,59 @@ def google_start(redirect: str | None = Query(default=None)) -> AuthStartRespons
     )
 
 
+@router.get("/google/link/start", response_model=AuthStartResponse)
+def google_link_start(
+    redirect: str | None = Query(default=None),
+    user: User = Depends(get_current_user),
+) -> AuthStartResponse:
+    """Begin OAuth to link another Gmail mailbox to the signed-in Albert user."""
+    target = _validate_redirect(redirect)
+    state = jwt.encode(
+        {
+            "nonce": secrets.token_urlsafe(16),
+            "redirect": target,
+            "link_user_id": user.id,
+            "exp": datetime.now(UTC) + timedelta(minutes=10),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+    return AuthStartResponse(
+        authorization_url=google_oauth.build_authorization_url(state), state=state
+    )
+
+
+def _upsert_google_account(
+    db: Session,
+    *,
+    user: User,
+    profile_email: str,
+    token_payload: dict,
+) -> ConnectedAccount:
+    ciphertext = encrypt_token(token_payload)
+    account = db.scalar(
+        select(ConnectedAccount).where(
+            ConnectedAccount.user_id == user.id,
+            ConnectedAccount.provider == Provider.google,
+            ConnectedAccount.provider_account_email == profile_email,
+        )
+    )
+    if account is None:
+        account = ConnectedAccount(
+            user_id=user.id,
+            provider=Provider.google,
+            provider_account_email=profile_email,
+            scopes=token_payload.get("scopes", []),
+            token_ciphertext=ciphertext,
+            sync_status=SyncStatus.never,
+        )
+        db.add(account)
+    else:
+        account.token_ciphertext = ciphertext
+        account.scopes = token_payload.get("scopes", [])
+    return account
+
+
 @router.get("/google/callback")
 def google_callback(
     code: str = Query(...),
@@ -103,31 +156,27 @@ def google_callback(
     token_payload = google_oauth.exchange_code(code)
     profile_email = _require_email(token_payload)
 
+    link_user_id = decoded.get("link_user_id")
+    if link_user_id:
+        user = db.get(User, link_user_id)
+        if user is None:
+            raise HTTPException(status_code=400, detail="Invalid link session")
+        _upsert_google_account(
+            db, user=user, profile_email=profile_email, token_payload=token_payload
+        )
+        db.commit()
+        sep = "&" if "?" in redirect_target else "?"
+        return RedirectResponse(url=f"{redirect_target}{sep}linked=1")
+
     user = db.scalar(select(User).where(User.email == profile_email))
     if user is None:
         user = User(email=profile_email)
         db.add(user)
         db.flush()
 
-    account = db.scalar(
-        select(ConnectedAccount).where(
-            ConnectedAccount.user_id == user.id, ConnectedAccount.provider == Provider.google
-        )
+    _upsert_google_account(
+        db, user=user, profile_email=profile_email, token_payload=token_payload
     )
-    ciphertext = encrypt_token(token_payload)
-    if account is None:
-        account = ConnectedAccount(
-            user_id=user.id,
-            provider=Provider.google,
-            provider_account_email=profile_email,
-            scopes=token_payload.get("scopes", []),
-            token_ciphertext=ciphertext,
-            sync_status=SyncStatus.never,
-        )
-        db.add(account)
-    else:
-        account.token_ciphertext = ciphertext
-        account.scopes = token_payload.get("scopes", [])
     db.commit()
 
     session = create_session_token(user.id)

@@ -18,10 +18,31 @@ describe("mapInboxMessage", () => {
       take: "You owe a reply",
       category: "Needs Reply",
       sent_at: null,
+      mailbox_email: "",
       action_required: true,
+      is_unread: true,
+      user_replied: false,
     });
     expect(item.section).toBe("reply");
     expect(item.summary).toBe("You owe a reply");
+  });
+
+  it("moves replied mail out of reply section", () => {
+    const item = mapInboxMessage({
+      id: "3",
+      sender: "a@b.com",
+      subject: "Hi",
+      snippet: "snip",
+      take: "You replied",
+      category: "Needs Reply",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: false,
+      user_replied: true,
+    });
+    expect(item.section).toBe("fyi");
+    expect(item.userReplied).toBe(true);
   });
 
   it("maps FYI to fyi section", () => {
@@ -33,7 +54,10 @@ describe("mapInboxMessage", () => {
       take: null,
       category: "FYI",
       sent_at: null,
+      mailbox_email: "",
       action_required: false,
+      is_unread: false,
+      user_replied: false,
     });
     expect(item.section).toBe("fyi");
     expect(item.summary).toBe("snip");
