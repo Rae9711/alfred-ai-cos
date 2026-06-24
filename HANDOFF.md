@@ -113,7 +113,8 @@ Integrate carefully — do not force-push either side.
 
 ## Deploy checklist (production)
 
-Full instructions: `deploy/HETZNER.md`
+- **Your own Hetzner VPS:** `deploy/HETZNER-OWN.md` + `deploy/hetzner-bootstrap.sh` + `deploy/hetzner-ship.sh`
+- **Shared box (89.167.84.193):** `deploy/HETZNER.md` (needs Adam’s SSH)
 
 ```bash
 # From laptop with SSH to Hetzner

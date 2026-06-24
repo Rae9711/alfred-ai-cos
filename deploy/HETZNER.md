@@ -1,5 +1,8 @@
 # Albert on Hetzner (systemd + uv + Cloudflare Tunnel)
 
+> **Own VPS?** If you are provisioning a **new** Hetzner server you control, use
+> **[HETZNER-OWN.md](./HETZNER-OWN.md)** (Docker Compose + Caddy) instead of this doc.
+
 The live production deploy. Albert runs as three systemd services on the shared box
 (89.167.84.193), alongside Alfred + Paperclip, behind the existing Cloudflare Tunnel.
 No Docker (the box doesn't use it). Public at **https://albert.alfredassistants.com**.
