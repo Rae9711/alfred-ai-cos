@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.db.enums import MessageClassification
 from app.db.models import Message
+from app.services.classification_adjust import looks_like_verification_code
 from app.services.gmail import is_non_primary_tab, is_primary_inbox
 from app.services.sender_class import has_bulk_mail_headers
 
@@ -18,6 +19,14 @@ _HIDDEN_CLASSIFICATIONS = frozenset(
 
 def message_in_primary_inbox(message: Message) -> bool:
     """Return True when this row should appear in the Inbox UI."""
+    if looks_like_verification_code(
+        subject=message.subject, snippet=message.snippet, body=message.body_summary
+    ):
+        labels = message.gmail_labels or []
+        if labels:
+            return "INBOX" in labels and "CATEGORY_PROMOTIONS" not in labels
+        return True
+
     if message.sender_classification in _BULK_SENDER_CLASSES:
         return False
     if message.classification in _HIDDEN_CLASSIFICATIONS:

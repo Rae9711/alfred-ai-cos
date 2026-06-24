@@ -19,6 +19,7 @@ from app.schemas.api import (
     InboxOut,
 )
 from app.services.assistant import interpret_and_book, resolve_timezone
+from app.services.classification_adjust import looks_like_verification_code
 from app.services.inbox_filter import message_in_primary_inbox
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -62,7 +63,12 @@ def list_inbox(
             filtered += 1
             continue
         # Unclassified (sync ran, extraction pending) → default to FYI rather than drop.
-        category = _CATEGORY.get(m.classification, "FYI") if m.classification else "FYI"
+        effective = m.classification
+        if looks_like_verification_code(
+            subject=m.subject, snippet=m.snippet, body=m.body_summary
+        ):
+            effective = MessageClassification.informational
+        category = _CATEGORY.get(effective, "FYI") if effective else "FYI"
         messages.append(
             InboxMessageOut(
                 id=m.id,
