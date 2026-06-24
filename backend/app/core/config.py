@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # X-Forward-Secret. Empty disables the endpoint entirely (returns 503).
     forward_inbox_secret: str = ""
 
+    mail_poll_interval_seconds: int = 120
+
     # Gmail sync: first connect backfills Primary inbox; later syncs use history API.
     sync_initial_max_results: int = 50
     sync_incremental_fallback_max: int = 20

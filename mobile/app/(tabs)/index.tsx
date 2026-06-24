@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import * as Notifications from "expo-notifications";
 
 import { CompanionAvatarHome } from "@/components/CompanionAvatar";
 import { Ic } from "@/components/icons";
@@ -68,6 +69,22 @@ function TabsChrome({
     else if (tab === "ask") setPlacement("ask");
     else setPlacement("home");
   }, [tab, setPlacement]);
+
+  useEffect(() => {
+    const openInbox = (data: unknown) => {
+      const payload = data as { type?: string; deep_link?: string };
+      if (payload?.type === "new_mail" || payload?.deep_link === "/inbox") {
+        setTab("inbox");
+      }
+    };
+    void Notifications.getLastNotificationResponseAsync().then((r) => {
+      if (r) openInbox(r.notification.request.content.data);
+    });
+    const sub = Notifications.addNotificationResponseReceivedListener((r) =>
+      openInbox(r.notification.request.content.data),
+    );
+    return () => sub.remove();
+  }, [setTab]);
 
   return (
     <ShellProvider>

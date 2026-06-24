@@ -13,7 +13,8 @@ from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.models import User
 from app.schemas.api import SyncResponse
-from app.services import calendar, extraction, ingestion
+from app.services import calendar
+from app.services.mail_sync import run_mail_sync
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -23,16 +24,12 @@ def sync_now(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SyncResponse:
-    result = ingestion.sync_messages(db, user.id)
-    to_process = ingestion.messages_to_process(db, user.id, result.new_messages)
-    commitments_found = 0
-    for message in to_process:
-        commitments_found += len(extraction.process_message(db, message))
+    result, processed, commitments = run_mail_sync(db, user.id)
     events = calendar.sync_calendar(db, user.id)
     return SyncResponse(
         ingested=len(result.new_messages),
-        processed=len(to_process),
-        commitments_found=commitments_found,
+        processed=processed,
+        commitments_found=commitments,
         events_synced=len(events),
         initial_backfill=result.initial_backfill,
     )

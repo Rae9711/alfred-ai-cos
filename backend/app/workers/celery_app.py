@@ -37,5 +37,10 @@ celery_app.conf.update(
             "task": "albert.scan_notifications",
             "schedule": crontab(minute="*/30"),
         },
+        # Poll Gmail for every connected mailbox and push when new Primary mail arrives.
+        "poll-mailboxes": {
+            "task": "albert.poll_all_mailboxes",
+            "schedule": settings.mail_poll_interval_seconds,
+        },
     },
 )

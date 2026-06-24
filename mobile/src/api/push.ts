@@ -6,6 +6,15 @@ import * as Notifications from "expo-notifications";
 
 import { api } from "@/api/client";
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: true,
+  }),
+});
+
 export async function registerForPush(): Promise<boolean> {
   const settings = await Notifications.getPermissionsAsync();
   let status = settings.status;

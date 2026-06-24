@@ -98,6 +98,7 @@ class NotificationType(enum.StrEnum):
     approval_needed = "approval_needed"
     schedule_conflict = "schedule_conflict"
     reminder = "reminder"
+    new_mail = "new_mail"
 
 
 class NotificationStatus(enum.StrEnum):

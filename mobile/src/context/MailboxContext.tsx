@@ -13,6 +13,8 @@ import {
 
 import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
+import { registerForPush } from "@/api/push";
+import { useMailAutoSync } from "@/hooks/useMailAutoSync";
 import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
 
 export type InboxScope = "today" | "synced";
@@ -126,6 +128,13 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [authed, loadInbox]);
+
+  useEffect(() => {
+    if (authed !== true) return;
+    void registerForPush().catch(() => undefined);
+  }, [authed]);
+
+  useMailAutoSync(syncAndRefresh);
 
   const itemById = useCallback(
     (id: string) => items.find((m) => m.id === id),

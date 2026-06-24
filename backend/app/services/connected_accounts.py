@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import Provider
-from app.db.models import ConnectedAccount, Message
+from app.db.models import ConnectedAccount, Message, User
 
 
 def list_google_accounts(db: Session, user_id: str) -> list[ConnectedAccount]:
@@ -36,3 +36,14 @@ def get_google_account_for_message(db: Session, message: Message) -> ConnectedAc
     if not message.connected_account_id:
         return None
     return db.get(ConnectedAccount, message.connected_account_id)
+
+
+def list_user_ids_with_google(db: Session) -> list[str]:
+    """Distinct user ids that have at least one connected Google mailbox."""
+    return list(
+        db.scalars(
+            select(ConnectedAccount.user_id)
+            .where(ConnectedAccount.provider == Provider.google)
+            .distinct()
+        )
+    )

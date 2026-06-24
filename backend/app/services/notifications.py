@@ -134,6 +134,7 @@ _IMPORTANCE: dict[NotificationType, NotificationImportance] = {
     # as critical; treat it as high-importance so the user sees it past the threshold.
     NotificationType.unanswered_email: NotificationImportance.high,
     NotificationType.reminder: NotificationImportance.normal,
+    NotificationType.new_mail: NotificationImportance.normal,
     NotificationType.daily_briefing: NotificationImportance.low,
 }
 

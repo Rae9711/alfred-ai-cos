@@ -14,12 +14,12 @@ from app.db.models import User
 from app.notifications import get_notifier
 from app.services import (
     briefing,
-    extraction,
-    ingestion,
     notifications,
     outbound_tracking,
     snooze,
 )
+from app.services.connected_accounts import list_user_ids_with_google
+from app.services.mail_sync import run_mail_sync, sync_user_and_notify
 from app.workers.celery_app import celery_app
 
 
@@ -29,19 +29,35 @@ def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
     del max_results  # policy lives in ingestion.sync_messages / settings
     db = SessionLocal()
     try:
-        result = ingestion.sync_messages(db, user_id)
-        to_process = ingestion.messages_to_process(db, user_id, result.new_messages)
-        commitments = 0
-        for message in to_process:
-            commitments += len(extraction.process_message(db, message))
+        result, processed, commitments = run_mail_sync(db, user_id)
         return {
             "ingested": len(result.new_messages),
-            "processed": len(to_process),
+            "processed": processed,
             "commitments_found": commitments,
             "initial_backfill": int(result.initial_backfill),
         }
     finally:
         db.close()
+
+
+@celery_app.task(name="albert.poll_all_mailboxes")  # type: ignore[untyped-decorator]
+def poll_all_mailboxes() -> dict[str, int]:
+    """Beat entry: sync every connected Gmail mailbox and push on new Primary mail."""
+    db = SessionLocal()
+    notifier = get_notifier()
+    users_synced = ingested_total = pushed = 0
+    try:
+        for user_id in list_user_ids_with_google(db):
+            user = db.get(User, user_id)
+            if user is None:
+                continue
+            stats = sync_user_and_notify(db, user, provider=notifier, notify=True)
+            users_synced += 1
+            ingested_total += stats["ingested"]
+            pushed += stats["pushed"]
+    finally:
+        db.close()
+    return {"users": users_synced, "ingested": ingested_total, "pushed": pushed}
 
 
 @celery_app.task(name="albert.generate_briefing")  # type: ignore[untyped-decorator]
