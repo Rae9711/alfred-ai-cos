@@ -1,9 +1,4 @@
-# Replace ALBERT_DOMAIN with your hostname (e.g. albert.example.com).
-# Install: cp deploy/Caddyfile.example /etc/caddy/Caddyfile && edit && systemctl reload caddy
-#
-# Albert's Docker stack binds web to 127.0.0.1:8011 (see docker-compose.prod.yml).
-
-ALBERT_DOMAIN {
+alfred-ai.com {
 	encode gzip
 	reverse_proxy 127.0.0.1:8011
 }

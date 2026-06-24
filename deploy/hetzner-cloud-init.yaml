@@ -5,7 +5,7 @@
 # Limit: 32 KiB. This file is ~3 KiB.
 #
 # BEFORE PASTING — edit the two lines marked EDIT below:
-#   1. albert_domain  — your API hostname (e.g. albert.example.com)
+#   1. albert_domain  — API hostname (default: alfred-ai.com)
 #   2. albert_repo    — git URL (default: Rae9711 fork; use Azzbee after merge)
 #
 # What this does on first boot:
@@ -17,7 +17,7 @@
 # SSH key: still add yours in the Hetzner UI (cloud-init does not replace that).
 # Logs: ssh in and run  tail -f /var/log/cloud-init-output.log
 
-hostname: albert-api
+hostname: alfred-ai
 
 package_update: true
 package_upgrade: false
@@ -35,8 +35,8 @@ write_files:
       set -euo pipefail
       exec > /var/log/albert-first-boot.log 2>&1
 
-      # ── EDIT: set your public API hostname (no https://) ──────────────
-      ALBERT_DOMAIN="albert.example.com"
+      # ── API hostname (no https://) ─────────────────────────────────────
+      ALBERT_DOMAIN="alfred-ai.com"
       # ── EDIT: repo to clone ───────────────────────────────────────────
       ALBERT_REPO="https://github.com/Rae9711/alfred-ai-cos.git"
       # ─────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ write_files:
       echo "→ bootstrap (Docker + Caddy + firewall)"
       bash "$REPO_DIR/deploy/hetzner-bootstrap.sh"
 
-      if [[ "$ALBERT_DOMAIN" != "albert.example.com" && -n "$ALBERT_DOMAIN" ]]; then
+      if [[ -n "$ALBERT_DOMAIN" ]]; then
         echo "→ Caddyfile for $ALBERT_DOMAIN"
         printf '%s\n' \
           "${ALBERT_DOMAIN} {" \
@@ -66,27 +66,30 @@ write_files:
           '  reverse_proxy 127.0.0.1:8011' \
           '}' > /etc/caddy/Caddyfile
         systemctl reload caddy || systemctl restart caddy
-      else
-        echo "→ ALBERT_DOMAIN still example.com — configure Caddy manually"
       fi
 
-      cat > /root/ALBERT-NEXT-STEPS.txt <<'TXT'
+      cat > /root/ALBERT-NEXT-STEPS.txt <<TXT
       Albert first-boot finished.
 
-      1. DNS: point your domain A record to this server's public IP.
+      Domain: https://alfred-ai.com
+
+      1. DNS: alfred-ai.com A record → this server's public IP
+         (dig +short alfred-ai.com)
       2. Secrets:
            cd /opt/albert/repo
            cp .env.production.example .env
            chmod 600 .env
            nano .env
-         Set APP_BASE_URL, GOOGLE_*, ANTHROPIC_API_KEY, JWT_SECRET, TOKEN_ENCRYPTION_KEY, POSTGRES_PASSWORD.
-      3. Google Console: add redirect URI
-           https://YOUR_DOMAIN/api/v1/auth/google/callback
+         APP_BASE_URL=https://alfred-ai.com
+         GOOGLE_OAUTH_REDIRECT_URI=https://alfred-ai.com/api/v1/auth/google/callback
+         + ANTHROPIC_API_KEY, JWT_SECRET, TOKEN_ENCRYPTION_KEY, POSTGRES_PASSWORD
+      3. Google Console → Authorized redirect URI:
+           https://alfred-ai.com/api/v1/auth/google/callback
       4. Deploy:
            cd /opt/albert/repo && ./deploy/albert-deploy.sh
       5. Verify:
-           curl -sS https://YOUR_DOMAIN/health
-      6. Mobile: set mobile/app.json apiBaseUrl → your domain, then EAS OTA.
+           curl -sS https://alfred-ai.com/health
+      6. Mobile: apiBaseUrl = https://alfred-ai.com (app.json) + EAS OTA
 
       Logs: /var/log/albert-first-boot.log
             /var/log/cloud-init-output.log

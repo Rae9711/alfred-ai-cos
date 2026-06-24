@@ -38,7 +38,7 @@
       "expo-updates"
     ],
     "extra": {
-      "apiBaseUrl": "https://albert.alfredassistants.com",
+      "apiBaseUrl": "https://alfred-ai.com",
       "router": {},
       "eas": {
         "projectId": "45e050ed-fd8c-494a-8173-821548b192f5"

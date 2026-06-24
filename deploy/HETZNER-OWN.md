@@ -13,7 +13,7 @@
 | 项目 | 说明 |
 |------|------|
 | Hetzner 账号 | [console.hetzner.cloud](https://console.hetzner.cloud) |
-| 域名（子域名即可） | 例如 `albert.yourdomain.com`，DNS 能改 A 记录或走 Cloudflare |
+| 域名 | **`alfred-ai.com`**（A 记录指向 VPS IP） |
 | Google OAuth | Cloud Console 里 Albert 的 Client ID / Secret |
 | Anthropic API Key | 分类、摘要、起草邮件 |
 | SSH 公钥 | 创建 VPS 时挂上，用密钥登录 |
@@ -25,7 +25,7 @@
 ## 架构
 
 ```
-手机 App  →  https://albert.yourdomain.com
+手机 App  →  https://alfred-ai.com
                     ↓
               Caddy (:443, Let's Encrypt)
                     ↓
