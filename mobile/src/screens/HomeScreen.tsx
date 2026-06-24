@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { CommitmentStatus, type Me, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -22,10 +22,8 @@ import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
-import { PriorityCard } from "@/components/PriorityCard";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
-import { SnoozeSheet } from "@/screens/sheets/SnoozeSheet";
 import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { greetingForLocale } from "@/i18n/locales";
@@ -223,46 +221,6 @@ export function HomeScreen() {
           </View>
         </View>
 
-        {today && today.top_priorities.length > 1 ? (
-          <>
-            <Text style={styles.sectionLabel}>{t.home.sectionPriorities}</Text>
-            <View style={styles.priorityStack}>
-              {today.top_priorities.slice(1, 4).map((item) => (
-                <PriorityCard
-                  key={item.id}
-                  item={item}
-                  onAct={() =>
-                    openSheet(
-                      <ApprovalSheet
-                        commitmentId={item.id}
-                        recipient={item.counterparty ?? "them"}
-                        onDone={() => void load()}
-                      />,
-                    )
-                  }
-                  onMarkDone={() =>
-                    void api
-                      .updateCommitmentStatus(item.id, CommitmentStatus.Done)
-                      .then(() => load())
-                  }
-                  onSnooze={() =>
-                    openSheet(
-                      <SnoozeSheet
-                        commitmentId={item.id}
-                        onDone={() => void load()}
-                      />,
-                    )
-                  }
-                  onDismiss={() =>
-                    void api
-                      .updateCommitmentStatus(item.id, CommitmentStatus.Dismissed)
-                      .then(() => load())
-                  }
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
 
         <Text style={styles.sectionLabel}>{t.home.sectionToday}</Text>
         {schedule.length > 0 ? (

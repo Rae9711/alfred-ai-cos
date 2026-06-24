@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.enums import MessageClassification
@@ -36,6 +37,10 @@ _FILTERED = {MessageClassification.spam_noise}
 
 @router.get("", response_model=InboxOut)
 def list_inbox(
+    scope: str = Query(
+        default="today",
+        description="'today' = mail since local midnight; 'synced' = latest synced Primary mail (up to 50)",
+    ),
     mailbox: str | None = Query(
         default=None,
         description="Filter by connected mailbox email; omit for all mailboxes",
@@ -54,22 +59,29 @@ def list_inbox(
                 filter_account_id = account.id
                 break
 
+    settings = get_settings()
     today_start = start_of_today_utc(user.timezone)
     replied_ids = user_replied_message_ids(db, user.id)
+    synced_limit = settings.sync_initial_max_results
 
-    rows = list(
-        db.scalars(
-            select(Message)
-            .where(Message.user_id == user.id)
-            .where(Message.sent_at.is_not(None))
-            .where(Message.sent_at >= today_start)
-            .order_by(Message.sent_at.desc().nullslast())
-        )
+    stmt = (
+        select(Message)
+        .where(Message.user_id == user.id)
+        .where(Message.sent_at.is_not(None))
+        .order_by(Message.sent_at.desc().nullslast())
     )
+    if scope == "today":
+        stmt = stmt.where(Message.sent_at >= today_start)
+    else:
+        stmt = stmt.limit(synced_limit * 3)
+
+    rows = list(db.scalars(stmt))
 
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
+        if scope != "today" and len(messages) >= synced_limit:
+            break
         if filter_account_id and m.connected_account_id != filter_account_id:
             continue
         if not message_in_primary_inbox(m):

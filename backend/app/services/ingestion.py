@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -138,17 +137,6 @@ def _refresh_gmail_labels(
             ).cls
 
 
-def _user_today_start(user: User | None) -> datetime:
-    tz_name = (user.timezone if user else None) or "UTC"
-    try:
-        tz = ZoneInfo(tz_name)
-    except (ZoneInfoNotFoundError, ValueError):
-        tz = UTC
-    local_now = datetime.now(tz)
-    local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return local_midnight.astimezone(UTC)
-
-
 def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
     settings = get_settings()
     token = decrypt_token(account.token_ciphertext)
@@ -164,7 +152,6 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
                 token,
                 max_results=settings.sync_initial_max_results,
                 inbox_tab="primary",
-                after=_user_today_start(user),
             )
             new_messages = _ingest_message_ids(db, account, token, message_ids)
         else:

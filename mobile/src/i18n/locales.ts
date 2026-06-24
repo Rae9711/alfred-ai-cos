@@ -52,8 +52,10 @@ export const translations = {
       syncing: "Syncing your inbox…",
       retry: "Tap to retry",
       filters: {
-        all: "All",
+        today: "Today",
       },
+      unreadLabel: "Unread",
+      readLabel: "Read",
       mailboxChip: "Mailbox",
     },
     ask: {
@@ -156,8 +158,10 @@ export const translations = {
       syncing: "正在同步收件箱…",
       retry: "点击重试",
       filters: {
-        all: "全部",
+        today: "今天",
       },
+      unreadLabel: "未读",
+      readLabel: "已读",
       mailboxChip: "邮箱",
     },
     ask: {

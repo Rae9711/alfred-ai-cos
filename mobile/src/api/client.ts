@@ -119,7 +119,13 @@ export const api = {
     ),
   sync: () => request<SyncResponse>("/sync", { method: "POST" }),
   getToday: () => request<TodayDashboard>("/today"),
-  getInbox: () => request<InboxView>("/messages"),
+  getInbox: (opts?: { scope?: "today" | "synced"; mailbox?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.scope) params.set("scope", opts.scope);
+    if (opts?.mailbox) params.set("mailbox", opts.mailbox);
+    const q = params.toString();
+    return request<InboxView>(`/messages${q ? `?${q}` : ""}`);
+  },
   // "Add to calendar" on a message — books it if it describes a timed event.
   bookFromMessage: (messageId: string, timezone: string) =>
     request<BookMessageResponse>(`/messages/${messageId}/book`, {

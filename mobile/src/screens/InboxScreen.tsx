@@ -39,20 +39,28 @@ function mailboxTabLabel(email: string): string {
 export function InboxScreen() {
   const { t } = useLocale();
   const { openChatFromInbox } = useWorkflow();
-  const { items, mailboxes, loading, syncing, error, syncAndRefresh } =
-    useMailbox();
-  const [filter, setFilter] = useState("all");
+  const {
+    items,
+    mailboxes,
+    inboxScope,
+    loading,
+    syncing,
+    error,
+    syncAndRefresh,
+    setInboxFilter,
+  } = useMailbox();
+  const [filter, setFilter] = useState("today");
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
 
   const mailboxTabs = useMemo(
     () => [
-      { id: "all", label: t.inbox.filters.all },
+      { id: "today", label: t.inbox.filters.today },
       ...mailboxes.map((email) => ({
         id: email,
         label: mailboxTabLabel(email),
       })),
     ],
-    [mailboxes, t.inbox.filters.all],
+    [mailboxes, t.inbox.filters.today],
   );
 
   const live = useMemo(
@@ -60,15 +68,16 @@ export function InboxScreen() {
     [items, deferred],
   );
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return live;
-    return live.filter((m) => m.mailboxEmail === filter);
-  }, [live, filter]);
-
+  const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
   const unread = live.filter((m) => m.isUnread && m.section === "reply").length;
-  const showMailboxChip = mailboxes.length > 1;
+  const showMailboxChip = inboxScope === "today" && mailboxes.length > 1;
+
+  const onSelectFilter = (id: string) => {
+    setFilter(id);
+    void setInboxFilter(id === "today" ? "today" : id);
+  };
 
   const defer = (id: string) => {
     ease();
@@ -115,24 +124,22 @@ export function InboxScreen() {
         </Pressable>
       ) : null}
 
-      {mailboxTabs.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filters}
-        >
-          {mailboxTabs.map((f) => (
-            <Pill
-              key={f.id}
-              label={f.label}
-              kind={filter === f.id ? "accent" : "muted"}
-              mono={false}
-              onPress={() => setFilter(f.id)}
-              style={styles.filterPill}
-            />
-          ))}
-        </ScrollView>
-      ) : null}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+      >
+        {mailboxTabs.map((f) => (
+          <Pill
+            key={f.id}
+            label={f.label}
+            kind={filter === f.id ? "accent" : "muted"}
+            mono={false}
+            onPress={() => onSelectFilter(f.id)}
+            style={styles.filterPill}
+          />
+        ))}
+      </ScrollView>
 
       {replyItems.length > 0 ? (
         <Section title={t.inbox.sectionReply}>
@@ -152,7 +159,8 @@ export function InboxScreen() {
                 reply: t.inbox.reply,
                 later: t.inbox.later,
                 delegate: t.inbox.handToAlfred,
-                read: t.inbox.read,
+                read: t.inbox.readLabel,
+                unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
               }}
             />
@@ -172,7 +180,13 @@ export function InboxScreen() {
                   : null
               }
               onDismiss={() => defer(m.id)}
-              labels={{ view: t.inbox.view, dismiss: t.inbox.dismiss, read: t.inbox.read, replied: t.inbox.replied }}
+              labels={{
+                view: t.inbox.view,
+                dismiss: t.inbox.dismiss,
+                read: t.inbox.readLabel,
+                unread: t.inbox.unreadLabel,
+                replied: t.inbox.replied,
+              }}
             />
           ))}
         </Section>
@@ -204,6 +218,39 @@ function Section({
   );
 }
 
+function ReadStatus({
+  item,
+  labels,
+}: {
+  item: AppInboxItem;
+  labels: { read: string; unread: string; replied: string };
+}) {
+  if (item.userReplied) {
+    return (
+      <View style={[styles.statusChip, styles.statusReplied]}>
+        <Text style={[styles.statusChipText, styles.statusRepliedText]}>
+          {labels.replied}
+        </Text>
+      </View>
+    );
+  }
+  if (item.isUnread) {
+    return (
+      <View style={[styles.statusChip, styles.statusUnread]}>
+        <View style={styles.unreadDot} />
+        <Text style={[styles.statusChipText, styles.statusUnreadText]}>
+          {labels.unread}
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.statusChip}>
+      <Text style={styles.statusChipText}>{labels.read}</Text>
+    </View>
+  );
+}
+
 function InboxCard({
   item,
   mailboxLabel,
@@ -217,26 +264,18 @@ function InboxCard({
   onReply: () => void;
   onLater: () => void;
   onDelegate: () => void;
-  labels: { reply: string; later: string; delegate: string; read: string; replied: string };
+  labels: { reply: string; later: string; delegate: string; read: string; unread: string; replied: string };
 }) {
   return (
-    <View style={[styles.card, !item.isUnread && styles.cardRead]}>
+    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
       <View style={styles.cardTop}>
+        <ReadStatus item={item} labels={labels} />
         {mailboxLabel ? (
           <View style={styles.sourceChip}>
             <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
           </View>
         ) : null}
-        {item.userReplied ? (
-          <View style={styles.statusChip}>
-            <Text style={styles.statusChipText}>{labels.replied}</Text>
-          </View>
-        ) : !item.isUnread ? (
-          <View style={styles.statusChip}>
-            <Text style={styles.statusChipText}>{labels.read}</Text>
-          </View>
-        ) : null}
-        <Text style={[styles.sender, !item.isUnread && styles.senderRead]}>
+        <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
           {item.sender}
         </Text>
       </View>
@@ -269,26 +308,18 @@ function FyiCard({
   item: AppInboxItem;
   mailboxLabel: string | null;
   onDismiss: () => void;
-  labels: { view: string; dismiss: string; read: string; replied: string };
+  labels: { view: string; dismiss: string; read: string; unread: string; replied: string };
 }) {
   return (
-    <View style={[styles.card, !item.isUnread && styles.cardRead]}>
+    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
       <View style={styles.cardTop}>
+        <ReadStatus item={item} labels={labels} />
         {mailboxLabel ? (
           <View style={styles.sourceChip}>
             <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
           </View>
         ) : null}
-        {item.userReplied ? (
-          <View style={styles.statusChip}>
-            <Text style={styles.statusChipText}>{labels.replied}</Text>
-          </View>
-        ) : !item.isUnread ? (
-          <View style={styles.statusChip}>
-            <Text style={styles.statusChipText}>{labels.read}</Text>
-          </View>
-        ) : null}
-        <Text style={[styles.sender, !item.isUnread && styles.senderRead]}>
+        <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
           {item.sender}
         </Text>
       </View>
@@ -376,9 +407,14 @@ const styles = StyleSheet.create({
     borderColor: colors.hair2,
     gap: 8,
   },
+  cardUnread: {
+    borderColor: colors.accentSoft,
+    backgroundColor: colors.card,
+  },
   cardRead: {
-    opacity: 0.72,
+    opacity: 0.88,
     backgroundColor: colors.paper2,
+    borderColor: colors.hair,
   },
   cardTop: {
     flexDirection: "row",
@@ -404,6 +440,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  statusUnread: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accent,
+  },
+  statusReplied: {
+    backgroundColor: colors.paper2,
+    borderColor: colors.hair2,
   },
   statusChipText: {
     fontFamily: fonts.mono,
@@ -412,7 +459,16 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
+  statusUnreadText: { color: colors.accent },
+  statusRepliedText: { color: colors.ink3 },
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
   sender: { fontSize: 13, fontWeight: "600", color: colors.ink2, flex: 1 },
+  senderUnread: { color: colors.ink },
   senderRead: { fontWeight: "500", color: colors.ink3 },
   cardTitle: { fontSize: 16, fontWeight: "600", color: colors.ink },
   summary: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
