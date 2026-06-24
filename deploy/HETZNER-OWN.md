@@ -43,7 +43,8 @@
 3. Image: **Ubuntu 24.04**
 4. Type: **CX22** 或以上
 5. SSH key: 选你的公钥
-6. 记下 **公网 IP**（下文 `$SERVER_IP`）
+6. **Cloud config（推荐）** — 见下一节；可代替手动 SSH 初始化
+7. 记下 **公网 IP**（下文 `$SERVER_IP`）
 
 防火墙（Hetzner Cloud Firewall 或服务器上 `ufw`）至少放行：
 
@@ -51,9 +52,32 @@
 - `80/tcp` — Caddy HTTP（证书申请）
 - `443/tcp` — HTTPS
 
+### Cloud config（创建时自动初始化）
+
+Hetzner 创建页有一项 **Cloud config**，可粘贴最多 **32 KiB** 的 [cloud-init](https://cloud-init.io/) 脚本，开机自动跑。
+
+1. 打开仓库里的 **`deploy/hetzner-cloud-init.yaml`**
+2. **粘贴前改两处**（文件里有 `EDIT` 注释）：
+   - `ALBERT_DOMAIN` → 你的域名，如 `albert.yourdomain.com`
+   - `ALBERT_REPO` → 默认 `Rae9711/alfred-ai-cos`；merge 后可改成 `Azzbee`
+3. 全选复制，贴进 Hetzner **Cloud config** 文本框
+4. 创建服务器，等 3–5 分钟
+5. SSH 登录检查：
+
+```bash
+ssh root@$SERVER_IP
+tail -50 /var/log/cloud-init-output.log    # 或 /var/log/albert-first-boot.log
+cat /root/ALBERT-NEXT-STEPS.txt
+```
+
+成功后会装好 Docker + Caddy，代码在 `/opt/albert/repo`。  
+**仍需你手动：** 填 `.env`、Google redirect、跑 `./deploy/albert-deploy.sh`（域名和密钥不能写进 cloud-init 提交到 Git）。
+
+若不用 Cloud config，用下面第 2 节手动初始化。
+
 ---
 
-## 2. 服务器初始化（一次性）
+## 2. 服务器初始化（手动，无 cloud-init 时）
 
 SSH 登录后执行（把仓库 clone 下来再跑，或先 scp 脚本）：
 

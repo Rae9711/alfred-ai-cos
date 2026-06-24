@@ -1,0 +1,102 @@
+#cloud-config
+# Albert — Hetzner "Cloud config" (user-data) for Ubuntu 24.04
+#
+# Paste this entire file into Hetzner Console → Add Server → Cloud config.
+# Limit: 32 KiB. This file is ~3 KiB.
+#
+# BEFORE PASTING — edit the two lines marked EDIT below:
+#   1. albert_domain  — your API hostname (e.g. albert.example.com)
+#   2. albert_repo    — git URL (default: Rae9711 fork; use Azzbee after merge)
+#
+# What this does on first boot:
+#   - clones the repo to /opt/albert/repo
+#   - runs deploy/hetzner-bootstrap.sh (Docker, Caddy, ufw)
+#   - writes /etc/caddy/Caddyfile if albert_domain is set
+#   - leaves /root/ALBERT-NEXT-STEPS.txt with manual steps (.env, deploy)
+#
+# SSH key: still add yours in the Hetzner UI (cloud-init does not replace that).
+# Logs: ssh in and run  tail -f /var/log/cloud-init-output.log
+
+hostname: albert-api
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - git
+  - ca-certificates
+  - curl
+
+write_files:
+  - path: /usr/local/sbin/albert-first-boot.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      exec > /var/log/albert-first-boot.log 2>&1
+
+      # ── EDIT: set your public API hostname (no https://) ──────────────
+      ALBERT_DOMAIN="albert.example.com"
+      # ── EDIT: repo to clone ───────────────────────────────────────────
+      ALBERT_REPO="https://github.com/Rae9711/alfred-ai-cos.git"
+      # ─────────────────────────────────────────────────────────────────
+
+      REPO_DIR="/opt/albert/repo"
+      MARKER="/var/lib/albert-first-boot.done"
+
+      if [[ -f "$MARKER" ]]; then
+        echo "already ran; exit"
+        exit 0
+      fi
+
+      echo "→ clone $ALBERT_REPO"
+      mkdir -p /opt/albert
+      if [[ ! -d "$REPO_DIR/.git" ]]; then
+        git clone --depth 1 "$ALBERT_REPO" "$REPO_DIR"
+      fi
+
+      echo "→ bootstrap (Docker + Caddy + firewall)"
+      bash "$REPO_DIR/deploy/hetzner-bootstrap.sh"
+
+      if [[ "$ALBERT_DOMAIN" != "albert.example.com" && -n "$ALBERT_DOMAIN" ]]; then
+        echo "→ Caddyfile for $ALBERT_DOMAIN"
+        printf '%s\n' \
+          "${ALBERT_DOMAIN} {" \
+          '  encode gzip' \
+          '  reverse_proxy 127.0.0.1:8011' \
+          '}' > /etc/caddy/Caddyfile
+        systemctl reload caddy || systemctl restart caddy
+      else
+        echo "→ ALBERT_DOMAIN still example.com — configure Caddy manually"
+      fi
+
+      cat > /root/ALBERT-NEXT-STEPS.txt <<'TXT'
+      Albert first-boot finished.
+
+      1. DNS: point your domain A record to this server's public IP.
+      2. Secrets:
+           cd /opt/albert/repo
+           cp .env.production.example .env
+           chmod 600 .env
+           nano .env
+         Set APP_BASE_URL, GOOGLE_*, ANTHROPIC_API_KEY, JWT_SECRET, TOKEN_ENCRYPTION_KEY, POSTGRES_PASSWORD.
+      3. Google Console: add redirect URI
+           https://YOUR_DOMAIN/api/v1/auth/google/callback
+      4. Deploy:
+           cd /opt/albert/repo && ./deploy/albert-deploy.sh
+      5. Verify:
+           curl -sS https://YOUR_DOMAIN/health
+      6. Mobile: set mobile/app.json apiBaseUrl → your domain, then EAS OTA.
+
+      Logs: /var/log/albert-first-boot.log
+            /var/log/cloud-init-output.log
+      TXT
+
+      touch "$MARKER"
+      echo "✓ albert first-boot done"
+
+runcmd:
+  - [bash, -lc, "until ping -c1 -W2 1.1.1.1 >/dev/null 2>&1; do sleep 2; done"]
+  - [bash, /usr/local/sbin/albert-first-boot.sh]
+
+final_message: "Albert cloud-init finished. SSH in and cat /root/ALBERT-NEXT-STEPS.txt"
