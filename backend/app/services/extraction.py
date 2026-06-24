@@ -17,10 +17,7 @@ from app.db.enums import CommitmentStatus, Provider, SourceType
 from app.db.models import Commitment, ConnectedAccount, Message, User
 from app.llm import get_llm
 from app.services import gmail
-from app.services.classification_adjust import (
-    looks_like_verification_code,
-    verification_code_classification,
-)
+from app.services.classification_adjust import automated_fyi_override
 from app.services.crypto import decrypt_token
 
 # Common filler words that carry no identity for a commitment. Two phrasings of the
@@ -118,14 +115,14 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
         token = decrypt_token(account.token_ciphertext)
         body = gmail.get_message(token, message.external_id)["body"]
 
-    if looks_like_verification_code(
+    override = automated_fyi_override(
         subject=message.subject, snippet=message.snippet, body=body
-    ):
-        result = verification_code_classification()
-        message.classification = result.classification
-        message.priority = result.priority
-        message.action_required = result.action_required
-        message.body_summary = result.reason
+    )
+    if override is not None:
+        message.classification = override.classification
+        message.priority = override.priority
+        message.action_required = override.action_required
+        message.body_summary = override.reason
         db.commit()
         return []
 

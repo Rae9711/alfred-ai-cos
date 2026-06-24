@@ -19,7 +19,7 @@ from app.schemas.api import (
     InboxOut,
 )
 from app.services.assistant import interpret_and_book, resolve_timezone
-from app.services.classification_adjust import looks_like_verification_code
+from app.services.classification_adjust import automated_fyi_override, looks_like_automated_fyi
 from app.services.inbox_filter import message_in_primary_inbox
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -64,7 +64,7 @@ def list_inbox(
             continue
         # Unclassified (sync ran, extraction pending) → default to FYI rather than drop.
         effective = m.classification
-        if looks_like_verification_code(
+        if looks_like_automated_fyi(
             subject=m.subject, snippet=m.snippet, body=m.body_summary
         ):
             effective = MessageClassification.informational
