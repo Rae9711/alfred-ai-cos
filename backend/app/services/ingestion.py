@@ -103,17 +103,21 @@ def _refresh_gmail_labels(
     account: ConnectedAccount,
     token: dict,
     *,
-    limit: int = 120,
+    limit: int = 40,
     priority_external_ids: list[str] | None = None,
 ) -> None:
     """Refresh Gmail labels (and sender class) for one mailbox."""
     user = db.get(User, account.user_id)
+    priority_cap = 30
+    capped_priority = list(priority_external_ids or [])[:priority_cap]
     unlabeled = list(
         db.scalars(
-            select(Message).where(
+            select(Message)
+            .where(
                 Message.connected_account_id == account.id,
                 Message.gmail_labels.is_(None),
             )
+            .limit(15)
         )
     )
     recent = list(
@@ -121,16 +125,16 @@ def _refresh_gmail_labels(
             select(Message)
             .where(Message.connected_account_id == account.id)
             .order_by(Message.sent_at.desc().nullslast())
-            .limit(limit)
+            .limit(min(limit, 25))
         )
     )
     priority_rows: list[Message] = []
-    if priority_external_ids:
+    if capped_priority:
         priority_rows = list(
             db.scalars(
                 select(Message).where(
                     Message.connected_account_id == account.id,
-                    Message.external_id.in_(priority_external_ids),
+                    Message.external_id.in_(capped_priority),
                 )
             )
         )
@@ -266,7 +270,7 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
             _apply_history_label_changes(db, account, token, account.gmail_history_id)
 
         unread_ids = gmail.list_unread_primary_message_ids(
-            token, max_results=settings.sync_unread_max_results
+            token, max_results=min(settings.sync_unread_max_results, 80)
         )
         _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
         account.gmail_history_id = gmail.get_history_id(token)
