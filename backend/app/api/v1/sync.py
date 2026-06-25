@@ -1,7 +1,7 @@
 """Trigger ingestion + extraction (PRD 12.2, 12.5).
 
-Mobile refresh uses ingest_only=true for a fast Gmail pull; classification runs
-in a Celery task afterward. Background poll uses the full path."""
+Mobile refresh uses background=true to queue sync and return immediately.
+ingest_only=true runs a fast incremental Gmail pull on the request path."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from app.db.models import User
 from app.schemas.api import SyncResponse
 from app.services import calendar
 from app.services.mail_sync import run_mail_sync
-from app.workers.tasks import classify_pending_messages
+from app.workers.tasks import classify_pending_messages, sync_user
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -25,9 +25,23 @@ def sync_now(
         default=False,
         description="Pull Gmail only (fast). Classify in background when true.",
     ),
+    background: bool = Query(
+        default=False,
+        description="Queue full sync in Celery and return immediately (mobile refresh).",
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SyncResponse:
+    if background:
+        sync_user.delay(user.id)
+        return SyncResponse(
+            ingested=0,
+            processed=0,
+            commitments_found=0,
+            events_synced=0,
+            initial_backfill=False,
+        )
+
     result, processed, commitments = run_mail_sync(
         db, user.id, ingest_only=ingest_only, light=ingest_only
     )

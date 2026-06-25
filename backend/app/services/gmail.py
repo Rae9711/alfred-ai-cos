@@ -6,21 +6,40 @@ ActionProposal via the SendEmail capability, never directly from a route."""
 from __future__ import annotations
 
 import base64
+import contextlib
+import contextvars
 import re
 from datetime import datetime
 from email.message import EmailMessage
 from html import unescape
 from typing import Any, Literal, cast
 
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from app.services.google_oauth import credentials_from_payload
 
+_active_creds: contextvars.ContextVar[Credentials | None] = contextvars.ContextVar(
+    "gmail_active_creds", default=None
+)
+
 
 def _service(token_payload: dict[str, Any]) -> Any:
-    """Return a Gmail API client. googleapiclient is untyped, hence Any."""
-    creds = credentials_from_payload(token_payload)
+    """Return a Gmail API client. Reuses credentials set by use_gmail_credentials."""
+    creds = _active_creds.get()
+    if creds is None:
+        creds = credentials_from_payload(token_payload)
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+
+@contextlib.contextmanager
+def use_gmail_credentials(creds: Credentials):
+    """Pin one refreshed credential for all Gmail calls in a sync pass."""
+    token = _active_creds.set(creds)
+    try:
+        yield
+    finally:
+        _active_creds.reset(token)
 
 
 InboxTab = Literal["all", "primary"]

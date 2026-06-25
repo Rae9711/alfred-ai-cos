@@ -102,11 +102,16 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const syncAndRefresh = useCallback(async () => {
     setSyncing(true);
     setError(null);
+    const { scope, mailbox } = filterRef.current;
     try {
-      await api.sync({ ingestOnly: true });
-      const { scope, mailbox } = filterRef.current;
+      // Show cached mail immediately — never block the UI on Gmail.
       await loadInbox(scope, mailbox);
+      await api.sync({ background: true });
       setLastSyncedAt(new Date());
+      // Pull again after the worker finishes ingesting.
+      setTimeout(() => {
+        void loadInbox(scope, mailbox).catch(() => undefined);
+      }, 12_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
       throw e;
@@ -132,14 +137,6 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        await api.sync({ ingestOnly: true });
-        if (!cancelled) setLastSyncedAt(new Date());
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Sync failed");
-        }
-      }
-      try {
         await loadInbox("synced");
       } catch (e) {
         if (!cancelled) {
@@ -148,6 +145,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled) setLoading(false);
       }
+      void api.sync({ background: true }).catch(() => undefined);
     })();
     return () => {
       cancelled = true;

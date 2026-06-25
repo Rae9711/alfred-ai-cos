@@ -10,6 +10,7 @@ import os
 from typing import Any, cast
 
 import httpx
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
@@ -102,6 +103,18 @@ def credentials_from_payload(payload: dict[str, Any]) -> Credentials:
         client_secret=payload.get("client_secret"),
         scopes=payload.get("scopes"),
     )
+
+
+def fresh_credentials(payload: dict[str, Any]) -> tuple[Credentials, dict[str, Any]]:
+    """Refresh the access token once if expired; return updated payload for persistence."""
+    creds = credentials_from_payload(payload)
+    updated = dict(payload)
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        updated["token"] = creds.token
+        if creds.expiry:
+            updated["expiry"] = creds.expiry.isoformat()
+    return creds, updated
 
 
 def revoke_token(payload: dict[str, Any]) -> bool:

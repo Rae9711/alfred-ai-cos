@@ -135,12 +135,17 @@ export const api = {
         method: "POST",
       },
     ),
-  sync: (opts?: { ingestOnly?: boolean }) =>
-    request<SyncResponse>(
-      `/sync${opts?.ingestOnly ? "?ingest_only=true" : ""}`,
+  sync: (opts?: { ingestOnly?: boolean; background?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.ingestOnly) params.set("ingest_only", "true");
+    if (opts?.background) params.set("background", "true");
+    const q = params.toString();
+    return request<SyncResponse>(
+      `/sync${q ? `?${q}` : ""}`,
       { method: "POST" },
-      opts?.ingestOnly ? 90_000 : 120_000,
-    ),
+      opts?.background ? 15_000 : opts?.ingestOnly ? 45_000 : 120_000,
+    );
+  },
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: (opts?: { scope?: "unread" | "today" | "synced"; mailbox?: string }) => {
     const params = new URLSearchParams();

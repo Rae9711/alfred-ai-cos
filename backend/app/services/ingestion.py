@@ -22,9 +22,10 @@ from app.db.enums import SyncStatus
 from app.db.models import ConnectedAccount, Message, User
 from app.services import gmail, sender_class
 from app.services.connected_accounts import list_google_accounts
-from app.services.crypto import decrypt_token
+from app.services.crypto import decrypt_token, encrypt_token
 from app.services.extraction import _EXTRACTION_BLOCKED_CLASSES
-from app.services.gmail import HistoryExpiredError
+from app.services.gmail import HistoryExpiredError, use_gmail_credentials
+from app.services.google_oauth import fresh_credentials
 from app.services.inbox_filter import message_in_primary_inbox
 
 
@@ -222,7 +223,8 @@ def _sync_account(
     db: Session, account: ConnectedAccount, *, light: bool = False
 ) -> SyncIngestResult:
     settings = get_settings()
-    token = decrypt_token(account.token_ciphertext)
+    stored_token = decrypt_token(account.token_ciphertext)
+    creds, token = fresh_credentials(stored_token)
 
     # Clear stale "syncing" left by a crashed worker.
     if (
@@ -240,46 +242,51 @@ def _sync_account(
     initial_backfill = account.gmail_history_id is None
     new_messages: list[Message] = []
     try:
-        if initial_backfill:
-            message_ids = gmail.list_recent_message_ids(
-                token,
-                max_results=settings.sync_initial_max_results,
-                inbox_tab="primary",
-            )
-            new_messages = _ingest_message_ids(db, account, token, message_ids)
-        else:
-            try:
-                message_ids, _latest = gmail.list_history_added_message_ids(
-                    token,
-                    account.gmail_history_id,
-                )
-                new_messages = _ingest_message_ids(db, account, token, message_ids)
-            except HistoryExpiredError:
+        with use_gmail_credentials(creds):
+            if initial_backfill:
                 message_ids = gmail.list_recent_message_ids(
                     token,
-                    max_results=settings.sync_incremental_fallback_max,
+                    max_results=settings.sync_initial_max_results,
                     inbox_tab="primary",
                 )
                 new_messages = _ingest_message_ids(db, account, token, message_ids)
+            else:
+                try:
+                    message_ids, _latest = gmail.list_history_added_message_ids(
+                        token,
+                        account.gmail_history_id,
+                    )
+                    new_messages = _ingest_message_ids(db, account, token, message_ids)
+                except HistoryExpiredError:
+                    message_ids = gmail.list_recent_message_ids(
+                        token,
+                        max_results=settings.sync_incremental_fallback_max,
+                        inbox_tab="primary",
+                    )
+                    new_messages = _ingest_message_ids(db, account, token, message_ids)
 
-        catchup = _sync_recent_primary_catchup(db, account, token)
-        unread_inbox = _sync_unread_inbox(db, account, token)
-        unread_primary = _sync_unread_primary(db, account, token)
-        new_messages.extend(catchup + unread_inbox + unread_primary)
+            if not light:
+                catchup = _sync_recent_primary_catchup(db, account, token)
+                unread_inbox = _sync_unread_inbox(db, account, token)
+                unread_primary = _sync_unread_primary(db, account, token)
+                new_messages.extend(catchup + unread_inbox + unread_primary)
 
-        if not light and account.gmail_history_id:
-            _apply_history_label_changes(db, account, token, account.gmail_history_id)
+            if not light and account.gmail_history_id:
+                _apply_history_label_changes(db, account, token, account.gmail_history_id)
 
-        if not light:
-            unread_ids = gmail.list_unread_primary_message_ids(
-                token, max_results=min(settings.sync_unread_max_results, 80)
-            )
-            _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
+            if not light:
+                unread_ids = gmail.list_unread_primary_message_ids(
+                    token, max_results=min(settings.sync_unread_max_results, 80)
+                )
+                _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
 
-        account.gmail_history_id = gmail.get_history_id(token)
+            account.gmail_history_id = gmail.get_history_id(token)
+
         account.sync_status = SyncStatus.ok
         account.last_synced_at = datetime.now(UTC)
         account.sync_error = None
+        if token != stored_token:
+            account.token_ciphertext = encrypt_token(token)
         db.commit()
     except Exception as exc:
         account.sync_status = SyncStatus.error
