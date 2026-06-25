@@ -23,7 +23,12 @@ app.include_router(api_router)
 @app.exception_handler(RequestValidationError)
 async def log_validation_errors(request: Request, exc: RequestValidationError):
     if request.url.path.endswith("/inbox/sms"):
-        logger.warning("SMS inbox payload validation failed: %s", exc.errors())
+        raw = (await request.body())[:500]
+        logger.warning(
+            "SMS inbox payload validation failed: %s raw=%r",
+            exc.errors(),
+            raw.decode("utf-8", errors="replace"),
+        )
     return await request_validation_exception_handler(request, exc)
 
 

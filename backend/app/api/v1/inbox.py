@@ -32,8 +32,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 
 _FROM_ALIASES = ("from_number", "fromNumber", "phone", "sender_phone", "sender")
-_BODY_ALIASES = ("body", "text", "message", "content")
+_BODY_ALIASES = (
+    "body",
+    "text",
+    "message",
+    "content",
+    "shortcut_input",
+    "shortcutinput",
+    "input",
+    "message_body",
+    "messagebody",
+)
 _NAME_ALIASES = ("from_name", "fromName", "name", "sender_name")
+_SKIP_BODY_KEYS = frozenset(
+    {
+        *{a.lower() for a in _FROM_ALIASES},
+        *{a.lower() for a in _NAME_ALIASES},
+        "message_id",
+        "messageid",
+        "received_at",
+        "receivedat",
+    }
+)
 
 
 def _lookup(data: dict[str, Any], aliases: tuple[str, ...]) -> Any:
@@ -114,6 +134,20 @@ def _coerce_optional_str(value: Any) -> str | None:
     return text or None
 
 
+def _fallback_body(data: dict[str, Any], phone: str | None) -> str | None:
+    """Last resort when Shortcuts omits body but sends message text under another key."""
+    for key, value in data.items():
+        if key.lower() in _SKIP_BODY_KEYS:
+            continue
+        coerced = _coerce_body(value)
+        if not coerced:
+            continue
+        if phone and coerced == phone:
+            continue
+        return coerced
+    return None
+
+
 class ForwardIn(BaseModel):
     """The parsed-email payload the Cloudflare Worker sends. Keep the schema small
     on purpose — anything we don't read here is wasted bytes through the worker."""
@@ -183,6 +217,8 @@ class SmsIn(BaseModel):
             return data
         phone = _coerce_phone(_lookup(data, _FROM_ALIASES))
         body = _coerce_body(_lookup(data, _BODY_ALIASES))
+        if not body:
+            body = _fallback_body(data, phone)
         return {
             "from_number": phone,
             "body": body,
@@ -216,6 +252,14 @@ def sms_inbox_webhook(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logger.info(
+        "SMS ingested user=%s from=%s deduped=%s message_id=%s",
+        user.id,
+        payload.from_number[:20],
+        result.deduped,
+        result.message_id,
+    )
 
     return SmsIngestOut(
         message_id=result.message_id,

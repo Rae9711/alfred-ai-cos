@@ -23,6 +23,8 @@ import type {
   MeetingPrep,
   OnboardingPrefs,
   SmsForwarding,
+  SmsInstallOut,
+  SmsIngestResult,
   SessionToken,
   SyncResponse,
   Task,
@@ -314,6 +316,10 @@ export const api = {
   getWaiting: () => request<WaitingView>("/waiting"),
   getMe: () => request<Me>("/me"),
   getSmsForwarding: () => request<SmsForwarding>("/me/sms-forwarding"),
+  getSmsForwardingInstall: () =>
+    request<SmsInstallOut>("/me/sms-forwarding/install"),
+  testSmsForwarding: () =>
+    request<SmsIngestResult>("/me/sms-forwarding/test", { method: "POST" }),
   submitOnboarding: (prefs: OnboardingPrefs) =>
     request<Me>("/onboarding", { method: "POST", body: JSON.stringify(prefs) }),
   registerDevice: (push_token: string, platform?: string) =>

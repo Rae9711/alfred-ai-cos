@@ -23,6 +23,7 @@ from app.api.v1 import (
     today,
     waiting,
 )
+from app.api.v1 import integrations as integrations_mod
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
@@ -41,6 +42,7 @@ api_router.include_router(waiting.router)
 api_router.include_router(me.router)
 api_router.include_router(notifications.router)
 api_router.include_router(inbox.router)
+api_router.include_router(integrations_mod.router)
 api_router.include_router(search.router)
 api_router.include_router(senders.router)
 api_router.include_router(dev.router)

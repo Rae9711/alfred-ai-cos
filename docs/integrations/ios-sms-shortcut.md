@@ -6,25 +6,50 @@ from your personal number.
 
 Email/Gmail sync is unchanged. SMS uses a separate webhook.
 
-## Setup in Albert
+## One-tap install (recommended)
 
-1. Open **You** (settings).
-2. Under **SMS forwarding**, copy:
-   - **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
-   - **X-Sms-Token** — your personal secret (never share publicly).
+1. Open **You** (settings) in the Albert app.
+2. Tap **Install Shortcut** — Shortcuts opens and imports **Albert SMS Forward**.
+3. When prompted, paste your **X-Sms-Token** (tap **Copy Token** in Albert if needed).
 
-## iOS Shortcut (recommended)
+Then create the automation (two steps after install):
+
+1. **Shortcuts → Automations → + → Message** → *When I receive a message* → **Run Immediately** → select **Albert SMS Forward**.
+2. Send yourself a test text and confirm it appears in **Inbox → SMS**.
+
+### Import URL pattern
+
+The app calls `GET /api/v1/me/sms-forwarding/install` (JWT) and opens:
+
+```text
+shortcuts://import-shortcut?url=<encoded-shortcut-download>&name=Albert%20SMS%20Forward
+```
+
+The signed shortcut file is served at:
+
+```text
+https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Forward.shortcut
+```
+
+On import, Shortcuts asks for your token once; it is stored in the shortcut header as `X-Sms-Token`.
+
+## Manual setup (advanced)
+
+If one-tap import is unavailable, copy from **You → SMS forwarding**:
+
+- **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
+- **X-Sms-Token** — your personal secret (never share publicly).
 
 Create an automation in the **Shortcuts** app:
 
 1. **Trigger:** *When I receive a message* → Run Immediately.
-2. **Find Messages** where *Is from the sender* is *Shortcut Input* (the incoming message).
-3. **Get Details of Messages** → **Sender** (or **Phone Number** if Sender is empty).
+2. **Get Details of Shortcut Input** → **Phone Number** (or **Sender**).
    - Prefer **Text** from Get Details, not the **Numbers** magic variable (Numbers often
      arrives as a JSON array and can cause 422 errors on older app builds).
+3. **Get Details of Shortcut Input** → **Body** (message text).
 4. **Dictionary** with keys:
-   - `from_number` → Sender / Phone Number text from step 3
-   - `body` → Shortcut Input (the message text)
+   - `from_number` → Sender / Phone Number text from step 2
+   - `body` → message Body from step 3 (not a blank variable)
    - `from_name` → (optional) contact name if you have it
 5. **Get Contents of URL**
    - Method: **POST**
@@ -79,6 +104,7 @@ Success looks like:
 | **400 Invalid sender phone number** | Empty or non-phone `from_number` | Check Get Details → Sender / Phone Number is populated |
 | **400 SMS body is required** | Empty message text | Map `body` to Shortcut Input, not a blank variable |
 | SMS missing in Inbox | Old app build or sync delay | Pull to refresh; confirm curl returns 200 first |
+| Install Shortcut does nothing | Shortcuts not installed / blocked URL | Install Apple Shortcuts; retry from Albert → You |
 
 ## Reply flow in the app
 
@@ -92,4 +118,6 @@ Success looks like:
 | Method | Path | Auth |
 |--------|------|------|
 | GET | `/api/v1/me/sms-forwarding` | JWT (app session) |
+| GET | `/api/v1/me/sms-forwarding/install` | JWT (app session) |
+| GET | `/api/v1/integrations/ios/Albert-SMS-Forward.shortcut` | Public (signed file) |
 | POST | `/api/v1/inbox/sms` | Header `X-Sms-Token` |

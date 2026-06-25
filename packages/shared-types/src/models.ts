@@ -269,6 +269,23 @@ export interface SmsForwarding {
   token: string;
 }
 
+/** One-tap iOS Shortcut import link from GET /me/sms-forwarding/install. */
+export interface SmsInstallOut {
+  import_url: string;
+  shortcut_url: string;
+  token: string;
+}
+
+/** @deprecated Use SmsInstallOut */
+export type SmsInstallLink = SmsInstallOut;
+
+export interface SmsIngestResult {
+  message_id: string;
+  commitments_extracted: number;
+  deduped: boolean;
+  draft_created: boolean;
+}
+
 export interface SessionToken {
   access_token: string;
   token_type: string;

@@ -126,6 +126,12 @@ class SmsForwardingOut(BaseModel):
     token: str
 
 
+class SmsInstallOut(BaseModel):
+    import_url: str
+    shortcut_url: str
+    token: str
+
+
 class SmsIngestOut(BaseModel):
     message_id: str
     commitments_extracted: int

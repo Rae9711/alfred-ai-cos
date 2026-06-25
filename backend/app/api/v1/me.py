@@ -3,6 +3,9 @@ revocation (PRD 9.1, 12.1, 13.1)."""
 
 from __future__ import annotations
 
+import secrets
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -27,8 +30,16 @@ from app.db.models import (
     Task,
     User,
 )
-from app.schemas.api import ConnectedMailboxOut, MeOut, OnboardingPrefs, SmsForwardingOut
+from app.schemas.api import (
+    ConnectedMailboxOut,
+    MeOut,
+    OnboardingPrefs,
+    SmsForwardingOut,
+    SmsIngestOut,
+    SmsInstallOut,
+)
 from app.services import google_oauth, sms_inbox
+from app.services.sms_shortcut import SHORTCUT_FILENAME, SHORTCUT_NAME
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
@@ -105,6 +116,53 @@ def get_sms_forwarding(
     settings = get_settings()
     base = settings.app_base_url.rstrip("/")
     return SmsForwardingOut(webhook_url=f"{base}/api/v1/inbox/sms", token=token)
+
+
+@router.get("/me/sms-forwarding/install", response_model=SmsInstallOut)
+def get_sms_forwarding_install(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsInstallOut:
+    """One-tap iOS Shortcut import URL; user pastes token when prompted on import."""
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+    settings = get_settings()
+    base = settings.app_base_url.rstrip("/")
+    shortcut_url = f"{base}/api/v1/integrations/ios/{SHORTCUT_FILENAME}"
+    import_url = (
+        "shortcuts://import-shortcut?"
+        f"url={quote(shortcut_url, safe='')}&name={quote(SHORTCUT_NAME)}"
+    )
+    return SmsInstallOut(
+        import_url=import_url,
+        shortcut_url=shortcut_url,
+        token=token,
+    )
+
+
+@router.post("/me/sms-forwarding/test", response_model=SmsIngestOut)
+def test_sms_forwarding(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsIngestOut:
+    """Insert a test SMS so the user can verify the inbox SMS tab without iOS Shortcut."""
+    try:
+        result = sms_inbox.ingest_sms(
+            db,
+            user=user,
+            from_number="+15550199",
+            body="Albert SMS test — if you see this in Inbox → SMS, the app path works.",
+            from_name="SMS Test",
+            message_id=f"app-test-{secrets.token_hex(8)}",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return SmsIngestOut(
+        message_id=result.message_id,
+        commitments_extracted=result.commitments_extracted,
+        deduped=result.deduped,
+        draft_created=result.draft_created,
+    )
 
 
 @router.post("/onboarding", response_model=MeOut)

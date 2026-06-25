@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,8 @@ import {
   View,
 } from "react-native";
 import type { Me } from "@albert/shared-types";
-import * as Linking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
+import * as LinkingExpo from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
 import { api } from "@/api/client";
@@ -41,7 +43,7 @@ export function SettingsScreen() {
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [smsToken, setSmsToken] = useState<string | null>(null);
-  const [smsWebhook, setSmsWebhook] = useState<string | null>(null);
+  const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -49,14 +51,14 @@ export function SettingsScreen() {
       .then(setMe)
       .catch(() => setMe(null));
     api
-      .getSmsForwarding()
+      .getSmsForwardingInstall()
       .then((cfg) => {
         setSmsToken(cfg.token);
-        setSmsWebhook(cfg.webhook_url);
+        setSmsImportUrl(cfg.import_url);
       })
       .catch(() => {
         setSmsToken(null);
-        setSmsWebhook(null);
+        setSmsImportUrl(null);
       });
   }, []);
 
@@ -102,10 +104,31 @@ export function SettingsScreen() {
       .catch(() => setMe(null));
   }, []);
 
+  const installSmsShortcut = useCallback(async () => {
+    if (!smsImportUrl) return;
+    setNote(null);
+    try {
+      const can = await Linking.canOpenURL(smsImportUrl);
+      if (!can) {
+        setNote(t.settings.smsInstallFailed);
+        return;
+      }
+      await Linking.openURL(smsImportUrl);
+    } catch {
+      setNote(t.settings.smsInstallFailed);
+    }
+  }, [smsImportUrl, t.settings.smsInstallFailed]);
+
+  const copySmsToken = useCallback(async () => {
+    if (!smsToken) return;
+    await Clipboard.setStringAsync(smsToken);
+    setNote(t.settings.smsTokenCopied);
+  }, [smsToken, t.settings.smsTokenCopied]);
+
   const linkGmail = useCallback(async () => {
     setNote(null);
     try {
-      const returnUrl = Linking.createURL("settings");
+      const returnUrl = LinkingExpo.createURL("settings");
       const { authorization_url } = await api.startGoogleLinkAuth(returnUrl);
       const result = await WebBrowser.openAuthSessionAsync(
         authorization_url,
@@ -245,11 +268,22 @@ export function SettingsScreen() {
       <SectionTitle label={t.settings.smsTitle} />
       <View style={styles.smsCard}>
         <Text style={styles.smsHint}>{t.settings.smsHint}</Text>
-        {smsWebhook ? (
-          <Text selectable style={styles.smsMono}>
-            {smsWebhook}
-          </Text>
-        ) : null}
+        <View style={styles.smsActions}>
+          <Btn
+            label={t.settings.smsInstallShortcut}
+            kind="accent"
+            tiny
+            onPress={() => void installSmsShortcut()}
+          />
+          {smsToken ? (
+            <Btn
+              label={t.settings.smsCopyToken}
+              kind="ghost"
+              tiny
+              onPress={() => void copySmsToken()}
+            />
+          ) : null}
+        </View>
         {smsToken ? (
           <>
             <Text style={styles.smsLabel}>{t.settings.smsTokenLabel}</Text>
@@ -569,6 +603,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   smsHint: { fontSize: 13, color: colors.ink2, lineHeight: 19 },
+  smsActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   smsLabel: {
     fontFamily: fonts.mono,
     fontSize: 10,

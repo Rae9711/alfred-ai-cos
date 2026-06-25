@@ -106,6 +106,10 @@ def test_sms_webhook_endpoint(db: Session, user: User, monkeypatch: pytest.Monke
         ({"fromNumber": "+15551234567", "body": "Hello"}, "+15551234567"),
         ({"phone": "+15551234567", "text": "Hello"}, "+15551234567"),
         ({"sender": {"phone": "+15551234567"}, "message": "Hello"}, "+15551234567"),
+        (
+            {"from_number": "+15551234567", "body": None, "shortcut_input": "Fallback text"},
+            "+15551234567",
+        ),
     ],
 )
 def test_sms_in_coerces_ios_shortcut_payload(raw: dict, expected_phone: str) -> None:
@@ -113,7 +117,7 @@ def test_sms_in_coerces_ios_shortcut_payload(raw: dict, expected_phone: str) -> 
 
     parsed = SmsIn.model_validate(raw)
     assert parsed.from_number == expected_phone
-    assert parsed.body == "Hello"
+    assert parsed.body in ("Hello", "Fallback text")
 
 
 def test_sms_webhook_accepts_array_from_number(

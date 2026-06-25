@@ -122,10 +122,14 @@ export const translations = {
       disconnectMailbox: "Disconnect",
       smsTitle: "SMS forwarding",
       smsHint:
-        "Use an iOS Shortcut to forward incoming texts to Albert. Webhook URL:",
-      smsTokenLabel: "Header X-Sms-Token:",
+        "Install Albert's Shortcut, paste your token when prompted, then turn on the automation below.",
+      smsTokenLabel: "X-Sms-Token (for import prompt):",
+      smsInstallShortcut: "Install Shortcut",
+      smsCopyToken: "Copy Token",
+      smsTokenCopied: "Token copied.",
+      smsInstallFailed: "Could not open Shortcuts.",
       smsSteps:
-        "In Shortcuts: When I receive a message → Get Contents of URL (POST JSON with from_number, body, optional from_name) → add header X-Sms-Token with your token above.",
+        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. Send yourself a test text and check Inbox → SMS.",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -261,10 +265,14 @@ export const translations = {
       connectedMailboxes: "已连接邮箱",
       disconnectMailbox: "断开",
       smsTitle: "短信转发",
-      smsHint: "用 iOS 快捷指令把收到的短信转发给 Albert。Webhook 地址：",
-      smsTokenLabel: "请求头 X-Sms-Token：",
+      smsHint: "安装 Albert 快捷指令，按提示粘贴令牌，然后开启下方自动化。",
+      smsTokenLabel: "X-Sms-Token（导入时粘贴）：",
+      smsInstallShortcut: "安装快捷指令",
+      smsCopyToken: "复制令牌",
+      smsTokenCopied: "已复制令牌。",
+      smsInstallFailed: "无法打开快捷指令。",
       smsSteps:
-        "快捷指令：收到信息时 → 获取 URL 内容（POST JSON：from_number、body，可选 from_name）→ 添加请求头 X-Sms-Token（使用上方令牌）。",
+        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 给自己发一条测试短信，在收件箱 → 短信中查看。",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",
