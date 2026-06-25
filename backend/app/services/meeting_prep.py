@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CalendarEvent, Message
 from app.llm import get_llm
 from app.schemas.llm import MeetingContextSummary
+from app.services.inbox_view import start_of_today_utc
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -23,6 +24,25 @@ def _emails_in(text: str | None) -> set[str]:
     if not text:
         return set()
     return {m.lower() for m in _EMAIL_RE.findall(text)}
+
+
+def today_events(
+    db: Session, user_id: str, *, timezone: str | None
+) -> list[CalendarEvent]:
+    """All events on the user's local calendar day, including ones that already started."""
+    start_utc = start_of_today_utc(timezone)
+    end_utc = start_utc + timedelta(days=1)
+    stmt = (
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.user_id == user_id,
+            CalendarEvent.start_time.is_not(None),
+            CalendarEvent.start_time >= start_utc,
+            CalendarEvent.start_time < end_utc,
+        )
+        .order_by(CalendarEvent.start_time)
+    )
+    return list(db.scalars(stmt))
 
 
 def upcoming_events(

@@ -244,7 +244,12 @@ export const api = {
   rejectAction: (actionId: string) =>
     request<ActionProposal>(`/actions/${actionId}/reject`, { method: "POST" }),
   listPendingActions: () => request<ActionProposal[]>("/actions/pending"),
-  listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
+  listUpcomingMeetings: (opts?: { today?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.today) params.set("today", "true");
+    const q = params.toString();
+    return request<UpcomingMeeting[]>(`/meetings/upcoming${q ? `?${q}` : ""}`);
+  },
   getMeeting: (eventId: string) => request<UpcomingMeeting>(`/meetings/${eventId}`),
   updateMeeting: (
     eventId: string,

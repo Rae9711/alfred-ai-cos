@@ -17,9 +17,12 @@ router = APIRouter(prefix="/meetings", tags=["meetings"])
 @router.get("/upcoming", response_model=list[UpcomingMeeting])
 def list_upcoming(
     within_hours: int | None = None,
+    today: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CalendarEvent]:
+    if today:
+        return meeting_prep.today_events(db, user.id, timezone=user.timezone)
     return meeting_prep.upcoming_events(db, user.id, within_hours=within_hours)
 
 

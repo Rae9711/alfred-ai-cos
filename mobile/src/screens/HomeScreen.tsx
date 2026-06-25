@@ -38,15 +38,9 @@ function formatMeetingTime(iso: string | null): string {
   });
 }
 
-function isToday(iso: string | null): boolean {
+function isPast(iso: string | null): boolean {
   if (!iso) return false;
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return new Date(iso).getTime() < Date.now();
 }
 
 export function HomeScreen() {
@@ -76,7 +70,7 @@ export function HomeScreen() {
       api.getToday(),
       api.getMe().catch(() => null),
       api.listPendingActions(),
-      api.listUpcomingMeetings().catch(() => [] as UpcomingMeeting[]),
+      api.listUpcomingMeetings({ today: true }).catch(() => [] as UpcomingMeeting[]),
     ]);
     setToday(dashboard);
     setMe(profile);
@@ -123,10 +117,7 @@ export function HomeScreen() {
   const proactivePrompt = top?.reason ?? today?.summary ?? t.home.proactiveEmpty;
   const proactiveCta = top ? t.home.proactiveAct : t.home.proactiveInbox;
 
-  const schedule = useMemo(
-    () => meetings.filter((m) => isToday(m.start_time)).slice(0, 6),
-    [meetings],
-  );
+  const schedule = useMemo(() => meetings.slice(0, 12), [meetings]);
 
   const submitComposer = () => {
     const q = composer.trim();
@@ -138,7 +129,10 @@ export function HomeScreen() {
       try {
         const res = await api.ask(q);
         showToast(res.reply, { duration: 6000 });
-        if (res.action !== "none") void load();
+        if (res.action !== "none") {
+          await api.sync({ calendarOnly: true }).catch(() => undefined);
+          await load();
+        }
       } catch (e) {
         showToast(e instanceof Error ? e.message : t.home.askFailed);
       } finally {
@@ -245,6 +239,7 @@ export function HomeScreen() {
                 key={item.id}
                 time={formatMeetingTime(item.start_time)}
                 title={item.title ?? "Meeting"}
+                past={isPast(item.start_time)}
                 detail={
                   item.location?.trim() ||
                   (item.attendees.length
@@ -305,20 +300,24 @@ function ScheduleRow({
   title,
   detail,
   tag,
+  past,
   onPress,
 }: {
   time: string;
   title: string;
   detail: string;
   tag?: { label: string; tone: "accent" | "warn" | "muted" };
+  past?: boolean;
   onPress?: () => void;
 }) {
   const body = (
-    <View style={styles.scheduleRow}>
-      <Text style={styles.scheduleTime}>{time}</Text>
+    <View style={[styles.scheduleRow, past && styles.scheduleRowPast]}>
+      <Text style={[styles.scheduleTime, past && styles.schedulePast]}>{time}</Text>
       <View style={styles.scheduleBody}>
-        <Text style={styles.scheduleTitle}>{title}</Text>
-        {detail ? <Text style={styles.scheduleDetail}>{detail}</Text> : null}
+        <Text style={[styles.scheduleTitle, past && styles.schedulePast]}>{title}</Text>
+        {detail ? (
+          <Text style={[styles.scheduleDetail, past && styles.schedulePast]}>{detail}</Text>
+        ) : null}
         {tag ? (
           <Pill label={tag.label} kind={tag.tone} mono style={styles.scheduleTag} />
         ) : null}
@@ -414,6 +413,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.hair,
   },
+  scheduleRowPast: { opacity: 0.55 },
+  schedulePast: { color: colors.ink4 },
   rowPressed: { opacity: 0.85 },
   scheduleTime: {
     width: 48,
