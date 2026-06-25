@@ -30,6 +30,7 @@ from app.schemas.api import ConnectedMailboxOut, MeOut, OnboardingPrefs
 from app.services import google_oauth
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
+from app.services.message_read import account_has_gmail_modify
 
 router = APIRouter(tags=["account"])
 
@@ -68,6 +69,7 @@ def _me(db: Session, user: User) -> MeOut:
             email=a.provider_account_email or "",
             sync_status=a.sync_status,
             last_synced_at=a.last_synced_at,
+            gmail_modify=account_has_gmail_modify(a),
         )
         for a in list_google_accounts(db, user.id)
         if a.provider_account_email

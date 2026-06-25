@@ -114,6 +114,13 @@ export interface ConnectedMailbox {
   email: string;
   sync_status: string;
   last_synced_at: string | null;
+  gmail_modify: boolean;
+}
+
+export interface MessageReadResult {
+  id: string;
+  is_unread: boolean;
+  gmail_synced: boolean;
 }
 
 export interface Me {

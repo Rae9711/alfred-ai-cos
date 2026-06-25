@@ -93,7 +93,19 @@ export function InboxScreen() {
 
   const markAsRead = (id: string) => {
     ease();
-    void markRead(id).catch(() => undefined);
+    void (async () => {
+      try {
+        const gmailSynced = await markRead(id);
+        showToast(
+          gmailSynced ? t.inbox.markReadDone : t.inbox.markReadReconnect,
+          { duration: gmailSynced ? 2200 : 4500 },
+        );
+      } catch (e) {
+        showToast(
+          e instanceof Error ? e.message : t.inbox.markReadFailed,
+        );
+      }
+    })();
   };
 
   const openMessage = (id: string, mode: "reply" | "delegate" = "reply") => {

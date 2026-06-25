@@ -120,6 +120,7 @@ class MessageDetailOut(BaseModel):
 class MessageReadOut(BaseModel):
     id: str
     is_unread: bool
+    gmail_synced: bool = True
 
 
 class BookMessageRequest(BaseModel):
@@ -307,6 +308,7 @@ class ConnectedMailboxOut(BaseModel):
     email: str
     sync_status: str
     last_synced_at: datetime | None = None
+    gmail_modify: bool = False
 
     model_config = {"from_attributes": True}
 

@@ -32,7 +32,7 @@ type MailboxState = {
   setInboxFilter: (filter: InboxFilter) => Promise<void>;
   refresh: () => Promise<void>;
   syncAndRefresh: () => Promise<number>;
-  markRead: (id: string) => Promise<void>;
+  markRead: (id: string) => Promise<boolean>;
   itemById: (id: string) => AppInboxItem | undefined;
 };
 
@@ -129,13 +129,14 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   }, [loadInbox]);
 
   const markRead = useCallback(async (id: string) => {
-    await api.markMessageRead(id);
+    const result = await api.markMessageRead(id);
     setItems((prev) => {
       if (filterRef.current.scope === "unread") {
         return prev.filter((m) => m.id !== id);
       }
       return prev.map((m) => (m.id === id ? { ...m, isUnread: false } : m));
     });
+    return result.gmail_synced;
   }, []);
 
   useEffect(() => {

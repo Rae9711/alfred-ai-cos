@@ -238,8 +238,16 @@ export function SettingsScreen() {
           <Row
             key={mailbox.id}
             label={mailbox.email}
-            detail="Gmail · synced"
-            onPress={() => disconnectMailbox(mailbox.id, mailbox.email)}
+            detail={
+              mailbox.gmail_modify
+                ? "Gmail · synced"
+                : t.settings.reconnectForRead
+            }
+            onPress={() =>
+              mailbox.gmail_modify
+                ? disconnectMailbox(mailbox.id, mailbox.email)
+                : void linkGmail()
+            }
           />
         ))}
         <Integration

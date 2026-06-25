@@ -25,7 +25,7 @@ from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.message_body import fetch_message_body
-from app.services.message_read import mark_message_read
+from app.services.message_read import account_has_gmail_modify, mark_message_read
 from app.services.inbox_view import (
     effective_inbox_category,
     is_gmail_unread,
@@ -174,12 +174,16 @@ def mark_read(
     if message is None or message.user_id != user.id:
         raise HTTPException(status_code=404, detail="Message not found")
     try:
-        mark_message_read(db, user, message)
+        message, gmail_synced = mark_message_read(db, user, message)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not update Gmail") from exc
-    return MessageReadOut(id=message.id, is_unread=is_gmail_unread(message.gmail_labels))
+    return MessageReadOut(
+        id=message.id,
+        is_unread=is_gmail_unread(message.gmail_labels),
+        gmail_synced=gmail_synced,
+    )
 
 
 @router.post("/{message_id}/book", response_model=BookMessageResponse)

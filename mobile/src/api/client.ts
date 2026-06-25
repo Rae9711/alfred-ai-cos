@@ -18,6 +18,7 @@ import type {
   DraftCreateRequest,
   InboxView,
   MessageDetail,
+  MessageReadResult,
   Me,
   MeetingPrep,
   OnboardingPrefs,
@@ -157,7 +158,7 @@ export const api = {
   getMessage: (messageId: string) =>
     request<MessageDetail>(`/messages/${messageId}`),
   markMessageRead: (messageId: string) =>
-    request<{ id: string; is_unread: boolean }>(`/messages/${messageId}/read`, {
+    request<MessageReadResult>(`/messages/${messageId}/read`, {
       method: "POST",
     }),
   // "Add to calendar" on a message — books it if it describes a timed event.

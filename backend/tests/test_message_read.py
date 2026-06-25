@@ -56,7 +56,32 @@ def test_mark_message_read_updates_gmail_and_db(
             ["INBOX", "CATEGORY_PERSONAL"] if remove == ["UNREAD"] else []
         ),
     )
-    mark_message_read(db, user, message)
+    message, gmail_synced = mark_message_read(db, user, message)
+    assert gmail_synced is True
+    assert message.gmail_labels == ["INBOX", "CATEGORY_PERSONAL"]
+
+
+def test_mark_message_read_without_modify_scope_updates_local_only(
+    db: Session, user: User, monkeypatch
+) -> None:
+    message = _message(db, user)
+    account = db.get(
+        ConnectedAccount,
+        message.connected_account_id,
+    )
+    assert account is not None
+    account.scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+    db.commit()
+    calls: list[str] = []
+
+    def boom(*_a, **_k):
+        calls.append("nope")
+        return []
+
+    monkeypatch.setattr(gmail, "modify_message_labels", boom)
+    message, gmail_synced = mark_message_read(db, user, message)
+    assert gmail_synced is False
+    assert calls == []
     assert message.gmail_labels == ["INBOX", "CATEGORY_PERSONAL"]
 
 
