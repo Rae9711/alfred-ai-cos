@@ -1,4 +1,4 @@
-// Home — greeting, proactive priority, today's schedule, composer. Live /today data.
+// Home — greeting, next-schedule reminder, today's schedule, composer.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -12,17 +12,15 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { type Me, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
-import { useWorkflow } from "@/context/WorkflowContext";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
-import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
@@ -49,10 +47,8 @@ export function HomeScreen() {
   const { meta, state, setThinking } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
-  const { setTab } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
-  const [today, setToday] = useState<TodayDashboard | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -66,13 +62,11 @@ export function HomeScreen() {
       : greetingFor(new Date().getHours());
 
   const load = useCallback(async () => {
-    const [dashboard, profile, pending, upcoming] = await Promise.all([
-      api.getToday(),
+    const [profile, pending, upcoming] = await Promise.all([
       api.getMe().catch(() => null),
       api.listPendingActions(),
       api.listUpcomingMeetings({ today: true }).catch(() => [] as UpcomingMeeting[]),
     ]);
-    setToday(dashboard);
     setMe(profile);
     setPendingCount(pending.length);
     setMeetings(upcoming);
@@ -113,11 +107,27 @@ export function HomeScreen() {
     }
   }, [load, syncAndRefresh, showToast]);
 
-  const top = today?.top_priorities[0] ?? null;
-  const proactivePrompt = top?.reason ?? today?.summary ?? t.home.proactiveEmpty;
-  const proactiveCta = top ? t.home.proactiveAct : t.home.proactiveInbox;
-
   const schedule = useMemo(() => meetings.slice(0, 12), [meetings]);
+
+  const nextMeeting = useMemo(
+    () => meetings.find((m) => !isPast(m.start_time)) ?? null,
+    [meetings],
+  );
+
+  const butlerPrompt = nextMeeting
+    ? t.home.nextScheduleReminder(
+        formatMeetingTime(nextMeeting.start_time),
+        nextMeeting.title ?? t.home.untitledMeeting,
+      )
+    : meetings.length > 0
+      ? t.home.scheduleDoneForDay
+      : t.home.noScheduleToday;
+
+  const butlerCta = nextMeeting
+    ? nextMeeting.prep_required
+      ? t.home.viewPrep
+      : t.home.viewSchedule
+    : null;
 
   const submitComposer = () => {
     const q = composer.trim();
@@ -142,18 +152,15 @@ export function HomeScreen() {
     })();
   };
 
-  const onProactivePress = () => {
-    if (top) {
-      openSheet(
-        <ApprovalSheet
-          commitmentId={top.id}
-          recipient={top.counterparty ?? "them"}
-          onDone={() => void load()}
-        />,
-      );
+  const onButlerPress = () => {
+    if (!nextMeeting) return;
+    if (nextMeeting.prep_required) {
+      openSheet(<MeetingPrepSheet eventId={nextMeeting.id} />);
       return;
     }
-    setTab("inbox");
+    openSheet(
+      <MeetingDetailSheet eventId={nextMeeting.id} onChanged={() => void load()} />,
+    );
   };
 
   const displayName =
@@ -220,13 +227,15 @@ export function HomeScreen() {
           <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
           <View style={styles.proactiveCard}>
             <Serif size={17} style={styles.proactiveText}>
-              {proactivePrompt}
+              {butlerPrompt}
             </Serif>
-            <Btn
-              label={proactiveCta}
-              onPress={onProactivePress}
-              style={styles.proactiveBtn}
-            />
+            {butlerCta ? (
+              <Btn
+                label={butlerCta}
+                onPress={onButlerPress}
+                style={styles.proactiveBtn}
+              />
+            ) : null}
           </View>
         </View>
 
