@@ -10,12 +10,12 @@ import {
   Linking,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import type { Me } from "@albert/shared-types";
-import * as Clipboard from "expo-clipboard";
 import * as LinkingExpo from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
@@ -121,8 +121,13 @@ export function SettingsScreen() {
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;
-    await Clipboard.setStringAsync(smsToken);
-    setNote(t.settings.smsTokenCopied);
+    // Share works on existing native builds; expo-clipboard needs a new binary.
+    try {
+      await Share.share({ message: smsToken });
+      setNote(t.settings.smsTokenCopied);
+    } catch {
+      setNote(t.settings.smsTokenCopied);
+    }
   }, [smsToken, t.settings.smsTokenCopied]);
 
   const linkGmail = useCallback(async () => {

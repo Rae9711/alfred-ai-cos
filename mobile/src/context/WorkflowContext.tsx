@@ -175,6 +175,8 @@ export function WorkflowProvider({
     const p = getWorkflowProactive(locale);
     setThread({
       messageId: p.messageId,
+      source: "email",
+      replyPhone: null,
       sender: p.sender,
       subject: p.subject,
       summary: null,

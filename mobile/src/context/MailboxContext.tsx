@@ -168,7 +168,9 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     void registerForPush().catch(() => undefined);
   }, [authed]);
 
-  useMailAutoSync(syncAndRefresh);
+  useMailAutoSync(async () => {
+    await syncAndRefresh();
+  });
 
   const itemById = useCallback(
     (id: string) => items.find((m) => m.id === id),
