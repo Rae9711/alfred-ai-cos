@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 
-import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -40,7 +40,7 @@ function mailboxTabLabel(email: string): string {
 
 export function InboxScreen() {
   const { t } = useLocale();
-  const { openSheet, closeSheet } = useShell();
+  const { openSheet, closeSheet, showToast } = useShell();
   const { openChatFromInbox } = useWorkflow();
   const {
     items,
@@ -49,6 +49,7 @@ export function InboxScreen() {
     loading,
     syncing,
     error,
+    lastSyncedAt,
     syncAndRefresh,
     markRead,
     setInboxFilter,
@@ -103,12 +104,41 @@ export function InboxScreen() {
     );
   };
 
+  const onPullRefresh = async () => {
+    try {
+      await syncAndRefresh();
+      showToast(t.inbox.refreshed);
+    } catch {
+      // error banner in MailboxContext
+    }
+  };
+
+  const refreshControl = (
+    <RefreshControl
+      refreshing={syncing}
+      onRefresh={() => void onPullRefresh()}
+      tintColor={colors.accent}
+      colors={[colors.accent]}
+    />
+  );
+
+  const syncFooter = lastSyncedAt
+    ? t.inbox.syncedJustNow
+    : t.inbox.pullToSync;
+
   if (loading && items.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.accent} />
-        <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
-      </View>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.scrollFill}
+        alwaysBounceVertical
+        refreshControl={refreshControl}
+      >
+        <View style={styles.centeredFill}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -117,13 +147,8 @@ export function InboxScreen() {
       style={styles.screen}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={syncing}
-          onRefresh={() => void syncAndRefresh()}
-          tintColor={colors.accent}
-        />
-      }
+      alwaysBounceVertical
+      refreshControl={refreshControl}
     >
       <View style={styles.header}>
         <Serif size={28}>
@@ -137,7 +162,7 @@ export function InboxScreen() {
       </View>
 
       {error ? (
-        <Pressable style={styles.errorBanner} onPress={() => void syncAndRefresh()}>
+        <Pressable style={styles.errorBanner} onPress={() => void onPullRefresh()}>
           <Text style={styles.errorText}>{error}</Text>
           <Text style={styles.errorRetry}>{t.inbox.retry}</Text>
         </Pressable>
@@ -219,8 +244,11 @@ export function InboxScreen() {
           <Serif size={17} italic color={colors.ink3}>
             {t.inbox.inboxZero}
           </Serif>
+          <Text style={styles.pullHint}>{t.inbox.pullToSync}</Text>
         </View>
       ) : null}
+
+      <FooterStamp text={syncFooter} />
     </ScrollView>
   );
 }
@@ -383,13 +411,14 @@ function FyiCard({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.paper },
-  content: { paddingBottom: 32 },
-  centered: {
-    flex: 1,
+  content: { flexGrow: 1, paddingBottom: 32 },
+  scrollFill: { flexGrow: 1 },
+  centeredFill: {
+    flexGrow: 1,
+    minHeight: 480,
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
-    backgroundColor: colors.paper,
   },
   loadingText: { fontSize: 14, color: colors.ink3 },
   header: {
@@ -532,5 +561,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper2,
   },
   actionGhostText: { fontSize: 13, fontWeight: "500", color: colors.ink2 },
-  empty: { padding: layout.padX, paddingTop: 40, alignItems: "center" },
+  empty: { padding: layout.padX, paddingTop: 40, alignItems: "center", gap: 8 },
+  pullHint: { fontSize: 13, color: colors.ink4, textAlign: "center" },
 });

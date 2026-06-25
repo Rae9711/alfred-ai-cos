@@ -100,23 +100,27 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   }, [loadInbox]);
 
   const syncAndRefresh = useCallback(async () => {
+    const started = Date.now();
     setSyncing(true);
     setError(null);
     const { scope, mailbox } = filterRef.current;
     try {
-      // Show cached mail immediately — never block the UI on Gmail.
       await loadInbox(scope, mailbox);
       await api.sync({ background: true });
       setLastSyncedAt(new Date());
-      // Pull again after the worker finishes ingesting.
-      setTimeout(() => {
-        void loadInbox(scope, mailbox).catch(() => undefined);
-      }, 12_000);
+      for (const delay of [3_000, 10_000, 20_000]) {
+        setTimeout(() => {
+          const current = filterRef.current;
+          void loadInbox(current.scope, current.mailbox).catch(() => undefined);
+        }, delay);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
       throw e;
     } finally {
-      setSyncing(false);
+      const minSpinnerMs = 800;
+      const wait = Math.max(0, minSpinnerMs - (Date.now() - started));
+      setTimeout(() => setSyncing(false), wait);
     }
   }, [loadInbox]);
 

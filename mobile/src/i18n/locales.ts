@@ -50,6 +50,9 @@ export const translations = {
       wechatEmptySub: "Email and calendar items still show under All.",
       inboxZero: "Inbox zero in this view.",
       syncing: "Syncing your inbox…",
+      pullToSync: "Pull down to sync",
+      refreshed: "Inbox updated",
+      syncedJustNow: "Synced just now",
       retry: "Tap to retry",
       filters: {
         inbox: "Inbox",
@@ -162,6 +165,9 @@ export const translations = {
       wechatEmptySub: "邮件和日历项目仍会在「全部」中显示。",
       inboxZero: "此视图下收件箱已清空。",
       syncing: "正在同步收件箱…",
+      pullToSync: "下拉同步收件箱",
+      refreshed: "收件箱已更新",
+      syncedJustNow: "刚刚同步",
       retry: "点击重试",
       filters: {
         inbox: "收件箱",
