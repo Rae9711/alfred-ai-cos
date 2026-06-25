@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import * as Notifications from "expo-notifications";
 
-const POLL_MS = 90_000;
-const MIN_GAP_MS = 30_000;
+const POLL_MS = 45_000;
+const MIN_GAP_MS = 15_000;
 
 export function useMailAutoSync(syncAndRefresh: () => Promise<void>) {
   const lastSyncAt = useRef(0);

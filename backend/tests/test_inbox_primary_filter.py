@@ -96,6 +96,21 @@ def test_low_priority_visible_on_primary(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is True
 
 
+def test_uncategorized_inbox_unread_visible(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="new1",
+        sender="friend@example.com",
+        recipients=[],
+        subject="Quick question",
+        gmail_labels=["INBOX", "UNREAD"],
+        classification=MessageClassification.needs_reply,
+        sender_classification="person",
+    )
+    assert message_in_primary_inbox(m) is True
+
+
 def test_legacy_person_without_labels_visible(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,

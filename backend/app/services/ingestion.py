@@ -61,7 +61,7 @@ def _ingest_message_ids(
         if _message_exists(db, account.id, message_id):
             continue
         labels = gmail.get_message_label_ids(token, message_id)
-        if not gmail.is_primary_inbox(labels):
+        if not gmail.should_ingest_inbox_message(labels):
             continue
         raw = gmail.get_message(token, message_id)
         sent_at = None
@@ -152,6 +152,30 @@ def _refresh_gmail_labels(
             ).cls
 
 
+def _sync_recent_primary_catchup(
+    db: Session, account: ConnectedAccount, token: dict
+) -> list[Message]:
+    """Safety net: ingest any recent Primary mail missing from the local store."""
+    settings = get_settings()
+    recent_ids = gmail.list_recent_message_ids(
+        token,
+        max_results=settings.sync_recent_primary_max,
+        inbox_tab="primary",
+    )
+    return _ingest_message_ids(db, account, token, recent_ids)
+
+
+def _sync_unread_inbox(
+    db: Session, account: ConnectedAccount, token: dict
+) -> list[Message]:
+    """Ingest unread inbox mail before Gmail assigns CATEGORY_PERSONAL."""
+    settings = get_settings()
+    unread_ids = gmail.list_unread_inbox_message_ids(
+        token, max_results=settings.sync_unread_max_results
+    )
+    return _ingest_message_ids(db, account, token, unread_ids)
+
+
 def _sync_unread_primary(
     db: Session, account: ConnectedAccount, token: dict
 ) -> list[Message]:
@@ -193,6 +217,17 @@ def _apply_history_label_changes(
 def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
     settings = get_settings()
     token = decrypt_token(account.token_ciphertext)
+
+    # Clear stale "syncing" left by a crashed worker.
+    if (
+        account.sync_status == SyncStatus.syncing
+        and account.last_synced_at
+        and (datetime.now(UTC) - account.last_synced_at).total_seconds() > 600
+    ):
+        account.sync_status = SyncStatus.error
+        account.sync_error = "Previous sync interrupted"
+        db.commit()
+
     account.sync_status = SyncStatus.syncing
     db.commit()
 
@@ -212,7 +247,6 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
                 message_ids, _latest = gmail.list_history_added_message_ids(
                     token,
                     account.gmail_history_id,
-                    label_id="INBOX",
                 )
                 new_messages = _ingest_message_ids(db, account, token, message_ids)
             except HistoryExpiredError:
@@ -223,8 +257,10 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
                 )
                 new_messages = _ingest_message_ids(db, account, token, message_ids)
 
-        unread_new = _sync_unread_primary(db, account, token)
-        new_messages.extend(unread_new)
+        catchup = _sync_recent_primary_catchup(db, account, token)
+        unread_inbox = _sync_unread_inbox(db, account, token)
+        unread_primary = _sync_unread_primary(db, account, token)
+        new_messages.extend(catchup + unread_inbox + unread_primary)
 
         if account.gmail_history_id:
             _apply_history_label_changes(db, account, token, account.gmail_history_id)
@@ -280,10 +316,20 @@ def sync_messages(db: Session, user_id: str) -> SyncIngestResult:
 
     all_new: list[Message] = []
     any_initial = False
+    errors: list[str] = []
     for account in accounts:
-        result = _sync_account(db, account)
-        all_new.extend(result.new_messages)
-        any_initial = any_initial or result.initial_backfill
+        try:
+            result = _sync_account(db, account)
+            all_new.extend(result.new_messages)
+            any_initial = any_initial or result.initial_backfill
+        except Exception as exc:
+            account.sync_status = SyncStatus.error
+            account.sync_error = str(exc)[:500]
+            db.commit()
+            label = account.provider_account_email or account.id
+            errors.append(f"{label}: {exc}")
+    if errors and not all_new and len(errors) == len(accounts):
+        raise ValueError("; ".join(errors))
     return SyncIngestResult(new_messages=all_new, initial_backfill=any_initial)
 
 

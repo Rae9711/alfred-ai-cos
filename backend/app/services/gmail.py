@@ -64,11 +64,37 @@ def is_non_primary_tab(labels: list[str] | None) -> bool:
     return bool(_NON_PRIMARY_TABS.intersection(labels))
 
 
+def should_ingest_inbox_message(labels: list[str] | None) -> bool:
+    """Whether to store a message during sync.
+
+    Gmail often delivers new Primary mail with only INBOX/UNREAD before
+    CATEGORY_PERSONAL is applied. Ingest those; skip Promotions/Social/etc.
+    """
+    if not labels:
+        return False
+    if "INBOX" not in labels:
+        return False
+    if is_non_primary_tab(labels):
+        return False
+    return True
+
+
+def list_unread_inbox_message_ids(
+    token_payload: dict[str, Any], *, max_results: int = 50
+) -> list[str]:
+    """Unread inbox mail regardless of category tab (filtered at ingest)."""
+    return list_message_ids(
+        token_payload,
+        label_ids=["INBOX", "UNREAD"],
+        max_results=max_results,
+    )
+
+
 def list_history_added_message_ids(
     token_payload: dict[str, Any],
     start_history_id: str,
     *,
-    label_id: str = "INBOX",
+    label_id: str | None = None,
 ) -> tuple[list[str], str]:
     """Return message ids added since start_history_id and the latest historyId.
 
@@ -80,18 +106,15 @@ def list_history_added_message_ids(
     latest_history_id = start_history_id
     while True:
         try:
-            resp = (
-                svc.users()
-                .history()
-                .list(
-                    userId="me",
-                    startHistoryId=start_history_id,
-                    labelId=label_id,
-                    historyTypes=["messageAdded"],
-                    pageToken=page_token,
-                )
-                .execute()
-            )
+            kwargs: dict[str, Any] = {
+                "userId": "me",
+                "startHistoryId": start_history_id,
+                "historyTypes": ["messageAdded"],
+                "pageToken": page_token,
+            }
+            if label_id:
+                kwargs["labelId"] = label_id
+            resp = svc.users().history().list(**kwargs).execute()
         except Exception as exc:
             # googleapiclient raises HttpError with status 404 when the cursor expired.
             if getattr(exc, "resp", None) is not None and exc.resp.status == 404:

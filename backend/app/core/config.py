@@ -58,12 +58,13 @@ class Settings(BaseSettings):
     # X-Forward-Secret. Empty disables the endpoint entirely (returns 503).
     forward_inbox_secret: str = ""
 
-    mail_poll_interval_seconds: int = 120
+    mail_poll_interval_seconds: int = 60
 
     # Gmail sync: first connect backfills Primary inbox; later syncs use history API.
     sync_initial_max_results: int = 50
     sync_incremental_fallback_max: int = 20
     sync_unread_max_results: int = 200
+    sync_recent_primary_max: int = 40
 
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [

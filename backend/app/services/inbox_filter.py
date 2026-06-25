@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.db.enums import MessageClassification
 from app.db.models import Message
 from app.services.classification_adjust import looks_like_automated_fyi
-from app.services.gmail import is_non_primary_tab, is_primary_inbox
+from app.services.gmail import should_ingest_inbox_message
 from app.services.sender_class import has_bulk_mail_headers
 
 _BULK_SENDER_CLASSES = frozenset({"automated", "bulk", "suspicious", "muted"})
@@ -30,6 +30,6 @@ def message_in_primary_inbox(message: Message) -> bool:
     if not labels:
         # Legacy rows: show classified human mail; hide unlabeled bulk/noise.
         return message.sender_classification not in _BULK_SENDER_CLASSES
-    if not is_primary_inbox(labels):
+    if not should_ingest_inbox_message(labels):
         return False
-    return not is_non_primary_tab(labels)
+    return True

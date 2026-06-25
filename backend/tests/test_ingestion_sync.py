@@ -18,6 +18,8 @@ from app.services.gmail import HistoryExpiredError
 @pytest.fixture(autouse=True)
 def _patch_unread_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(gmail, "list_unread_primary_message_ids", lambda *_a, **_k: [])
+    monkeypatch.setattr(gmail, "list_unread_inbox_message_ids", lambda *_a, **_k: [])
+    monkeypatch.setattr(gmail, "list_recent_message_ids", lambda *_a, **_k: [])
     monkeypatch.setattr(
         gmail,
         "list_history_label_affected_message_ids",
@@ -80,7 +82,7 @@ def test_initial_backfill_uses_primary_and_sets_history(
     result = ingestion.sync_messages(db, user.id)
 
     assert result.initial_backfill is True
-    assert listed == [50, "primary"]
+    assert listed == [50, "primary", 40, "primary"]
     assert len(result.new_messages) == 2
     account = db.scalar(select(ConnectedAccount).where(ConnectedAccount.user_id == user.id))
     assert account is not None
@@ -95,7 +97,7 @@ def test_incremental_uses_history_and_filters_primary(
     monkeypatch.setattr(
         gmail,
         "list_history_added_message_ids",
-        lambda _t, start, label_id="INBOX": (["m-new"], "hist-new"),
+        lambda _t, start, label_id=None: (["m-new"], "hist-new"),
     )
     monkeypatch.setattr(
         gmail,
