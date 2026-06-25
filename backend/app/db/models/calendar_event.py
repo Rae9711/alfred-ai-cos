@@ -27,3 +27,4 @@ class CalendarEvent(Base):
     attendees: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     prep_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    html_link: Mapped[str | None] = mapped_column(Text)

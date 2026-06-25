@@ -15,6 +15,10 @@ from app.db.enums import ActionType
 def _registry() -> dict[ActionType, CapabilityProvider]:
     from app.capabilities.providers.browser_action import BrowserActionCapability
     from app.capabilities.providers.calendar_event import CalendarEventCapability
+    from app.capabilities.providers.calendar_event_mutate import (
+        DeleteCalendarEventCapability,
+        UpdateCalendarEventCapability,
+    )
     from app.capabilities.providers.create_task import CreateTaskCapability
     from app.capabilities.providers.delivery_order import DeliveryOrderCapability
     from app.capabilities.providers.gmail_draft import GmailDraftCapability
@@ -26,6 +30,8 @@ def _registry() -> dict[ActionType, CapabilityProvider]:
         SendEmailCapability(),
         CreateTaskCapability(),
         CalendarEventCapability(),
+        UpdateCalendarEventCapability(),
+        DeleteCalendarEventCapability(),
         # Refused capabilities are always registered so the boundary is explicit:
         # they raise a sourced CapabilityError. See docs/integrations/REFUSED.md.
         BrowserActionCapability(),

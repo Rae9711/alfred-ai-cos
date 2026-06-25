@@ -47,6 +47,7 @@ export interface UpcomingMeeting {
   location: string | null;
   attendees: string[];
   prep_required: boolean;
+  html_link?: string | null;
 }
 
 export interface MeetingPrep {
@@ -222,7 +223,7 @@ export interface BookMessageResponse {
 // calendar event was created, "none" otherwise; `reply` is the line to show.
 export interface AssistantAskResponse {
   reply: string;
-  action: "booked" | "none";
+  action: "booked" | "updated" | "cancelled" | "none";
   detail: string | null;
 }
 

@@ -109,15 +109,18 @@ _CAPTURE_SYSTEM = (
 _INTERPRET_SYSTEM = (
     "You are Albert's assistant agent. Read one free-text request and decide what to do.\n"
     "If the user asks to schedule, book, block, or hold time on their calendar, set "
-    "intent='book_calendar' and fill title, start, and end. Resolve relative phrasing "
-    "('tomorrow', 'this evening', '5 to 6pm', 'Friday morning') against the given current "
-    "local time, and return start/end as ISO 8601 WITH the user's UTC offset (e.g. "
-    "2026-05-28T17:00:00+02:00). Default an event to 1 hour if only a start is given. "
-    "Give the title sensible wording from the request ('Focus block', 'Gym', or whatever "
-    "they named). Put a short confirmation in reply, e.g. 'Booked 5–6pm tomorrow.'\n"
-    "For anything that is not a calendar booking, set intent='none' and a brief, honest "
-    "reply saying what you can do (book calendar time) rather than pretending. Never "
-    "invent times the user did not express."
+    "intent='book_calendar' and fill title, start, and end.\n"
+    "If they ask to move, reschedule, or change the time of an existing event, set "
+    "intent='reschedule_calendar', pick event_id from the upcoming-events list, and "
+    "fill the new start/end (and title only if they rename it).\n"
+    "If they ask to cancel or delete a calendar event, set intent='cancel_calendar' "
+    "and pick event_id from the upcoming-events list.\n"
+    "Resolve relative phrasing ('tomorrow', 'this evening', '5 to 6pm', 'Friday morning') "
+    "against the given current local time, and return start/end as ISO 8601 WITH the "
+    "user's UTC offset (e.g. 2026-05-28T17:00:00+02:00). Default an event to 1 hour "
+    "if only a start is given. Put a short confirmation in reply.\n"
+    "For anything that is not calendar booking/reschedule/cancel, set intent='none' with "
+    "an honest reply about what you can do. Never invent times or events."
 )
 
 
@@ -260,13 +263,19 @@ class AnthropicLLMClient:
         return CaptureResult.model_validate(raw)
 
     def interpret_request(
-        self, *, text: str, now_iso: str, timezone: str
+        self, *, text: str, now_iso: str, timezone: str, upcoming_events: str = ""
     ) -> AssistantInterpretation:
+        events_block = (
+            f"\n\nUpcoming events (use event_id when rescheduling or cancelling):\n{upcoming_events}"
+            if upcoming_events
+            else ""
+        )
         raw = self._structured(
             model=settings.llm_extract_model,
             system=_INTERPRET_SYSTEM,
             user_content=(
-                f"Current local time: {now_iso} (timezone {timezone}).\n\nRequest:\n{text}"
+                f"Current local time: {now_iso} (timezone {timezone}).{events_block}\n\n"
+                f"Request:\n{text}"
             ),
             tool=_tool_for(
                 AssistantInterpretation, "record_interpretation", "Record the interpretation."

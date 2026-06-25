@@ -1,7 +1,7 @@
-"""Shared assistant logic: resolve the user's timezone and interpret-then-book.
+"""Shared assistant logic: resolve the user's timezone and interpret-then-act.
 
 Both the Ask endpoint (free text) and the Inbox "Yes/Add to calendar" action route
-through here, so calendar booking from natural language has one audited path."""
+through here, so calendar actions from natural language have one audited path."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import ActionType
 from app.db.models import User
 from app.llm import get_llm
-from app.services import execution
+from app.services import execution, meeting_prep
 from app.services.actions import propose_action_internal
 
 
@@ -38,18 +38,31 @@ def _now_in_tz(timezone: str) -> datetime:
         return datetime.now(UTC)
 
 
+def _format_upcoming(db: Session, user_id: str) -> str:
+    lines: list[str] = []
+    for event in meeting_prep.upcoming_events(db, user_id, within_hours=24 * 14)[:20]:
+        when = event.start_time.isoformat() if event.start_time else "?"
+        lines.append(f"- id={event.id} | {event.title or 'Untitled'} | {when}")
+    return "\n".join(lines) if lines else "(none)"
+
+
 @dataclass
-class BookOutcome:
-    booked: bool
+class AssistantOutcome:
+    action: str  # booked | updated | cancelled | none
     reply: str
     detail: str | None = None
 
 
-def interpret_and_book(db: Session, user: User, *, text: str, tz: str) -> BookOutcome:
-    """Interpret free text against the user's clock; if it's a calendar booking, create
-    the event through the audited capability spine. Returns the outcome to show."""
+def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> AssistantOutcome:
+    """Interpret free text; book, reschedule, or cancel through the capability spine."""
     now = _now_in_tz(tz)
-    interp = get_llm().interpret_request(text=text, now_iso=now.isoformat(), timezone=tz)
+    upcoming = _format_upcoming(db, user.id)
+    interp = get_llm().interpret_request(
+        text=text,
+        now_iso=now.isoformat(),
+        timezone=tz,
+        upcoming_events=upcoming,
+    )
 
     if interp.intent == "book_calendar" and interp.start and interp.end and interp.title:
         proposal = propose_action_internal(
@@ -60,6 +73,46 @@ def interpret_and_book(db: Session, user: User, *, text: str, tz: str) -> BookOu
             reason="Booked from an assistant request",
         )
         result = execution.execute_proposal(db, user, proposal)
-        return BookOutcome(booked=True, reply=interp.reply or result.detail, detail=result.detail)
+        return AssistantOutcome(
+            action="booked", reply=interp.reply or result.detail, detail=result.detail
+        )
 
-    return BookOutcome(booked=False, reply=interp.reply)
+    if interp.intent == "reschedule_calendar" and interp.event_id and (interp.start or interp.end):
+        target: dict[str, str] = {"event_id": interp.event_id}
+        if interp.start:
+            target["start"] = interp.start
+        if interp.end:
+            target["end"] = interp.end
+        if interp.title:
+            target["title"] = interp.title
+        proposal = propose_action_internal(
+            db,
+            user,
+            action_type=ActionType.update_calendar_event,
+            target=target,
+            reason="Rescheduled from an assistant request",
+        )
+        result = execution.execute_proposal(db, user, proposal)
+        return AssistantOutcome(
+            action="updated", reply=interp.reply or result.detail, detail=result.detail
+        )
+
+    if interp.intent == "cancel_calendar" and interp.event_id:
+        proposal = propose_action_internal(
+            db,
+            user,
+            action_type=ActionType.delete_calendar_event,
+            target={"event_id": interp.event_id},
+            reason="Cancelled from an assistant request",
+        )
+        result = execution.execute_proposal(db, user, proposal)
+        return AssistantOutcome(
+            action="cancelled", reply=interp.reply or result.detail, detail=result.detail
+        )
+
+    return AssistantOutcome(action="none", reply=interp.reply)
+
+
+# Back-compat alias used by message booking tests.
+def interpret_and_book(db: Session, user: User, *, text: str, tz: str) -> AssistantOutcome:
+    return interpret_and_act(db, user, text=text, tz=tz)

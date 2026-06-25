@@ -104,7 +104,14 @@ async function request<T>(
       const detail = await res.text();
       throw new Error(`API ${res.status}: ${detail}`);
     }
-    return (await res.json()) as T;
+    if (res.status === 204) {
+      return undefined as T;
+    }
+    const body = await res.text();
+    if (!body) {
+      return undefined as T;
+    }
+    return JSON.parse(body) as T;
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error("Request timed out — try again");
@@ -136,15 +143,24 @@ export const api = {
         method: "POST",
       },
     ),
-  sync: (opts?: { ingestOnly?: boolean; background?: boolean }) => {
+  sync: (opts?: {
+    ingestOnly?: boolean;
+    calendarOnly?: boolean;
+    background?: boolean;
+  }) => {
     const params = new URLSearchParams();
     if (opts?.ingestOnly) params.set("ingest_only", "true");
+    if (opts?.calendarOnly) params.set("calendar_only", "true");
     if (opts?.background) params.set("background", "true");
     const q = params.toString();
     return request<SyncResponse>(
       `/sync${q ? `?${q}` : ""}`,
       { method: "POST" },
-      opts?.background ? 15_000 : opts?.ingestOnly ? 45_000 : 120_000,
+      opts?.background
+        ? 15_000
+        : opts?.ingestOnly || opts?.calendarOnly
+          ? 45_000
+          : 120_000,
     );
   },
   getToday: () => request<TodayDashboard>("/today"),
@@ -229,6 +245,23 @@ export const api = {
     request<ActionProposal>(`/actions/${actionId}/reject`, { method: "POST" }),
   listPendingActions: () => request<ActionProposal[]>("/actions/pending"),
   listUpcomingMeetings: () => request<UpcomingMeeting[]>("/meetings/upcoming"),
+  getMeeting: (eventId: string) => request<UpcomingMeeting>(`/meetings/${eventId}`),
+  updateMeeting: (
+    eventId: string,
+    body: {
+      title?: string | null;
+      start?: string | null;
+      end?: string | null;
+      location?: string | null;
+      description?: string | null;
+    },
+  ) =>
+    request<UpcomingMeeting>(`/meetings/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteMeeting: (eventId: string) =>
+    request<void>(`/meetings/${eventId}`, { method: "DELETE" }),
   getMeetingPrep: (eventId: string) =>
     request<MeetingPrep>(`/meetings/${eventId}/prep`),
   generateBriefing: () =>

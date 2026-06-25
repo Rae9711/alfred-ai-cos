@@ -61,16 +61,13 @@ class CaptureResult(BaseModel):
 
 
 class AssistantInterpretation(BaseModel):
-    """How Albert read a free-text request from the Ask screen. `intent` decides the
-    action; `book_calendar` fills the event fields (ISO 8601 with the user's offset)."""
+    """How Albert read a free-text request from the Ask screen."""
 
     intent: str = Field(
-        description="One of: book_calendar, none. 'book_calendar' when the user asks to "
-        "schedule/book/block time. 'none' for anything else."
+        description="One of: book_calendar, reschedule_calendar, cancel_calendar, none."
     )
     reply: str = Field(
-        description="A short, calm one-line reply to show the user (e.g. confirmation, "
-        "or — when intent is none — an honest note that this isn't supported yet)."
+        description="A short, calm one-line reply to show the user."
     )
     title: str | None = Field(default=None, description="Event title when booking.")
     start: str | None = Field(
@@ -78,4 +75,8 @@ class AssistantInterpretation(BaseModel):
     )
     end: str | None = Field(
         default=None, description="Event end, ISO 8601 with the user's UTC offset."
+    )
+    event_id: str | None = Field(
+        default=None,
+        description="Internal event id from the upcoming-events list when rescheduling or cancelling.",
     )

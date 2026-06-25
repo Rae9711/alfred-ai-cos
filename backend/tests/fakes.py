@@ -87,9 +87,14 @@ class FakeLLM:
         return CaptureResult(tasks=self._capture_tasks, detected_project=self._detected_project)
 
     def interpret_request(
-        self, *, text: str, now_iso: str, timezone: str
+        self, *, text: str, now_iso: str, timezone: str, upcoming_events: str = ""
     ) -> AssistantInterpretation:
-        self.interpret_calls.append({"text": text, "now_iso": now_iso, "timezone": timezone})
+        self.interpret_calls.append({
+            "text": text,
+            "now_iso": now_iso,
+            "timezone": timezone,
+            "upcoming_events": upcoming_events,
+        })
         if self._interpretation is not None:
             return self._interpretation
         return AssistantInterpretation(intent="none", reply="I can book calendar time.")

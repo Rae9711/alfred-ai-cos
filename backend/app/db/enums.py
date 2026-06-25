@@ -74,6 +74,8 @@ class ActionType(enum.StrEnum):
     create_draft = "create_draft"  # push a reply into Gmail drafts (level 3)
     create_task = "create_task"  # level 2 reversible write
     create_calendar_event = "create_calendar_event"  # level 2: book your own time
+    update_calendar_event = "update_calendar_event"  # level 2: reschedule your own time
+    delete_calendar_event = "delete_calendar_event"  # level 2: cancel your own time
     send_email = "send_email"  # level 3 external comm
     send_message = "send_message"  # level 3 (e.g. WhatsApp)
     make_payment = "make_payment"  # level 4 financial

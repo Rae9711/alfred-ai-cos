@@ -24,6 +24,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
+import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { greetingForLocale } from "@/i18n/locales";
@@ -96,8 +97,21 @@ export function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setSyncing(true);
     try {
-      await syncAndRefresh();
+      const [mailResult, calResult] = await Promise.all([
+        syncAndRefresh(),
+        api.sync({ calendarOnly: true }),
+      ]);
       await load();
+      const parts: string[] = [];
+      if (mailResult > 0) parts.push(`${mailResult} new email${mailResult === 1 ? "" : "s"}`);
+      if (calResult.events_synced > 0) {
+        parts.push(
+          `${calResult.events_synced} calendar event${calResult.events_synced === 1 ? "" : "s"}`,
+        );
+      }
+      if (parts.length > 0) {
+        showToast(`Synced ${parts.join(", ")}`);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Sync failed");
     } finally {
@@ -124,6 +138,7 @@ export function HomeScreen() {
       try {
         const res = await api.ask(q);
         showToast(res.reply, { duration: 6000 });
+        if (res.action !== "none") void load();
       } catch (e) {
         showToast(e instanceof Error ? e.message : t.home.askFailed);
       } finally {
@@ -241,10 +256,13 @@ export function HomeScreen() {
                     ? { label: t.home.prepRequired, tone: "accent" as const }
                     : undefined
                 }
-                onPress={
-                  item.prep_required
-                    ? () => openSheet(<MeetingPrepSheet eventId={item.id} />)
-                    : undefined
+                onPress={() =>
+                  openSheet(
+                    <MeetingDetailSheet
+                      eventId={item.id}
+                      onChanged={() => void load()}
+                    />,
+                  )
                 }
               />
             ))}

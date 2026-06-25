@@ -19,7 +19,7 @@ from app.services import (
     snooze,
 )
 from app.services.connected_accounts import list_user_ids_with_google
-from app.services import extraction, ingestion
+from app.services import calendar, extraction, ingestion
 from app.services.mail_sync import run_mail_sync, sync_user_and_notify
 from app.workers.celery_app import celery_app
 
@@ -41,15 +41,17 @@ def classify_pending_messages(user_id: str, *, limit: int = 30) -> int:
 
 @celery_app.task(name="albert.sync_user")  # type: ignore[untyped-decorator]
 def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
-    """Ingest new Gmail for a user and run extraction over unprocessed messages."""
+    """Ingest new Gmail for a user, sync calendar, and classify pending messages."""
     del max_results  # policy lives in ingestion.sync_messages / settings
     db = SessionLocal()
     try:
         result, processed, commitments = run_mail_sync(db, user_id)
+        events = calendar.sync_calendar(db, user_id)
         return {
             "ingested": len(result.new_messages),
             "processed": processed,
             "commitments_found": commitments,
+            "events_synced": len(events),
             "initial_backfill": int(result.initial_backfill),
         }
     finally:

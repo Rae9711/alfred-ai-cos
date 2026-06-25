@@ -85,13 +85,11 @@ class LLMClient(Protocol):
         ...
 
     def interpret_request(
-        self, *, text: str, now_iso: str, timezone: str
+        self, *, text: str, now_iso: str, timezone: str, upcoming_events: str = ""
     ) -> AssistantInterpretation:
         """Read a free-text Ask request and decide an action (PRD 10.2).
 
         now_iso is the user's current local time with offset, and timezone is their IANA
-        zone, so relative phrasing ("tomorrow 5 to 6pm") resolves to absolute ISO times
-        in the user's wall clock. v1 handles calendar booking; other intents return
-        intent='none' with an honest reply.
+        zone. upcoming_events is a formatted list of ids/titles/times for reschedule/cancel.
         """
         ...

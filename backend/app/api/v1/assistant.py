@@ -15,7 +15,7 @@ from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.models import User
 from app.schemas.api import AssistantAskRequest, AssistantAskResponse
-from app.services.assistant import interpret_and_book, resolve_timezone
+from app.services.assistant import interpret_and_act, resolve_timezone
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -27,9 +27,9 @@ def ask(
     db: Session = Depends(get_db),
 ) -> AssistantAskResponse:
     tz = resolve_timezone(db, user, payload.timezone)
-    outcome = interpret_and_book(db, user, text=payload.text, tz=tz)
+    outcome = interpret_and_act(db, user, text=payload.text, tz=tz)
     return AssistantAskResponse(
         reply=outcome.reply,
-        action="booked" if outcome.booked else "none",
+        action=outcome.action,
         detail=outcome.detail,
     )

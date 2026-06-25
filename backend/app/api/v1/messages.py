@@ -207,5 +207,5 @@ def book_from_message(
     )
     outcome = interpret_and_book(db, user, text=text, tz=tz)
     return BookMessageResponse(
-        booked=outcome.booked, reply=outcome.reply, detail=outcome.detail
+        booked=outcome.action == "booked", reply=outcome.reply, detail=outcome.detail
     )

@@ -143,8 +143,16 @@ class AssistantAskRequest(BaseModel):
 
 class AssistantAskResponse(BaseModel):
     reply: str  # one-line message to show the user
-    action: str  # "booked" | "none"
+    action: str  # "booked" | "updated" | "cancelled" | "none"
     detail: str | None = None  # execution detail when an action ran
+
+
+class UpdateMeetingRequest(BaseModel):
+    title: str | None = None
+    start: datetime | None = None
+    end: datetime | None = None
+    location: str | None = None
+    description: str | None = None
 
 
 class CommitmentDraftRequest(BaseModel):
@@ -210,6 +218,7 @@ class UpcomingMeeting(BaseModel):
     location: str | None
     attendees: list[str]
     prep_required: bool
+    html_link: str | None = None
 
     model_config = {"from_attributes": True}
 

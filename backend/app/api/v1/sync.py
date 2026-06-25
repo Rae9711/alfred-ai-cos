@@ -1,7 +1,8 @@
 """Trigger ingestion + extraction (PRD 12.2, 12.5).
 
 Mobile refresh uses background=true to queue incremental sync and return immediately.
-ingest_only=true runs incremental Gmail pull on the request path (classify in Celery)."""
+ingest_only=true runs incremental Gmail pull on the request path (classify in Celery).
+calendar_only=true syncs Google Calendar without touching Gmail (fast home refresh)."""
 
 from __future__ import annotations
 
@@ -25,6 +26,10 @@ def sync_now(
         default=False,
         description="Pull Gmail only (fast). Classify in background when true.",
     ),
+    calendar_only: bool = Query(
+        default=False,
+        description="Sync Google Calendar only (fast). Skips Gmail.",
+    ),
     background: bool = Query(
         default=False,
         description="Queue incremental sync in Celery and return immediately (mobile refresh).",
@@ -39,6 +44,16 @@ def sync_now(
             processed=0,
             commitments_found=0,
             events_synced=0,
+            initial_backfill=False,
+        )
+
+    if calendar_only:
+        events = calendar.sync_calendar(db, user.id)
+        return SyncResponse(
+            ingested=0,
+            processed=0,
+            commitments_found=0,
+            events_synced=len(events),
             initial_backfill=False,
         )
 
