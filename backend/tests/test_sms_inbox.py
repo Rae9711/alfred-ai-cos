@@ -96,3 +96,67 @@ def test_sms_webhook_endpoint(db: Session, user: User, monkeypatch: pytest.Monke
     assert out.deduped is False
     assert out.message_id
     assert out.draft_created is True
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_phone"),
+    [
+        ({"from_number": ["+15551234567"], "body": "Hello"}, "+15551234567"),
+        ({"from_number": 5551234567, "body": "Hello"}, "5551234567"),
+        ({"fromNumber": "+15551234567", "body": "Hello"}, "+15551234567"),
+        ({"phone": "+15551234567", "text": "Hello"}, "+15551234567"),
+        ({"sender": {"phone": "+15551234567"}, "message": "Hello"}, "+15551234567"),
+    ],
+)
+def test_sms_in_coerces_ios_shortcut_payload(raw: dict, expected_phone: str) -> None:
+    from app.api.v1.inbox import SmsIn
+
+    parsed = SmsIn.model_validate(raw)
+    assert parsed.from_number == expected_phone
+    assert parsed.body == "Hello"
+
+
+def test_sms_webhook_accepts_array_from_number(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.v1 import inbox as inbox_mod
+
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+
+    out = inbox_mod.sms_inbox_webhook(
+        inbox_mod.SmsIn.model_validate(
+            {"from_number": ["+15551112222"], "body": "Shortcut array phone"}
+        ),
+        x_sms_token=token,
+        db=db,
+    )
+    assert out.deduped is False
+    msg = db.get(Message, out.message_id)
+    assert msg is not None
+    assert msg.thread_id == "+15551112222"
+
+
+def test_ingest_sms_succeeds_when_auto_draft_fails(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+
+    def boom(*_a: object, **_k: object) -> None:
+        raise RuntimeError("LLM down")
+
+    monkeypatch.setattr(sms_inbox, "_auto_draft_reply", boom)
+
+    result = sms_inbox.ingest_sms(
+        db,
+        user=user,
+        from_number="+15551234567",
+        body="Can you meet tomorrow?",
+        message_id="draft-fail-1",
+    )
+    assert result.deduped is False
+    assert result.draft_created is False
+    msg = db.get(Message, result.message_id)
+    assert msg is not None
+    assert msg.source == "sms"

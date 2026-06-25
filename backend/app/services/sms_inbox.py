@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from app.llm import get_llm
 from app.services import extraction, sender_class
 from app.services.message_body import build_draft_context
 
+logger = logging.getLogger(__name__)
+
 _SMS_TOKEN_KEY = "sms_forward_token"
 _PHONE_RE = re.compile(r"[\d+()\-\s]+")
 
@@ -29,6 +32,7 @@ def ensure_sms_forward_token(user: User) -> str:
         token = secrets.token_urlsafe(32)
         prefs[_SMS_TOKEN_KEY] = token
         user.preferences = prefs
+        flag_modified(user, "preferences")
     return token
 
 
@@ -194,10 +198,9 @@ def ingest_sms(
                 DraftReply.message_id == message.id,
             )
         ) is not None
-        db.commit()
     except Exception:
-        db.rollback()
-        raise
+        logger.exception("SMS auto-draft failed for message %s", message.id)
+    db.commit()
 
     return SmsIngestResult(
         message_id=message.id,

@@ -14,10 +14,12 @@ Security posture:
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -25,7 +27,91 @@ from app.db.base import get_db
 from app.schemas.api import SmsIngestOut
 from app.services import forward_inbox, sms_inbox
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/inbox", tags=["inbox"])
+
+_FROM_ALIASES = ("from_number", "fromNumber", "phone", "sender_phone", "sender")
+_BODY_ALIASES = ("body", "text", "message", "content")
+_NAME_ALIASES = ("from_name", "fromName", "name", "sender_name")
+
+
+def _lookup(data: dict[str, Any], aliases: tuple[str, ...]) -> Any:
+    lower_map = {k.lower(): k for k in data}
+    for alias in aliases:
+        key = lower_map.get(alias.lower())
+        if key is not None:
+            return data[key]
+    return None
+
+
+def _coerce_phone(value: Any) -> str | None:
+    """Extract a phone-like string from iOS Shortcuts shapes (array, dict, number)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else str(value)
+    if isinstance(value, list):
+        for item in value:
+            coerced = _coerce_phone(item)
+            if coerced:
+                return coerced
+        return None
+    if isinstance(value, dict):
+        for key in ("phone", "number", "phoneNumber", "Phone Number", "text", "value"):
+            if key in value:
+                coerced = _coerce_phone(value[key])
+                if coerced:
+                    return coerced
+        for item in value.values():
+            coerced = _coerce_phone(item)
+            if coerced:
+                return coerced
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _coerce_body(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, dict):
+        for key in ("text", "message", "body", "content", "value"):
+            if key in value:
+                coerced = _coerce_body(value[key])
+                if coerced:
+                    return coerced
+        return None
+    if isinstance(value, list):
+        for item in value:
+            coerced = _coerce_body(item)
+            if coerced:
+                return coerced
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _coerce_optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, (list, dict)):
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 class ForwardIn(BaseModel):
@@ -89,6 +175,21 @@ class SmsIn(BaseModel):
         default=None, description="Optional stable id from Shortcuts for dedup"
     )
     received_at: datetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_ios_shortcut_payload(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        phone = _coerce_phone(_lookup(data, _FROM_ALIASES))
+        body = _coerce_body(_lookup(data, _BODY_ALIASES))
+        return {
+            "from_number": phone,
+            "body": body,
+            "from_name": _coerce_optional_str(_lookup(data, _NAME_ALIASES)),
+            "message_id": _coerce_optional_str(data.get("message_id") or data.get("messageId")),
+            "received_at": data.get("received_at") or data.get("receivedAt"),
+        }
 
 
 @router.post("/sms", response_model=SmsIngestOut)
