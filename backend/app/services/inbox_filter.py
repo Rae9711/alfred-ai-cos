@@ -21,6 +21,9 @@ def message_in_primary_inbox(message: Message) -> bool:
         return True
 
     if message.sender_classification in _BULK_SENDER_CLASSES:
+        labels = message.gmail_labels or []
+        if "CATEGORY_UPDATES" in labels:
+            return True
         return False
     if message.classification in _HIDDEN_CLASSIFICATIONS:
         return False

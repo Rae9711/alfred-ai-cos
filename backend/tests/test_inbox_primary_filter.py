@@ -50,6 +50,22 @@ def test_updates_tab_visible(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is True
 
 
+def test_updates_bulk_sender_visible(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="upd2",
+        sender="MIDAS <midas-research@umich.edu>",
+        recipients=[],
+        subject="MIDAS digest",
+        gmail_labels=["INBOX", "CATEGORY_UPDATES"],
+        classification=MessageClassification.low_priority,
+        sender_classification="bulk",
+        headers={"List-Unsubscribe": "<mailto:unsub@umich.edu>"},
+    )
+    assert message_in_primary_inbox(m) is True
+
+
 def test_promotions_tab_hidden(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,

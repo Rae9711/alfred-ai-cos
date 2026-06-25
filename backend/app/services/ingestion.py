@@ -90,9 +90,10 @@ def _ingest_message_ids(
             headers=raw.get("headers") or {},
             user=user,
         )
-        if cls.cls in _EXTRACTION_BLOCKED_CLASSES:
+        is_updates_tab = "CATEGORY_UPDATES" in labels
+        if cls.cls in _EXTRACTION_BLOCKED_CLASSES and not is_updates_tab:
             continue
-        if sender_class.has_bulk_mail_headers(raw.get("headers")):
+        if sender_class.has_bulk_mail_headers(raw.get("headers")) and not is_updates_tab:
             continue
         message.sender_classification = cls.cls
         db.add(message)
