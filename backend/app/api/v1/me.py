@@ -4,7 +4,6 @@ revocation (PRD 9.1, 12.1, 13.1)."""
 from __future__ import annotations
 
 import secrets
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -39,7 +38,7 @@ from app.schemas.api import (
     SmsInstallOut,
 )
 from app.services import google_oauth, sms_inbox
-from app.services.sms_shortcut import SHORTCUT_FILENAME, SHORTCUT_NAME
+from app.services.sms_shortcut import build_sms_install_urls
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
@@ -127,12 +126,7 @@ def get_sms_forwarding_install(
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
     settings = get_settings()
-    base = settings.app_base_url.rstrip("/")
-    shortcut_url = f"{base}/api/v1/integrations/ios/{SHORTCUT_FILENAME}"
-    import_url = (
-        "shortcuts://import-shortcut?"
-        f"url={quote(shortcut_url, safe='')}&name={quote(SHORTCUT_NAME)}"
-    )
+    import_url, shortcut_url = build_sms_install_urls(app_base_url=settings.app_base_url)
     return SmsInstallOut(
         import_url=import_url,
         shortcut_url=shortcut_url,

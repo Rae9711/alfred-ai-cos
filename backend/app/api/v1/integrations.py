@@ -19,6 +19,6 @@ def download_ios_shortcut(filename: str) -> FileResponse:
         raise HTTPException(status_code=503, detail="SMS shortcut is not available")
     return FileResponse(
         path,
-        media_type="application/octet-stream",
+        media_type="application/x-shortcut",
         filename=SHORTCUT_FILENAME,
     )

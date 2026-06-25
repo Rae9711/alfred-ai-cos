@@ -43,6 +43,7 @@ export function SettingsScreen() {
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [smsToken, setSmsToken] = useState<string | null>(null);
+  const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,10 +55,12 @@ export function SettingsScreen() {
       .getSmsForwardingInstall()
       .then((cfg) => {
         setSmsToken(cfg.token);
+        setSmsShortcutUrl(cfg.shortcut_url);
         setSmsImportUrl(cfg.import_url);
       })
       .catch(() => {
         setSmsToken(null);
+        setSmsShortcutUrl(null);
         setSmsImportUrl(null);
       });
   }, []);
@@ -105,19 +108,26 @@ export function SettingsScreen() {
   }, []);
 
   const installSmsShortcut = useCallback(async () => {
-    if (!smsImportUrl) return;
+    // Open the signed HTTPS .shortcut URL in Safari — iOS shows the import sheet
+    // reliably. shortcuts://import-shortcut often fails from in-app Linking because
+    // nested query encoding gets mangled ("the shortcut URL provided was invalid").
+    const target = smsShortcutUrl ?? smsImportUrl;
+    if (!target) return;
     setNote(null);
     try {
-      const can = await Linking.canOpenURL(smsImportUrl);
-      if (!can) {
-        setNote(t.settings.smsInstallFailed);
-        return;
-      }
-      await Linking.openURL(smsImportUrl);
+      await Linking.openURL(target);
     } catch {
+      if (smsImportUrl && target !== smsImportUrl) {
+        try {
+          await Linking.openURL(smsImportUrl);
+          return;
+        } catch {
+          // fall through
+        }
+      }
       setNote(t.settings.smsInstallFailed);
     }
-  }, [smsImportUrl, t.settings.smsInstallFailed]);
+  }, [smsShortcutUrl, smsImportUrl, t.settings.smsInstallFailed]);
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;

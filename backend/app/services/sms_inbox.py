@@ -21,6 +21,8 @@ from app.services.message_body import build_draft_context
 logger = logging.getLogger(__name__)
 
 _SMS_TOKEN_KEY = "sms_forward_token"
+# Placeholder when the iOS shortcut cannot read sender phone (minimal automation).
+UNKNOWN_SMS_SENDER = "+10000000000"
 _PHONE_RE = re.compile(r"[\d+()\-\s]+")
 
 
@@ -59,7 +61,18 @@ def normalize_phone(raw: str) -> str:
     return cleaned
 
 
+def is_unknown_sms_sender(phone: str | None) -> bool:
+    """True when Shortcuts could not supply a real sender number."""
+    if not phone:
+        return True
+    return normalize_phone(phone) == UNKNOWN_SMS_SENDER
+
+
 def _display_sender(*, phone: str, name: str | None) -> str:
+    if is_unknown_sms_sender(phone):
+        if name and name.strip():
+            return name.strip()
+        return "Unknown sender"
     if name and name.strip():
         return f"{name.strip()} ({phone})"
     return phone
@@ -123,6 +136,14 @@ class SmsIngestResult:
     draft_created: bool
 
 
+def resolve_sms_sender_phone(from_number: str | None) -> str:
+    """Normalize sender phone, falling back when Shortcuts cannot supply it."""
+    phone = normalize_phone(from_number or "")
+    if phone and _PHONE_RE.search(phone):
+        return phone
+    return UNKNOWN_SMS_SENDER
+
+
 def ingest_sms(
     db: Session,
     *,
@@ -134,9 +155,7 @@ def ingest_sms(
     received_at: datetime | None = None,
 ) -> SmsIngestResult:
     """Create a Message from a forwarded SMS and run classification + optional draft."""
-    phone = normalize_phone(from_number)
-    if not phone or not _PHONE_RE.search(phone):
-        raise ValueError("Invalid sender phone number")
+    phone = resolve_sms_sender_phone(from_number)
     text = (body or "").strip()
     if not text:
         raise ValueError("SMS body is required")
@@ -215,7 +234,12 @@ def sms_reply_phone(message: Message) -> str | None:
         return None
     headers = message.headers or {}
     phone = headers.get("sender_phone")
-    return str(phone) if phone else None
+    if not phone:
+        return None
+    phone_str = str(phone)
+    if is_unknown_sms_sender(phone_str):
+        return None
+    return phone_str
 
 
 def is_sms_unread(message: Message) -> bool:

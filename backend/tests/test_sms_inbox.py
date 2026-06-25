@@ -81,6 +81,58 @@ def test_normalize_phone() -> None:
     assert sms_inbox.normalize_phone("(555) 123-4567") == "+15551234567"
 
 
+def test_resolve_sms_sender_phone_falls_back_when_missing() -> None:
+    assert sms_inbox.resolve_sms_sender_phone(None) == sms_inbox.UNKNOWN_SMS_SENDER
+    assert sms_inbox.resolve_sms_sender_phone("") == sms_inbox.UNKNOWN_SMS_SENDER
+    assert sms_inbox.resolve_sms_sender_phone("unknown") == sms_inbox.UNKNOWN_SMS_SENDER
+    assert sms_inbox.resolve_sms_sender_phone("+15551234567") == "+15551234567"
+
+
+def test_sms_reply_phone_hides_placeholder_sender() -> None:
+    from datetime import UTC, datetime
+
+    msg = Message(
+        user_id="u1",
+        source="sms",
+        external_id="sms:test",
+        sender="+10000000000",
+        snippet="Hi",
+        sent_at=datetime.now(UTC),
+        headers={"sender_phone": sms_inbox.UNKNOWN_SMS_SENDER, "sms_body": "Hi"},
+    )
+    assert sms_inbox.sms_reply_phone(msg) is None
+
+    msg.headers = {"sender_phone": "+15551234567", "sms_body": "Hi"}
+    assert sms_inbox.sms_reply_phone(msg) == "+15551234567"
+
+
+def test_display_sender_uses_name_when_phone_unknown() -> None:
+    from app.services.sms_inbox import _display_sender
+
+    assert _display_sender(phone=sms_inbox.UNKNOWN_SMS_SENDER, name="Alex") == "Alex"
+    assert _display_sender(phone=sms_inbox.UNKNOWN_SMS_SENDER, name=None) == "Unknown sender"
+
+
+def test_sms_webhook_accepts_body_only_payload(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.v1 import inbox as inbox_mod
+
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+
+    out = inbox_mod.sms_inbox_webhook(
+        inbox_mod.SmsIn.model_validate({"body": "Hello from minimal shortcut"}),
+        x_sms_token=token,
+        db=db,
+    )
+    assert out.deduped is False
+    msg = db.get(Message, out.message_id)
+    assert msg is not None
+    assert msg.thread_id == sms_inbox.UNKNOWN_SMS_SENDER
+
+
 def test_sms_webhook_endpoint(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.api.v1 import inbox as inbox_mod
 
@@ -102,7 +154,7 @@ def test_sms_webhook_endpoint(db: Session, user: User, monkeypatch: pytest.Monke
     ("raw", "expected_phone"),
     [
         ({"from_number": ["+15551234567"], "body": "Hello"}, "+15551234567"),
-        ({"from_number": 5551234567, "body": "Hello"}, "5551234567"),
+        ({"from_number": 5551234567, "body": "Hello"}, "+15551234567"),
         ({"fromNumber": "+15551234567", "body": "Hello"}, "+15551234567"),
         ({"phone": "+15551234567", "text": "Hello"}, "+15551234567"),
         ({"sender": {"phone": "+15551234567"}, "message": "Hello"}, "+15551234567"),

@@ -26,6 +26,7 @@ from app.core.config import get_settings
 from app.db.base import get_db
 from app.schemas.api import SmsIngestOut
 from app.services import forward_inbox, sms_inbox
+from app.services.sms_inbox import UNKNOWN_SMS_SENDER, resolve_sms_sender_phone
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,7 @@ class SmsIn(BaseModel):
         if not body:
             body = _fallback_body(data, phone)
         return {
-            "from_number": phone,
+            "from_number": resolve_sms_sender_phone(phone) if phone else UNKNOWN_SMS_SENDER,
             "body": body,
             "from_name": _coerce_optional_str(_lookup(data, _NAME_ALIASES)),
             "message_id": _coerce_optional_str(data.get("message_id") or data.get("messageId")),

@@ -105,7 +105,8 @@ export const translations = {
       albertSummary: "Summary",
       openInMessages: "Open in Messages",
       smsOpened: "Draft ready in Messages — tap Send when it looks right.",
-      smsMissingPhone: "Missing phone number for this text.",
+      smsMissingPhone:
+        "Sender phone unknown — re-import the Albert SMS shortcut from Settings.",
     },
     sms: {
       messageLabel: "Text message",
@@ -249,7 +250,7 @@ export const translations = {
       albertSummary: "摘要",
       openInMessages: "在「信息」中发送",
       smsOpened: "已在「信息」中填好草稿 — 确认后点发送即可。",
-      smsMissingPhone: "缺少对方号码，无法打开短信。",
+      smsMissingPhone: "无法识别发件人号码，请在设置中重新安装 Albert 短信快捷指令。",
     },
     sms: {
       messageLabel: "短信",

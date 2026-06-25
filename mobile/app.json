@@ -18,7 +18,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.alfredassistants.albert",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["shortcuts"]
       }
     },
     "android": {
