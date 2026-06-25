@@ -262,3 +262,52 @@ def test_sync_dedupes_existing_messages(
 
     result = ingestion.sync_messages(db, user.id)
     assert [m.external_id for m in result.new_messages] == ["m2"]
+
+
+def test_sync_skips_duplicate_ids_in_same_batch(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _connect(db, user, history_id=None)
+    monkeypatch.setattr(
+        gmail, "list_recent_message_ids", lambda *_a, **_k: ["m1", "m1", "m2"]
+    )
+    monkeypatch.setattr(
+        gmail,
+        "get_message_label_ids",
+        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"],
+    )
+    monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
+    monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-1")
+
+    result = ingestion.sync_messages(db, user.id)
+    assert [m.external_id for m in result.new_messages] == ["m1", "m2"]
+    assert db.query(Message).count() == 2
+
+
+def test_incremental_catchup_skips_messages_pending_in_session(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _connect(db, user, history_id="hist-old")
+    monkeypatch.setattr(
+        gmail,
+        "list_history_added_message_ids",
+        lambda _t, start, label_id=None: (["m-overlap"], "hist-new"),
+    )
+
+    def catchup(_t, *, max_results, inbox_tab):
+        assert inbox_tab == "all"
+        return ["m-overlap", "m-new"]
+
+    monkeypatch.setattr(gmail, "list_recent_message_ids", catchup)
+    monkeypatch.setattr(
+        gmail,
+        "get_message_label_ids",
+        lambda _t, mid: ["INBOX", "CATEGORY_PERSONAL"],
+    )
+    monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
+    monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-99")
+
+    result = ingestion.sync_messages(db, user.id, incremental=True)
+
+    assert [m.external_id for m in result.new_messages] == ["m-overlap", "m-new"]
+    assert db.query(Message).count() == 2

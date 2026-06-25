@@ -37,7 +37,7 @@ class SyncIngestResult:
 
 
 def _message_exists(db: Session, connected_account_id: str, external_id: str) -> bool:
-    return (
+    if (
         db.scalar(
             select(Message.id).where(
                 Message.connected_account_id == connected_account_id,
@@ -45,7 +45,17 @@ def _message_exists(db: Session, connected_account_id: str, external_id: str) ->
             )
         )
         is not None
-    )
+    ):
+        return True
+    # Unflushed rows from an earlier ingest step in the same sync transaction.
+    for pending in db.new:
+        if (
+            isinstance(pending, Message)
+            and pending.connected_account_id == connected_account_id
+            and pending.external_id == external_id
+        ):
+            return True
+    return False
 
 
 def _ingest_message_ids(
@@ -59,7 +69,11 @@ def _ingest_message_ids(
         raise ValueError("Missing user for ingestion")
 
     new_messages: list[Message] = []
+    seen_ids: set[str] = set()
     for message_id in message_ids:
+        if message_id in seen_ids:
+            continue
+        seen_ids.add(message_id)
         if _message_exists(db, account.id, message_id):
             continue
         labels = gmail.get_message_label_ids(token, message_id)
@@ -305,6 +319,7 @@ def _sync_account(
             account.token_ciphertext = encrypt_token(token)
         db.commit()
     except Exception as exc:
+        db.rollback()
         account.sync_status = SyncStatus.error
         account.sync_error = str(exc)[:500]
         db.commit()
@@ -353,6 +368,7 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
             all_new.extend(result.new_messages)
             any_initial = any_initial or result.initial_backfill
         except Exception as exc:
+            db.rollback()
             account.sync_status = SyncStatus.error
             account.sync_error = str(exc)[:500]
             db.commit()
