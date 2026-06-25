@@ -318,6 +318,8 @@ export const api = {
   getSmsForwarding: () => request<SmsForwarding>("/me/sms-forwarding"),
   getSmsForwardingInstall: () =>
     request<SmsInstallOut>("/me/sms-forwarding/install"),
+  getSmsBackfillInstall: () =>
+    request<SmsInstallOut>("/me/sms-forwarding/backfill"),
   testSmsForwarding: () =>
     request<SmsIngestResult>("/me/sms-forwarding/test", { method: "POST" }),
   submitOnboarding: (prefs: OnboardingPrefs) =>

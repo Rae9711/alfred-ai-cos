@@ -218,6 +218,53 @@ def test_ingest_sms_succeeds_when_auto_draft_fails(
     assert msg.source == "sms"
 
 
+def test_sms_reply_phone_hides_unknown_sender(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    result = sms_inbox.ingest_sms(
+        db,
+        user=user,
+        from_number=sms_inbox.UNKNOWN_SMS_SENDER,
+        body="No phone on this one",
+        message_id="unknown-phone-1",
+    )
+    msg = db.get(Message, result.message_id)
+    assert msg is not None
+    assert sms_inbox.sms_reply_phone(msg) is None
+
+
+def test_ingest_sms_backfill_avoids_spam_noise_classification(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(commitments=[])
+    _patch_llm(monkeypatch, fake)
+
+    def spam_classify(**_kwargs: object) -> object:
+        from app.schemas.llm import ClassificationResult
+
+        return ClassificationResult(
+            classification="spam_noise",
+            priority="noise",
+            action_required=False,
+            reason="marketing",
+        )
+
+    monkeypatch.setattr(fake, "classify_message", spam_classify)
+
+    result = sms_inbox.ingest_sms(
+        db,
+        user=user,
+        from_number="+15551234567",
+        body="50% off today only",
+        message_id="backfill-spam-1",
+        backfill=True,
+    )
+    msg = db.get(Message, result.message_id)
+    assert msg is not None
+    from app.db.enums import MessageClassification
+
+    assert msg.classification == MessageClassification.informational
+
+
 def test_list_inbox_sms_scope_returns_only_texts(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

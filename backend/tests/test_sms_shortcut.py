@@ -1,16 +1,25 @@
-"""SMS forward shortcut plist builder."""
+"""SMS forward and backfill shortcut plist builders."""
 
 from __future__ import annotations
 
 import plistlib
 
 from app.services.sms_shortcut import (
+    BACKFILL_MESSAGE_LIMIT,
+    BACKFILL_SHORTCUT_FILENAME,
+    BACKFILL_SHORTCUT_NAME,
     DEFAULT_WEBHOOK_URL,
     DETECT_CONTACTS_ACTION,
     DETECT_TEXT_ACTION,
+    FIND_MESSAGES_ACTION,
+    HASH_ACTION,
     PROPERTIES_CONTACTS_ACTION,
     PROPERTIES_MESSAGES_ACTION,
+    REPEAT_EACH_ACTION,
     SHORTCUT_NAME,
+    backfill_shortcut_download_url,
+    build_sms_backfill_install_urls,
+    build_sms_backfill_shortcut,
     build_sms_forward_shortcut,
     build_sms_install_urls,
     shortcut_download_url,
@@ -113,3 +122,43 @@ def test_build_sms_install_urls() -> None:
     assert import_url.startswith("shortcuts://import-shortcut/?")
     assert "url=https%3A%2F%2Falfredaitech.com%2Fapi%2Fv1%2Fintegrations%2Fios%2FAlbert-SMS-Forward.shortcut" in import_url
     assert "name=Albert" in import_url and "Forward" in import_url
+
+
+def test_build_sms_backfill_shortcut_finds_and_posts_latest_messages() -> None:
+    data = plistlib.loads(build_sms_backfill_shortcut(sms_token="tok"))
+    assert data["WFWorkflowName"] == BACKFILL_SHORTCUT_NAME
+    identifiers = [a["WFWorkflowActionIdentifier"] for a in data["WFWorkflowActions"]]
+    assert FIND_MESSAGES_ACTION in identifiers
+    assert identifiers.count(REPEAT_EACH_ACTION) == 2
+    find_action = next(
+        a for a in data["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"] == FIND_MESSAGES_ACTION
+    )
+    assert find_action["WFWorkflowActionParameters"]["WFContentItemLimitNumber"] == BACKFILL_MESSAGE_LIMIT
+    assert any(a["WFWorkflowActionIdentifier"] == HASH_ACTION for a in data["WFWorkflowActions"])
+    post = data["WFWorkflowActions"][-2]
+    assert post["WFWorkflowActionIdentifier"] == "is.workflow.actions.downloadurl"
+    assert post["WFWorkflowActionParameters"]["WFURL"] == DEFAULT_WEBHOOK_URL
+
+
+def test_build_sms_backfill_shortcut_does_not_use_broken_contentitems_action() -> None:
+    data = plistlib.loads(build_sms_backfill_shortcut(sms_token="tok"))
+    forbidden = {
+        "is.workflow.actions.properties.contentitems",
+        "is.workflow.actions.contentitemproperties",
+    }
+    for action in data["WFWorkflowActions"]:
+        assert action["WFWorkflowActionIdentifier"] not in forbidden
+
+
+def test_backfill_shortcut_download_url() -> None:
+    assert (
+        backfill_shortcut_download_url(app_base_url="https://alfredaitech.com")
+        == "https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Backfill.shortcut"
+    )
+
+
+def test_build_sms_backfill_install_urls() -> None:
+    import_url, shortcut_url = build_sms_backfill_install_urls(app_base_url="https://alfredaitech.com")
+    assert shortcut_url.endswith(f"/{BACKFILL_SHORTCUT_FILENAME}")
+    assert import_url.startswith("shortcuts://import-shortcut/?")
+    assert "Backfill" in import_url or "Backfill" in shortcut_url

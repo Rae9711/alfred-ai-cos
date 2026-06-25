@@ -38,7 +38,7 @@ from app.schemas.api import (
     SmsInstallOut,
 )
 from app.services import google_oauth, sms_inbox
-from app.services.sms_shortcut import build_sms_install_urls
+from app.services.sms_shortcut import build_sms_backfill_install_urls, build_sms_install_urls
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
@@ -127,6 +127,23 @@ def get_sms_forwarding_install(
     db.commit()
     settings = get_settings()
     import_url, shortcut_url = build_sms_install_urls(app_base_url=settings.app_base_url)
+    return SmsInstallOut(
+        import_url=import_url,
+        shortcut_url=shortcut_url,
+        token=token,
+    )
+
+
+@router.get("/me/sms-forwarding/backfill", response_model=SmsInstallOut)
+def get_sms_forwarding_backfill(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsInstallOut:
+    """One-tap import URL for the one-time SMS backfill shortcut."""
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+    settings = get_settings()
+    import_url, shortcut_url = build_sms_backfill_install_urls(app_base_url=settings.app_base_url)
     return SmsInstallOut(
         import_url=import_url,
         shortcut_url=shortcut_url,

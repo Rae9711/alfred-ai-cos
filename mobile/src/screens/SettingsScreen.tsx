@@ -45,6 +45,8 @@ export function SettingsScreen() {
   const [smsToken, setSmsToken] = useState<string | null>(null);
   const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
+  const [smsBackfillShortcutUrl, setSmsBackfillShortcutUrl] = useState<string | null>(null);
+  const [smsBackfillImportUrl, setSmsBackfillImportUrl] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -62,6 +64,16 @@ export function SettingsScreen() {
         setSmsToken(null);
         setSmsShortcutUrl(null);
         setSmsImportUrl(null);
+      });
+    api
+      .getSmsBackfillInstall()
+      .then((cfg) => {
+        setSmsBackfillShortcutUrl(cfg.shortcut_url);
+        setSmsBackfillImportUrl(cfg.import_url);
+      })
+      .catch(() => {
+        setSmsBackfillShortcutUrl(null);
+        setSmsBackfillImportUrl(null);
       });
   }, []);
 
@@ -128,6 +140,25 @@ export function SettingsScreen() {
       setNote(t.settings.smsInstallFailed);
     }
   }, [smsShortcutUrl, smsImportUrl, t.settings.smsInstallFailed]);
+
+  const openSmsBackfillShortcut = useCallback(async () => {
+    const target = smsBackfillShortcutUrl ?? smsBackfillImportUrl;
+    if (!target) return;
+    setNote(null);
+    try {
+      await Linking.openURL(target);
+    } catch {
+      if (smsBackfillImportUrl && target !== smsBackfillImportUrl) {
+        try {
+          await Linking.openURL(smsBackfillImportUrl);
+          return;
+        } catch {
+          // fall through
+        }
+      }
+      setNote(t.settings.smsInstallFailed);
+    }
+  }, [smsBackfillShortcutUrl, smsBackfillImportUrl, t.settings.smsInstallFailed]);
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;
@@ -289,6 +320,12 @@ export function SettingsScreen() {
             kind="accent"
             tiny
             onPress={() => void installSmsShortcut()}
+          />
+          <Btn
+            label={t.settings.smsSyncLastTen}
+            kind="ghost"
+            tiny
+            onPress={() => void openSmsBackfillShortcut()}
           />
           {smsToken ? (
             <Btn

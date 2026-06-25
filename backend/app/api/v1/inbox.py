@@ -210,6 +210,10 @@ class SmsIn(BaseModel):
         default=None, description="Optional stable id from Shortcuts for dedup"
     )
     received_at: datetime | None = None
+    backfill: bool = Field(
+        default=False,
+        description="True when importing historical texts via the backfill shortcut",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -220,12 +224,18 @@ class SmsIn(BaseModel):
         body = _coerce_body(_lookup(data, _BODY_ALIASES))
         if not body:
             body = _fallback_body(data, phone)
+        backfill_raw = data.get("backfill")
+        backfill = (
+            backfill_raw is True
+            or (isinstance(backfill_raw, str) and backfill_raw.strip().lower() in {"1", "true", "yes"})
+        )
         return {
             "from_number": resolve_sms_sender_phone(phone) if phone else UNKNOWN_SMS_SENDER,
             "body": body,
             "from_name": _coerce_optional_str(_lookup(data, _NAME_ALIASES)),
             "message_id": _coerce_optional_str(data.get("message_id") or data.get("messageId")),
             "received_at": data.get("received_at") or data.get("receivedAt"),
+            "backfill": backfill,
         }
 
 
@@ -250,6 +260,7 @@ def sms_inbox_webhook(
             from_name=payload.from_name,
             message_id=payload.message_id,
             received_at=payload.received_at,
+            backfill=payload.backfill,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

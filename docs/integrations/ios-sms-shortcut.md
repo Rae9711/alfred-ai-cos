@@ -13,21 +13,34 @@ Email/Gmail sync is unchanged. SMS uses a separate webhook.
   - **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
   - **X-Sms-Token** — your personal secret (never share publicly).
 
-## iOS Shortcut (recommended)
+## User flow (install + backfill once)
 
-Albert ships a **signed** shortcut file. iOS rejects unsigned `.shortcut` downloads with
-*Importing unsigned shortcut files is not supported* — always use the link from Albert
-settings or the signed URL below, not a hand-built unsigned plist.
+1. **You** → **SMS forwarding** → **Install Shortcut** (Albert SMS Forward).
+2. Paste **X-Sms-Token** when prompted.
+3. Create automation: **When I receive a message** → run **Albert SMS Forward**
+   immediately.
+4. **You** → **Sync last 10 texts** (Albert SMS Backfill) — run once from
+   Shortcuts to import recent incoming texts for reply testing. Safe to re-run;
+   duplicates are skipped via `message_id`.
+5. Open **Inbox** → **SMS**, pull to refresh, tap **Reply** on a thread.
 
-The shortcut uses widely-supported actions plus **Get Details of Messages** with the
-correct action ID (`is.workflow.actions.properties.messages`). Older builds used
-`properties.contentitems`, which shows as *Unknown Action* on many iPhones.
+## iOS Shortcuts (recommended)
 
-### One-tap install (easiest)
+Albert ships **signed** shortcut files. iOS rejects unsigned `.shortcut` downloads
+with *Importing unsigned shortcut files is not supported* — always use the link
+from Albert settings or the signed URLs below.
+
+Both shortcuts use widely-supported actions (`Get Text from Input`, `Get Details
+of Messages` via `is.workflow.actions.properties.messages`, `Dictionary`,
+`Get Contents of URL`). They do **not** use *Get Details of Content Item* /
+`contentitemproperties` — those action IDs vary by iOS version and often show as
+*Unknown Action* blocks.
+
+### Albert SMS Forward (automation)
 
 **If you already imported an older Albert SMS Forward shortcut**, delete it first
-(**Shortcuts** → **Albert SMS Forward** → **…** → **Delete Shortcut**), then install
-again — older builds used invalid *Get Details* action IDs or sent a placeholder phone.
+(**Shortcuts** → **Albert SMS Forward** → **…** → **Delete Shortcut**), then
+install again.
 
 1. Open **You** → **SMS forwarding**.
 2. Tap **Install shortcut** (opens the signed download in Safari; tap **Add Shortcut**).
@@ -35,33 +48,59 @@ again — older builds used invalid *Get Details* action IDs or sent a placehold
 4. Create the automation: **When I receive a message** → run **Albert SMS Forward**
    immediately.
 
-Signed download (Safari or Shortcuts import):
+Signed download:
 
 `https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Forward.shortcut`
 
-One-tap Shortcuts deep link (paste in Safari if the in-app button fails):
+### Albert SMS Backfill (run once manually)
 
-`shortcuts://import-shortcut/?url=https%3A%2F%2Falfredaitech.com%2Fapi%2Fv1%2Fintegrations%2Fios%2FAlbert-SMS-Forward.shortcut&name=Albert+SMS+Forward`
+Imports your **10 most recent incoming texts** (not from you) so you can test
+reply drafts without waiting for new messages.
 
-A signed file is ~23 KB; if the download is only ~2 KB, the server is serving an
-unsigned build — contact support or retry after a redeploy.
+1. Open **You** → **SMS forwarding**.
+2. Tap **Sync last 10 texts** / **同步最近 10 条短信** (opens Safari).
+3. Tap **Add Shortcut**, paste **X-Sms-Token** if prompted.
+4. Open **Shortcuts** → **Albert SMS Backfill** → **Run** (play button).
+5. Pull to refresh **Inbox** → **SMS**.
 
-### What the shortcut does
+Signed download:
+
+`https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Backfill.shortcut`
+
+Re-running backfill is safe — each message sends a stable `message_id` (hash of
+body) and Albert dedupes via `external_id`.
+
+### Forward shortcut actions
 
 | Step | Action ID | Purpose |
 | ---- | --------- | ------- |
 | 1 (import) | `is.workflow.actions.gettext` | Prompt for X-Sms-Token |
-| 2 | `is.workflow.actions.detect.text` | Message text from Shortcut Input |
+| 2 | `is.workflow.actions.detect.text` | Message body from Shortcut Input |
 | 3 | `is.workflow.actions.properties.messages` | Sender phone (`Phone Number`) |
-| 4 | `is.workflow.actions.detect.contacts` | Contact for sender (name) |
-| 5 | `is.workflow.actions.properties.contacts` | Sender display name |
-| 6 | `is.workflow.actions.dictionary` | `body`, `from_number`, `from_name` |
-| 7 | `is.workflow.actions.downloadurl` | POST JSON to Albert webhook |
+| 4 | `is.workflow.actions.detect.contacts` | Contact from message |
+| 5 | `is.workflow.actions.properties.contacts` | Sender name |
+| 6 | `is.workflow.actions.dictionary` | JSON payload |
+| 7 | `is.workflow.actions.downloadurl` | POST to Albert webhook |
 
-**Message Received** passes the incoming message as Shortcut Input. Step 3 reads the
-real sender number; Albert uses it for **Open in Messages**. If phone extraction fails
-(empty or unsupported on your iOS build), Albert still ingests the text but disables
-reply until you fix the shortcut.
+If step 3 shows *Unknown Action* on your iOS version, messages still import with
+body text; **Open in Messages** may not pre-fill the recipient until you add
+**Get Details of Messages** manually (see below).
+
+### Backfill shortcut actions
+
+| Step | Action ID | Purpose |
+| ---- | --------- | ------- |
+| 1 (import) | `is.workflow.actions.gettext` | Prompt for X-Sms-Token |
+| 2 | `is.workflow.actions.filter.messages` | Latest 10, **Is From Me** = false |
+| 3 | `is.workflow.actions.repeat.each` | Loop over messages |
+| 4 | `is.workflow.actions.detect.text` | Body |
+| 5 | `is.workflow.actions.properties.messages` | Phone + date |
+| 6 | `is.workflow.actions.detect.contacts` | Contact |
+| 7 | `is.workflow.actions.properties.contacts` | Name |
+| 8 | `is.workflow.actions.hash` | Stable `message_id` for dedup |
+| 9 | `is.workflow.actions.dictionary` | Payload (`backfill: true`) |
+| 10 | `is.workflow.actions.downloadurl` | POST each message |
+| 11 | `is.workflow.actions.repeat.each` | End repeat |
 
 ### Manual build (maintainers)
 
@@ -71,71 +110,43 @@ From a Mac with the `shortcuts` CLI:
 python3 backend/scripts/build_sms_shortcut.py
 ```
 
-Commit or ship `backend/integrations/ios/Albert-SMS-Forward.shortcut` before deploying.
-The deploy image bundles that file; unsigned plists are generated at build time on macOS
-only.
+Commit or ship both files under `backend/integrations/ios/` before deploying:
 
-### iCloud share link (fallback)
+- `Albert-SMS-Forward.shortcut`
+- `Albert-SMS-Backfill.shortcut`
 
-If Safari import still fails on some iOS versions:
+### Manual backfill (if Find Messages fails)
 
-1. On a Mac, open the signed `.shortcut` in Shortcuts.
-2. **Share** → **Copy iCloud Link**.
-3. Open that link on the iPhone and tap **Add Shortcut**.
+1. **Find Messages** — sort by Date, latest first, limit 10, filter **Is From Me**
+   is false.
+2. **Repeat with Each**:
+   - **Get Text from Input** → `body`
+   - **Get Details of Messages** → **Phone Number** → `from_number` (if supported)
+   - **Dictionary** with `body`, `from_number`, `backfill: true`
+   - **Get Contents of URL** — POST to webhook with `X-Sms-Token`
 
-### Manual shortcut (advanced)
+### With sender phone (if your iOS supports it)
 
-Create an automation in the **Shortcuts** app:
+If *Get Details of Messages* works on your device, ensure it uses
+`properties.messages` (not `contentitemproperties`). Use **Phone Number** for
+`from_number`.
 
-1. **Trigger:** *When I receive a message* → Run Immediately.
-2. **Get Text from Input** — input: *Shortcut Input* (message body).
-3. **Get Details of Messages** from *Shortcut Input* → **Phone Number**
-   (not the generic *Get Details of Content Items* — that action ID breaks on many devices).
-4. **Get Contacts from Input** from *Shortcut Input* → **Get Details of Contacts** → **Name** (optional).
-5. **Dictionary** with keys:
-  - `body` → text from step 2
-  - `from_number` → phone from step 3
-  - `from_name` → name from step 4 (optional)
-6. **Get Contents of URL**
-  - Method: **POST**
-  - URL: webhook from Albert settings
-  - Headers:
-    - `Content-Type: application/json`
-    - `X-Sms-Token: <your token>`
-  - Request body: **File** → the Dictionary from step 5 (Shortcuts serializes it as JSON)
-
-### If sender phone still missing
-
-On some iOS versions, **Get Details of Messages** may not appear or may return empty.
-Try these on your device (add between steps 2 and 5 above):
-
-| Approach | Actions to add | Notes |
-| -------- | -------------- | ----- |
-| Message details | *Get Details of Messages* → **Phone Number** | Preferred; matches shipped shortcut |
-| Contact lookup | *Get Contacts from Input* → *Get Details of Contacts* → **Phone Number** | Works when sender is in Contacts |
-| Phone scan | *Get Phone Numbers from Input* | May work if the message object embeds a number |
-
-Do **not** wire the **Numbers** magic variable directly unless you must — it is often
-sent as `[15551234567]` instead of a string (Albert coerces arrays, but text is safer).
-
-In **Message Received** automations on iOS 18+, tap the variable pill after the trigger
-and check whether **Sender** is offered as a magic variable — if so, use that for
-`from_number` instead of step 3.
-
-Example JSON body (what Albert expects after coercion):
+Example JSON body:
 
 ```json
 {
   "from_number": "+15551234567",
   "body": "Can we meet tomorrow?",
-  "from_name": "Alex"
+  "from_name": "Alex",
+  "message_id": "abc123",
+  "backfill": true
 }
 ```
 
-Albert also accepts aliases: `fromNumber`, `phone`, `sender_phone`, `sender` for the phone
-and `text`, `message`, `content` for the body. If `from_number` is missing or empty,
-Albert stores the message with an internal placeholder and **does not** expose a reply
-phone until a real number is supplied.
+Albert also accepts aliases: `fromNumber`, `phone`, `sender_phone`, `sender` for
+the phone and `text`, `message`, `content` for the body. If `from_number` is
+missing, Albert stores the message but does not expose a `reply_phone` in the app
+(**Open in Messages** shows a toast instead).
 
 ## Test with curl
 
@@ -145,16 +156,7 @@ Replace `YOUR_TOKEN` with the token from Albert settings:
 curl -sS -X POST 'https://alfredaitech.com/api/v1/inbox/sms' \
   -H 'Content-Type: application/json' \
   -H 'X-Sms-Token: YOUR_TOKEN' \
-  -d '{"from_number":"+15551234567","body":"curl test message"}'
-```
-
-Body-only (fallback when shortcut cannot read sender):
-
-```bash
-curl -sS -X POST 'https://alfredaitech.com/api/v1/inbox/sms' \
-  -H 'Content-Type: application/json' \
-  -H 'X-Sms-Token: YOUR_TOKEN' \
-  -d '{"body":"curl test message"}'
+  -d '{"from_number":"+15551234567","body":"curl test message","backfill":true}'
 ```
 
 Success looks like:
@@ -165,31 +167,36 @@ Success looks like:
 
 ## Troubleshooting
 
-
-| Symptom                             | Likely cause                     | Fix                                                                    |
-| ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| **Unknown Action** blocks in shortcut | Old shortcut used `properties.contentitems` | Delete **Albert SMS Forward**, re-import from **Install shortcut** or the signed URL below (~23 KB). |
-| **The shortcut URL provided was invalid** | `shortcuts://import-shortcut` from in-app Linking | Tap **Install shortcut** again (opens HTTPS in Safari), or paste the signed download URL above in Safari. |
-| **Importing unsigned shortcut files is not supported** | Unsigned `.shortcut` from server | Use **Install shortcut** in Albert → You, or the signed URL (~23 KB). Maintainer: run `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
-| **401 Missing/Invalid X-Sms-Token** | Wrong or missing header          | Copy token again from Albert → You → SMS forwarding                    |
-| **422 Unprocessable Entity**        | Body shape from Shortcuts        | Use **Text** for phone, not **Numbers**; ensure `body` is message text |
-| **400 SMS body is required**        | Empty message text               | Map `body` to Shortcut Input via **Get Text from Input**               |
-| SMS missing in Inbox                | Old app build or sync delay      | Pull to refresh; confirm curl returns 200 first                        |
-| **Open in Messages** disabled       | Sender phone not forwarded       | Re-import shortcut; add **Get Details of Messages → Phone Number** manually if needed |
-| Reply opens Messages without recipient | Placeholder sender phone stored | Re-import latest shortcut; old messages keep placeholder until re-forwarded |
-
+| Symptom | Likely cause | Fix |
+| ------- | -------------- | --- |
+| **Unknown Action** blocks | Old shortcut or `contentitemproperties` | Delete shortcut, re-import from Albert settings (~20+ KB signed file). |
+| **The shortcut URL provided was invalid** | `shortcuts://` from in-app Linking | Tap install/sync button again (opens HTTPS in Safari). |
+| **Importing unsigned shortcut files is not supported** | Unsigned server build | Maintainer: `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
+| **401 Missing/Invalid X-Sms-Token** | Wrong or missing header | Copy token again from Albert → You → SMS forwarding |
+| **422 Unprocessable Entity** | Body shape from Shortcuts | Use **Text** for phone; ensure `body` is message text |
+| **400 SMS body is required** | Empty message text | Map `body` via **Get Text from Input** |
+| SMS missing in Inbox | Sync delay | Pull to refresh; confirm curl returns 200 first |
+| Reply opens Messages without recipient | No sender phone from Shortcut | Expected if Get Details fails; add **Get Details of Messages** manually |
+| Backfill shows 0 new texts | All 10 already imported | Re-run is safe (deduped); send a new test SMS |
 
 ## Reply flow in the app
 
 1. SMS appears in **Inbox** with an **SMS** tag.
 2. Tap **Reply** — Albert loads the text and shows a draft.
-3. Tap **Open in Messages** — iOS opens Messages with the draft filled in (when sender phone is known).
+3. Tap **Open in Messages** — iOS opens Messages with the draft filled in (when
+   `reply_phone` is available).
 4. Review and tap **Send** on your phone.
+
+If the sender phone is unknown, Albert shows **Missing phone number for this text**
+instead of opening Messages with a bogus number.
 
 ## API
 
-
-| Method | Path                        | Auth                 |
-| ------ | --------------------------- | -------------------- |
-| GET    | `/api/v1/me/sms-forwarding` | JWT (app session)    |
-| POST   | `/api/v1/inbox/sms`         | Header `X-Sms-Token` |
+| Method | Path | Auth |
+| ------ | ---- | ---- |
+| GET | `/api/v1/me/sms-forwarding` | JWT (app session) |
+| GET | `/api/v1/me/sms-forwarding/install` | JWT |
+| GET | `/api/v1/me/sms-forwarding/backfill` | JWT |
+| GET | `/api/v1/integrations/ios/Albert-SMS-Forward.shortcut` | none (signed file) |
+| GET | `/api/v1/integrations/ios/Albert-SMS-Backfill.shortcut` | none (signed file) |
+| POST | `/api/v1/inbox/sms` | Header `X-Sms-Token` |

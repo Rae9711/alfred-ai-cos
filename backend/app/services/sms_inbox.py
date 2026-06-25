@@ -153,6 +153,7 @@ def ingest_sms(
     from_name: str | None = None,
     message_id: str | None = None,
     received_at: datetime | None = None,
+    backfill: bool = False,
 ) -> SmsIngestResult:
     """Create a Message from a forwarded SMS and run classification + optional draft."""
     phone = resolve_sms_sender_phone(from_number)
@@ -191,6 +192,10 @@ def ingest_sms(
         headers=None,
         user=user,
     )
+    headers = _sms_headers(phone=phone, body=text)
+    if backfill:
+        headers["sms_backfill"] = True
+
     message = Message(
         user_id=user.id,
         source="sms",
@@ -202,12 +207,14 @@ def ingest_sms(
         snippet=text[:200],
         sent_at=received_at or datetime.now(UTC),
         sender_classification=cls.cls,
-        headers=_sms_headers(phone=phone, body=text),
+        headers=headers,
     )
     db.add(message)
     db.flush()
 
     commitments = extraction.process_message(db, message, body=text)
+    if backfill and message.classification == MessageClassification.spam_noise:
+        message.classification = MessageClassification.informational
     had_draft = False
     try:
         _auto_draft_reply(db, user, message)

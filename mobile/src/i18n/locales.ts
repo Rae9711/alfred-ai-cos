@@ -126,11 +126,12 @@ export const translations = {
         "Install Albert's Shortcut, paste your token when prompted, then turn on the automation below.",
       smsTokenLabel: "X-Sms-Token (for import prompt):",
       smsInstallShortcut: "Install Shortcut",
+      smsSyncLastTen: "Sync last 10 texts",
       smsCopyToken: "Copy Token",
       smsTokenCopied: "Token copied.",
       smsInstallFailed: "Could not open Shortcuts.",
       smsSteps:
-        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. Send yourself a test text and check Inbox → SMS.",
+        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. Tap Sync last 10 texts once to import recent messages for reply testing.\n3. Send yourself a test text and check Inbox → SMS.",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -269,11 +270,12 @@ export const translations = {
       smsHint: "安装 Albert 快捷指令，按提示粘贴令牌，然后开启下方自动化。",
       smsTokenLabel: "X-Sms-Token（导入时粘贴）：",
       smsInstallShortcut: "安装快捷指令",
+      smsSyncLastTen: "同步最近 10 条短信",
       smsCopyToken: "复制令牌",
       smsTokenCopied: "已复制令牌。",
       smsInstallFailed: "无法打开快捷指令。",
       smsSteps:
-        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 给自己发一条测试短信，在收件箱 → 短信中查看。",
+        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 点一次「同步最近 10 条短信」导入近期短信，便于测试回复。\n3. 给自己发一条测试短信，在收件箱 → 短信中查看。",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",
