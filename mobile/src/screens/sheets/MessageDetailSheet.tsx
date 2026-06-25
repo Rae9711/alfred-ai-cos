@@ -17,11 +17,19 @@ import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type Props = {
   messageId: string;
+  isUnread?: boolean;
   onReply: () => void;
+  onMarkRead?: () => void;
   onClose: () => void;
 };
 
-export function MessageDetailSheet({ messageId, onReply, onClose }: Props) {
+export function MessageDetailSheet({
+  messageId,
+  isUnread = false,
+  onReply,
+  onMarkRead,
+  onClose,
+}: Props) {
   const { t } = useLocale();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +37,11 @@ export function MessageDetailSheet({ messageId, onReply, onClose }: Props) {
   const [sender, setSender] = useState("");
   const [summary, setSummary] = useState<string | null>(null);
   const [body, setBody] = useState("");
+  const [read, setRead] = useState(!isUnread);
+
+  useEffect(() => {
+    setRead(!isUnread);
+  }, [isUnread, messageId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +67,12 @@ export function MessageDetailSheet({ messageId, onReply, onClose }: Props) {
       cancelled = true;
     };
   }, [messageId]);
+
+  const handleMarkRead = () => {
+    if (read) return;
+    setRead(true);
+    onMarkRead?.();
+  };
 
   return (
     <View style={styles.sheet}>
@@ -90,6 +109,11 @@ export function MessageDetailSheet({ messageId, onReply, onClose }: Props) {
       )}
 
       <View style={styles.footer}>
+        {!read ? (
+          <Pressable style={styles.markReadBtn} onPress={handleMarkRead}>
+            <Text style={styles.markReadText}>{t.inbox.markReadAction}</Text>
+          </Pressable>
+        ) : null}
         <Btn label={t.inbox.reply} onPress={onReply} />
       </View>
     </View>
@@ -157,7 +181,16 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: layout.padX,
     paddingTop: 10,
+    gap: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hair,
   },
+  markReadBtn: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.sm,
+    backgroundColor: colors.paper2,
+  },
+  markReadText: { fontSize: 13, fontWeight: "500", color: colors.ink2 },
 });

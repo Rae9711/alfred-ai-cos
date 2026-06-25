@@ -91,11 +91,21 @@ export function InboxScreen() {
     void markRead(id).catch(() => undefined);
   };
 
+  const markAsRead = (id: string) => {
+    ease();
+    void markRead(id).catch(() => undefined);
+  };
+
   const openMessage = (id: string, mode: "reply" | "delegate" = "reply") => {
+    const item = items.find((m) => m.id === id);
     openSheet(
       <MessageDetailSheet
         messageId={id}
+        isUnread={item?.isUnread ?? false}
         onClose={closeSheet}
+        onMarkRead={() => {
+          markAsRead(id);
+        }}
         onReply={() => {
           closeSheet();
           openChatFromInbox(id, mode);
@@ -199,11 +209,13 @@ export function InboxScreen() {
               onReply={() => openMessage(m.id, "reply")}
               onLater={() => defer(m.id)}
               onDelegate={() => openMessage(m.id, "delegate")}
+              onMarkRead={() => markAsRead(m.id)}
               onOpen={() => openMessage(m.id, "reply")}
               labels={{
                 reply: t.inbox.reply,
                 later: t.inbox.later,
                 delegate: t.inbox.handToAlfred,
+                markRead: t.inbox.markReadAction,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
@@ -226,10 +238,12 @@ export function InboxScreen() {
                   : null
               }
               onDismiss={() => defer(m.id)}
+              onMarkRead={() => markAsRead(m.id)}
               onView={() => openMessage(m.id, "reply")}
               labels={{
                 view: t.inbox.view,
                 dismiss: t.inbox.dismiss,
+                markRead: t.inbox.markReadAction,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
@@ -307,6 +321,7 @@ function InboxCard({
   onReply,
   onLater,
   onDelegate,
+  onMarkRead,
   onOpen,
   labels,
 }: {
@@ -315,8 +330,18 @@ function InboxCard({
   onReply: () => void;
   onLater: () => void;
   onDelegate: () => void;
+  onMarkRead: () => void;
   onOpen: () => void;
-  labels: { reply: string; later: string; delegate: string; read: string; unread: string; replied: string; albertTake: string };
+  labels: {
+    reply: string;
+    later: string;
+    delegate: string;
+    markRead: string;
+    read: string;
+    unread: string;
+    replied: string;
+    albertTake: string;
+  };
 }) {
   return (
     <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
@@ -345,15 +370,24 @@ function InboxCard({
           </View>
         </View>
       </Pressable>
-      {item.showReplyActions ? (
+      {item.showReplyActions || item.isUnread ? (
         <View style={styles.actions}>
-          <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
-          <Pressable style={styles.actionGhost} onPress={onLater}>
-            <Text style={styles.actionGhostText}>{labels.later}</Text>
-          </Pressable>
-          <Pressable style={styles.actionGhost} onPress={onDelegate}>
-            <Text style={styles.actionGhostText}>{labels.delegate}</Text>
-          </Pressable>
+          {item.showReplyActions ? (
+            <>
+              <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
+              <Pressable style={styles.actionGhost} onPress={onLater}>
+                <Text style={styles.actionGhostText}>{labels.later}</Text>
+              </Pressable>
+              <Pressable style={styles.actionGhost} onPress={onDelegate}>
+                <Text style={styles.actionGhostText}>{labels.delegate}</Text>
+              </Pressable>
+            </>
+          ) : null}
+          {item.isUnread ? (
+            <Pressable style={styles.actionGhost} onPress={onMarkRead}>
+              <Text style={styles.actionGhostText}>{labels.markRead}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -364,14 +398,23 @@ function FyiCard({
   item,
   mailboxLabel,
   onDismiss,
+  onMarkRead,
   onView,
   labels,
 }: {
   item: AppInboxItem;
   mailboxLabel: string | null;
   onDismiss: () => void;
+  onMarkRead: () => void;
   onView: () => void;
-  labels: { view: string; dismiss: string; read: string; unread: string; replied: string };
+  labels: {
+    view: string;
+    dismiss: string;
+    markRead: string;
+    read: string;
+    unread: string;
+    replied: string;
+  };
 }) {
   return (
     <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
@@ -401,6 +444,11 @@ function FyiCard({
         <Pressable style={styles.actionGhost} onPress={onView}>
           <Text style={styles.actionGhostText}>{labels.view}</Text>
         </Pressable>
+        {item.isUnread ? (
+          <Pressable style={styles.actionGhost} onPress={onMarkRead}>
+            <Text style={styles.actionGhostText}>{labels.markRead}</Text>
+          </Pressable>
+        ) : null}
         <Pressable style={styles.actionGhost} onPress={onDismiss}>
           <Text style={styles.actionGhostText}>{labels.dismiss}</Text>
         </Pressable>
