@@ -4,9 +4,10 @@ sensitive data at rest; the extraction pipeline uses the body in-process only.
 
 Sync policy (per connected Gmail mailbox):
   - First connect (no gmail_history_id): backfill the newest Primary inbox messages.
-  - Later syncs: Gmail history API for new inbox mail, Primary tab only.
+  - All later syncs (default): Gmail history API for newly added mail only.
   - On expired history: fall back to a small recent Primary poll.
-  - Inbox UI: only messages with CATEGORY_PERSONAL (+ INBOX) are stored/shown.
+  - Label read/unread changes: history API label events (incremental).
+  - Deep rescan (incremental=False): optional catchup/unread sweeps for repair.
 """
 
 from __future__ import annotations
@@ -220,7 +221,7 @@ def _apply_history_label_changes(
 
 
 def _sync_account(
-    db: Session, account: ConnectedAccount, *, light: bool = False
+    db: Session, account: ConnectedAccount, *, incremental: bool = True
 ) -> SyncIngestResult:
     settings = get_settings()
     stored_token = decrypt_token(account.token_ciphertext)
@@ -265,16 +266,14 @@ def _sync_account(
                     )
                     new_messages = _ingest_message_ids(db, account, token, message_ids)
 
-            if not light:
+            if account.gmail_history_id:
+                _apply_history_label_changes(db, account, token, account.gmail_history_id)
+
+            if not incremental:
                 catchup = _sync_recent_primary_catchup(db, account, token)
                 unread_inbox = _sync_unread_inbox(db, account, token)
                 unread_primary = _sync_unread_primary(db, account, token)
                 new_messages.extend(catchup + unread_inbox + unread_primary)
-
-            if not light and account.gmail_history_id:
-                _apply_history_label_changes(db, account, token, account.gmail_history_id)
-
-            if not light:
                 unread_ids = gmail.list_unread_primary_message_ids(
                     token, max_results=min(settings.sync_unread_max_results, 80)
                 )
@@ -322,7 +321,7 @@ def messages_to_process(
     return new_messages + pending
 
 
-def sync_messages(db: Session, user_id: str, *, light: bool = False) -> SyncIngestResult:
+def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> SyncIngestResult:
     """Ingest new Gmail messages for every connected Google mailbox."""
     accounts = list_google_accounts(db, user_id)
     if not accounts:
@@ -333,7 +332,7 @@ def sync_messages(db: Session, user_id: str, *, light: bool = False) -> SyncInge
     errors: list[str] = []
     for account in accounts:
         try:
-            result = _sync_account(db, account, light=light)
+            result = _sync_account(db, account, incremental=incremental)
             all_new.extend(result.new_messages)
             any_initial = any_initial or result.initial_backfill
         except Exception as exc:

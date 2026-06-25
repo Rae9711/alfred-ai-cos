@@ -82,7 +82,7 @@ def test_initial_backfill_uses_primary_and_sets_history(
     result = ingestion.sync_messages(db, user.id)
 
     assert result.initial_backfill is True
-    assert listed == [50, "primary", 40, "primary"]
+    assert listed == [50, "primary"]
     assert len(result.new_messages) == 2
     account = db.scalar(select(ConnectedAccount).where(ConnectedAccount.user_id == user.id))
     assert account is not None
@@ -162,7 +162,7 @@ def test_messages_to_process_includes_pending_unclassified(
     assert combined[0].external_id == "old-1"
 
 
-def test_light_sync_skips_catchup_and_unread(
+def test_incremental_sync_skips_catchup_and_unread(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _connect(db, user, history_id="hist-old")
@@ -192,10 +192,41 @@ def test_light_sync_skips_catchup_and_unread(
     monkeypatch.setattr(gmail, "list_recent_message_ids", track_recent)
     monkeypatch.setattr(gmail, "list_unread_inbox_message_ids", track_unread_inbox)
 
-    result = ingestion.sync_messages(db, user.id, light=True)
+    result = ingestion.sync_messages(db, user.id, incremental=True)
 
     assert len(result.new_messages) == 1
     assert calls == []
+
+
+def test_deep_sync_runs_catchup_after_initial(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _connect(db, user, history_id="hist-old")
+    listed: list[tuple[int, str]] = []
+
+    monkeypatch.setattr(
+        gmail,
+        "list_history_added_message_ids",
+        lambda _t, start, label_id=None: ([], "hist-new"),
+    )
+    monkeypatch.setattr(
+        gmail,
+        "list_history_label_affected_message_ids",
+        lambda *_a, **_k: (set(), "hist-new"),
+    )
+    monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-99")
+
+    def track_recent(_t, *, max_results, inbox_tab):
+        listed.append((max_results, inbox_tab))
+        return []
+
+    monkeypatch.setattr(gmail, "list_recent_message_ids", track_recent)
+    monkeypatch.setattr(gmail, "list_unread_inbox_message_ids", lambda *_a, **_k: [])
+    monkeypatch.setattr(gmail, "list_unread_primary_message_ids", lambda *_a, **_k: [])
+
+    ingestion.sync_messages(db, user.id, incremental=False)
+
+    assert listed == [(40, "primary")]
 
 
 def test_sync_dedupes_existing_messages(
