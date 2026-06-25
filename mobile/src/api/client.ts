@@ -72,29 +72,46 @@ export function setOnAuthExpired(fn: (() => void) | null): void {
   onAuthExpired = fn;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs?: number,
+): Promise<T> {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}/api/v1${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      // Skip ngrok's free-tier interstitial so the app gets JSON, not the warning page.
-      "ngrok-skip-browser-warning": "true",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
-  if (!res.ok) {
-    // A 401 while we hold a token means it's no longer valid — clear it and bounce to
-    // Connect so the user (and friends) re-auth cleanly instead of looping on 401s.
-    if (res.status === 401 && token) {
-      await clearToken();
-      onAuthExpired?.();
+  const controller = new AbortController();
+  const timer =
+    timeoutMs != null ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        // Skip ngrok's free-tier interstitial so the app gets JSON, not the warning page.
+        "ngrok-skip-browser-warning": "true",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+    if (!res.ok) {
+      // A 401 while we hold a token means it's no longer valid — clear it and bounce to
+      // Connect so the user (and friends) re-auth cleanly instead of looping on 401s.
+      if (res.status === 401 && token) {
+        await clearToken();
+        onAuthExpired?.();
+      }
+      const detail = await res.text();
+      throw new Error(`API ${res.status}: ${detail}`);
     }
-    const detail = await res.text();
-    throw new Error(`API ${res.status}: ${detail}`);
+    return (await res.json()) as T;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Request timed out — try again");
+    }
+    throw e;
+  } finally {
+    if (timer != null) clearTimeout(timer);
   }
-  return (await res.json()) as T;
 }
 
 export const api = {
@@ -118,7 +135,12 @@ export const api = {
         method: "POST",
       },
     ),
-  sync: () => request<SyncResponse>("/sync", { method: "POST" }),
+  sync: (opts?: { ingestOnly?: boolean }) =>
+    request<SyncResponse>(
+      `/sync${opts?.ingestOnly ? "?ingest_only=true" : ""}`,
+      { method: "POST" },
+      opts?.ingestOnly ? 90_000 : 120_000,
+    ),
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: (opts?: { scope?: "unread" | "today" | "synced"; mailbox?: string }) => {
     const params = new URLSearchParams();

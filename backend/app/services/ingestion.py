@@ -218,7 +218,9 @@ def _apply_history_label_changes(
             continue
 
 
-def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
+def _sync_account(
+    db: Session, account: ConnectedAccount, *, light: bool = False
+) -> SyncIngestResult:
     settings = get_settings()
     token = decrypt_token(account.token_ciphertext)
 
@@ -237,7 +239,6 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
 
     initial_backfill = account.gmail_history_id is None
     new_messages: list[Message] = []
-    user = db.get(User, account.user_id)
     try:
         if initial_backfill:
             message_ids = gmail.list_recent_message_ids(
@@ -266,13 +267,15 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
         unread_primary = _sync_unread_primary(db, account, token)
         new_messages.extend(catchup + unread_inbox + unread_primary)
 
-        if account.gmail_history_id:
+        if not light and account.gmail_history_id:
             _apply_history_label_changes(db, account, token, account.gmail_history_id)
 
-        unread_ids = gmail.list_unread_primary_message_ids(
-            token, max_results=min(settings.sync_unread_max_results, 80)
-        )
-        _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
+        if not light:
+            unread_ids = gmail.list_unread_primary_message_ids(
+                token, max_results=min(settings.sync_unread_max_results, 80)
+            )
+            _refresh_gmail_labels(db, account, token, priority_external_ids=unread_ids)
+
         account.gmail_history_id = gmail.get_history_id(token)
         account.sync_status = SyncStatus.ok
         account.last_synced_at = datetime.now(UTC)
@@ -280,7 +283,7 @@ def _sync_account(db: Session, account: ConnectedAccount) -> SyncIngestResult:
         db.commit()
     except Exception as exc:
         account.sync_status = SyncStatus.error
-        account.sync_error = str(exc)
+        account.sync_error = str(exc)[:500]
         db.commit()
         raise
     return SyncIngestResult(new_messages=new_messages, initial_backfill=initial_backfill)
@@ -312,7 +315,7 @@ def messages_to_process(
     return new_messages + pending
 
 
-def sync_messages(db: Session, user_id: str) -> SyncIngestResult:
+def sync_messages(db: Session, user_id: str, *, light: bool = False) -> SyncIngestResult:
     """Ingest new Gmail messages for every connected Google mailbox."""
     accounts = list_google_accounts(db, user_id)
     if not accounts:
@@ -323,7 +326,7 @@ def sync_messages(db: Session, user_id: str) -> SyncIngestResult:
     errors: list[str] = []
     for account in accounts:
         try:
-            result = _sync_account(db, account)
+            result = _sync_account(db, account, light=light)
             all_new.extend(result.new_messages)
             any_initial = any_initial or result.initial_backfill
         except Exception as exc:

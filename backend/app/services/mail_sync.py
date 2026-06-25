@@ -13,9 +13,13 @@ from app.services import extraction, ingestion, notifications
 from app.services.ingestion import SyncIngestResult
 
 
-def run_mail_sync(db: Session, user_id: str) -> tuple[SyncIngestResult, int, int]:
-    """Pull new Gmail, classify unprocessed messages. Returns (ingest, processed, commitments)."""
-    result = ingestion.sync_messages(db, user_id)
+def run_mail_sync(
+    db: Session, user_id: str, *, ingest_only: bool = False, light: bool = False
+) -> tuple[SyncIngestResult, int, int]:
+    """Pull new Gmail; classify unless ingest_only (fast path for mobile refresh)."""
+    result = ingestion.sync_messages(db, user_id, light=light)
+    if ingest_only:
+        return result, 0, 0
     to_process = ingestion.messages_to_process(db, user_id, result.new_messages)
     commitments = 0
     for message in to_process:

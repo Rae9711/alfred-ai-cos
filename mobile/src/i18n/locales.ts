@@ -52,6 +52,7 @@ export const translations = {
       syncing: "Syncing your inbox…",
       retry: "Tap to retry",
       filters: {
+        inbox: "Inbox",
         unread: "Unread",
         today: "Today",
       },
@@ -163,6 +164,7 @@ export const translations = {
       syncing: "正在同步收件箱…",
       retry: "点击重试",
       filters: {
+        inbox: "收件箱",
         unread: "未读",
         today: "今天",
       },

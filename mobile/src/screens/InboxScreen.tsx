@@ -53,18 +53,19 @@ export function InboxScreen() {
     markRead,
     setInboxFilter,
   } = useMailbox();
-  const [filter, setFilter] = useState("unread");
+  const [filter, setFilter] = useState("inbox");
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
 
   const mailboxTabs = useMemo(
     () => [
+      { id: "inbox", label: t.inbox.filters.inbox },
       { id: "unread", label: t.inbox.filters.unread },
       ...mailboxes.map((email) => ({
         id: email,
         label: mailboxTabLabel(email),
       })),
     ],
-    [mailboxes, t.inbox.filters.unread],
+    [mailboxes, t.inbox.filters.inbox, t.inbox.filters.unread],
   );
 
   const live = useMemo(
@@ -76,11 +77,11 @@ export function InboxScreen() {
   const replyItems = filtered.filter((m) => m.section === "reply");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
   const unread = live.filter((m) => m.isUnread && m.section === "reply").length;
-  const showMailboxChip = inboxScope === "unread" && mailboxes.length > 1;
+  const showMailboxChip = inboxScope === "synced" && mailboxes.length > 1;
 
   const onSelectFilter = (id: string) => {
     setFilter(id);
-    void setInboxFilter(id === "unread" ? "unread" : id);
+    void setInboxFilter(id);
   };
 
   const defer = (id: string) => {

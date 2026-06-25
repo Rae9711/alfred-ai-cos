@@ -42,9 +42,9 @@ _FILTERED = {MessageClassification.spam_noise}
 @router.get("", response_model=InboxOut)
 def list_inbox(
     scope: str = Query(
-        default="unread",
-        description="'unread' = all unread Primary mail; 'today' = since local midnight; "
-        "'synced' = latest synced Primary mail (up to 50)",
+        default="synced",
+        description="'synced' = latest synced Primary mail (default); "
+        "'unread' = unread Primary only; 'today' = since local midnight",
     ),
     mailbox: str | None = Query(
         default=None,
