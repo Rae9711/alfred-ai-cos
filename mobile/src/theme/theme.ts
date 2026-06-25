@@ -42,6 +42,7 @@ export const layout = {
   gapSection: 22, // space above a section title (--gap-section)
   cardPad: 16, // card interior padding (--card-pad)
   topPad: 58, // space above the screen header (status bar + breathing room)
+  tabBarInset: 82, // custom bottom tab bar — for KeyboardAvoidingView offset
 } as const;
 
 // Font family keys must match the names registered in app/_layout.tsx useFonts().

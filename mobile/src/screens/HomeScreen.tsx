@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -175,11 +177,17 @@ export function HomeScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? layout.tabBarInset : 0}
+    >
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={syncing}
@@ -284,6 +292,10 @@ export function HomeScreen() {
             placeholder={t.home.composerPlaceholder}
             placeholderTextColor={colors.ink4}
             style={styles.composerInput}
+            multiline
+            maxLength={500}
+            returnKeyType="send"
+            blurOnSubmit
             onSubmitEditing={submitComposer}
             editable={!asking}
           />
@@ -300,7 +312,7 @@ export function HomeScreen() {
           </Pressable>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -450,7 +462,7 @@ const styles = StyleSheet.create({
   },
   composerInner: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 8,
     backgroundColor: colors.card,
     borderRadius: 22,
@@ -459,8 +471,16 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
+    minHeight: 44,
   },
-  composerInput: { flex: 1, fontSize: 15, color: colors.ink },
+  composerInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.ink,
+    minHeight: 28,
+    maxHeight: 100,
+    paddingVertical: 4,
+  },
   micBtn: {
     width: 36,
     height: 36,
