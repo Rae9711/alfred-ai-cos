@@ -10,7 +10,8 @@ from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token, encrypt_token
 from app.services.google_oauth import fresh_credentials
 from app.services.gmail import use_gmail_credentials
-from app.services.inbox_view import is_gmail_unread
+from app.services.inbox_view import is_gmail_unread, is_message_unread
+from app.services.sms_inbox import mark_sms_read
 
 GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
 
@@ -49,7 +50,12 @@ def mark_message_read(db: Session, user: User, message: Message) -> tuple[Messag
     """
     if message.user_id != user.id:
         raise ValueError("Message not found")
-    if not is_gmail_unread(message.gmail_labels):
+    if not is_message_unread(message):
+        return message, True
+
+    if message.source == "sms":
+        mark_sms_read(message)
+        db.commit()
         return message, True
 
     account = get_google_account_for_message(db, message)

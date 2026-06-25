@@ -28,10 +28,11 @@ from app.services.message_body import fetch_message_body
 from app.services.message_read import account_has_gmail_modify, mark_message_read
 from app.services.inbox_view import (
     effective_inbox_category,
-    is_gmail_unread,
+    is_message_unread,
     start_of_today_utc,
     user_replied_message_ids,
 )
+from app.services.sms_inbox import sms_reply_phone
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -94,15 +95,16 @@ def list_inbox(
             break
         if filter_account_id and m.connected_account_id != filter_account_id:
             continue
-        if not message_in_primary_inbox(m):
-            filtered += 1
-            continue
+        if m.source != "sms":
+            if not message_in_primary_inbox(m):
+                filtered += 1
+                continue
         if m.classification in _FILTERED:
             filtered += 1
             continue
 
         category = effective_inbox_category(m)
-        is_unread = is_gmail_unread(m.gmail_labels)
+        is_unread = is_message_unread(m)
         if scope == "unread" and not is_unread:
             continue
         user_replied = m.id in replied_ids
@@ -119,6 +121,8 @@ def list_inbox(
                 mailbox_email=account_by_id.get(m.connected_account_id or "", ""),
                 is_unread=is_unread,
                 user_replied=user_replied,
+                source=m.source or "gmail",
+                reply_phone=sms_reply_phone(m),
             )
         )
 
@@ -148,7 +152,10 @@ def get_message(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not load email from Gmail") from exc
+        detail = "Could not load message body"
+        if message.source != "sms":
+            detail = "Could not load email from Gmail"
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     return MessageDetailOut(
         id=message.id,
@@ -160,6 +167,8 @@ def get_message(
         category=effective_inbox_category(message),
         sent_at=message.sent_at,
         mailbox_email=account_by_id.get(message.connected_account_id or "", ""),
+        source=message.source or "gmail",
+        reply_phone=sms_reply_phone(message),
     )
 
 
@@ -181,7 +190,7 @@ def mark_read(
         raise HTTPException(status_code=502, detail="Could not update Gmail") from exc
     return MessageReadOut(
         id=message.id,
-        is_unread=is_gmail_unread(message.gmail_labels),
+        is_unread=is_message_unread(message),
         gmail_synced=gmail_synced,
     )
 

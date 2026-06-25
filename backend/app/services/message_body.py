@@ -14,7 +14,14 @@ _MAX_BODY_CHARS = 12_000
 
 
 def fetch_message_body(db: Session, message: Message) -> str:
-    """Return the full plain-text body from Gmail for one stored message."""
+    """Return the full plain-text body for one stored message."""
+    if message.source == "sms":
+        headers = message.headers or {}
+        body = str(headers.get("sms_body") or message.snippet or "").strip()
+        if not body:
+            raise ValueError("Missing SMS body")
+        return body
+
     account = get_google_account_for_message(db, message)
     if account is None:
         raise ValueError("Missing connected account for message")
@@ -30,6 +37,8 @@ def fetch_message_body(db: Session, message: Message) -> str:
 
 def build_draft_context(*, message: Message, body: str) -> str:
     """Thread context passed to the draft-reply LLM."""
+    if message.source == "sms":
+        return f"SMS from: {message.sender}\n\n{body}"
     return (
         f"Subject: {message.subject or '(none)'}\n"
         f"From: {message.sender}\n\n"

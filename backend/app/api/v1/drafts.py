@@ -7,6 +7,7 @@ and is created as an ActionProposal in app/api/v1/actions.py."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -28,6 +29,16 @@ def create_draft(
     message = db.get(Message, payload.message_id)
     if message is None or message.user_id != user.id:
         raise HTTPException(status_code=404, detail="Message not found")
+
+    revising = bool(payload.instruction or (payload.revision_history or []))
+    if not revising:
+        existing = db.scalar(
+            select(DraftReply)
+            .where(DraftReply.user_id == user.id, DraftReply.message_id == message.id)
+            .order_by(DraftReply.created_at.desc())
+        )
+        if existing is not None:
+            return existing
 
     try:
         body = fetch_message_body(db, message)

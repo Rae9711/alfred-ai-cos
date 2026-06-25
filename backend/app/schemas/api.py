@@ -95,6 +95,8 @@ class InboxMessageOut(BaseModel):
     mailbox_email: str = ""
     is_unread: bool = True
     user_replied: bool = False
+    source: str = "gmail"
+    reply_phone: str | None = None
 
 
 class InboxOut(BaseModel):
@@ -115,6 +117,20 @@ class MessageDetailOut(BaseModel):
     category: str
     sent_at: datetime | None
     mailbox_email: str = ""
+    source: str = "gmail"
+    reply_phone: str | None = None
+
+
+class SmsForwardingOut(BaseModel):
+    webhook_url: str
+    token: str
+
+
+class SmsIngestOut(BaseModel):
+    message_id: str
+    commitments_extracted: int
+    deduped: bool
+    draft_created: bool
 
 
 class MessageReadOut(BaseModel):

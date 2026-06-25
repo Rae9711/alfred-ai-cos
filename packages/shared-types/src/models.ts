@@ -191,6 +191,8 @@ export interface InboxMessage {
   mailbox_email: string;
   is_unread: boolean;
   user_replied: boolean;
+  source?: "gmail" | "sms" | string;
+  reply_phone?: string | null;
 }
 
 /** Full message body for reply drafting (fetched from Gmail on demand). */
@@ -204,6 +206,8 @@ export interface MessageDetail {
   category: InboxMessage["category"];
   sent_at: string | null;
   mailbox_email: string;
+  source?: "gmail" | "sms" | string;
+  reply_phone?: string | null;
 }
 
 export interface InboxView {
@@ -258,6 +262,11 @@ export interface SyncResponse {
   commitments_found: number;
   events_synced: number;
   initial_backfill: boolean;
+}
+
+export interface SmsForwarding {
+  webhook_url: string;
+  token: string;
 }
 
 export interface SessionToken {

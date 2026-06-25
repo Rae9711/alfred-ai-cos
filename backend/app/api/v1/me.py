@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
+from app.core.config import get_settings
 from app.db.base import get_db
 from app.db.enums import Provider, SyncStatus
 from app.db.models import (
@@ -26,8 +27,8 @@ from app.db.models import (
     Task,
     User,
 )
-from app.schemas.api import ConnectedMailboxOut, MeOut, OnboardingPrefs
-from app.services import google_oauth
+from app.schemas.api import ConnectedMailboxOut, MeOut, OnboardingPrefs, SmsForwardingOut
+from app.services import google_oauth, sms_inbox
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
@@ -91,6 +92,19 @@ def get_me(
     db: Session = Depends(get_db),
 ) -> MeOut:
     return _me(db, user)
+
+
+@router.get("/me/sms-forwarding", response_model=SmsForwardingOut)
+def get_sms_forwarding(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsForwardingOut:
+    """Per-user webhook URL + token for the iOS SMS forwarding Shortcut."""
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+    settings = get_settings()
+    base = settings.app_base_url.rstrip("/")
+    return SmsForwardingOut(webhook_url=f"{base}/api/v1/inbox/sms", token=token)
 
 
 @router.post("/onboarding", response_model=MeOut)

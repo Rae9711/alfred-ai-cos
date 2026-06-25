@@ -2,12 +2,13 @@ import type { InboxMessage } from "@albert/shared-types";
 
 export type AppInboxItem = {
   id: string;
-  source: "email";
+  source: "email" | "sms";
   sender: string;
   title: string;
   take: string;
   summary: string;
   mailboxEmail: string;
+  replyPhone: string | null;
   tags: { label: string; tone: "warn" | "accent" | "muted" }[];
   section: "reply" | "fyi";
   category: InboxMessage["category"];
@@ -62,15 +63,25 @@ export function showsReplyActions(message: InboxMessage): boolean {
 
 export function mapInboxMessage(message: InboxMessage): AppInboxItem {
   const section = needsAttention(message) ? "reply" : "fyi";
+  const isSms = message.source === "sms";
+  const tags = isSms
+    ? ([
+        { label: "SMS", tone: "accent" as const },
+        tagForCategory(message.category),
+      ] as AppInboxItem["tags"])
+    : ([tagForCategory(message.category)] as AppInboxItem["tags"]);
   return {
     id: message.id,
-    source: "email",
+    source: isSms ? "sms" : "email",
     sender: parseSenderDisplay(message.sender),
-    title: message.subject?.trim() || "(No subject)",
+    title: isSms
+      ? message.snippet?.trim() || message.take?.trim() || "Text message"
+      : message.subject?.trim() || "(No subject)",
     take: message.take?.trim() || "",
     summary: message.take?.trim() || message.snippet?.trim() || "",
     mailboxEmail: message.mailbox_email?.trim() || "",
-    tags: [tagForCategory(message.category)],
+    replyPhone: message.reply_phone?.trim() || null,
+    tags,
     section,
     category: message.category,
     isUnread: message.is_unread ?? true,

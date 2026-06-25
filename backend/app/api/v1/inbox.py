@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import get_db
-from app.services import forward_inbox
+from app.schemas.api import SmsIngestOut
+from app.services import forward_inbox, sms_inbox
 
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 
@@ -75,4 +76,49 @@ def forward_inbox_webhook(
         message_id=result.message_id,
         commitments_extracted=result.commitments_extracted,
         deduped=result.deduped,
+    )
+
+
+class SmsIn(BaseModel):
+    """Payload from the user's iOS Shortcut when a new SMS arrives."""
+
+    from_number: str = Field(description="Sender phone number")
+    body: str = Field(description="SMS text")
+    from_name: str | None = Field(default=None, description="Contact name if available")
+    message_id: str | None = Field(
+        default=None, description="Optional stable id from Shortcuts for dedup"
+    )
+    received_at: datetime | None = None
+
+
+@router.post("/sms", response_model=SmsIngestOut)
+def sms_inbox_webhook(
+    payload: SmsIn,
+    x_sms_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> SmsIngestOut:
+    if not x_sms_token:
+        raise HTTPException(status_code=401, detail="Missing X-Sms-Token")
+    user = sms_inbox.find_user_by_sms_token(db, x_sms_token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid SMS token")
+
+    try:
+        result = sms_inbox.ingest_sms(
+            db,
+            user=user,
+            from_number=payload.from_number,
+            body=payload.body,
+            from_name=payload.from_name,
+            message_id=payload.message_id,
+            received_at=payload.received_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return SmsIngestOut(
+        message_id=result.message_id,
+        commitments_extracted=result.commitments_extracted,
+        deduped=result.deduped,
+        draft_created=result.draft_created,
     )

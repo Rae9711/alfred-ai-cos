@@ -55,6 +55,7 @@ class TaskStatus(enum.StrEnum):
 
 class SourceType(enum.StrEnum):
     gmail = "gmail"
+    sms = "sms"
     calendar = "calendar"
     manual = "manual"
     voice = "voice"

@@ -180,7 +180,7 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
             counterparty=item.counterparty,
             due_date=item.due_date,
             priority=item.priority,
-            source_type=SourceType.gmail,
+            source_type=SourceType.sms if message.source == "sms" else SourceType.gmail,
             source_id=message.id,
             evidence=item.evidence,
             confidence=item.confidence,

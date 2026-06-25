@@ -100,6 +100,12 @@ export const translations = {
       originalEmail: "Original email",
       loadingEmail: "Loading full email…",
       albertSummary: "Summary",
+      openInMessages: "Open in Messages",
+      smsOpened: "Draft ready in Messages — tap Send when it looks right.",
+      smsMissingPhone: "Missing phone number for this text.",
+    },
+    sms: {
+      messageLabel: "Text message",
     },
     settings: {
       you: "You",
@@ -111,6 +117,12 @@ export const translations = {
       reconnectForRead: "Tap to re-authorize read sync",
       connectedMailboxes: "Connected mailboxes",
       disconnectMailbox: "Disconnect",
+      smsTitle: "SMS forwarding",
+      smsHint:
+        "Use an iOS Shortcut to forward incoming texts to Albert. Webhook URL:",
+      smsTokenLabel: "Header X-Sms-Token:",
+      smsSteps:
+        "In Shortcuts: When I receive a message → Get Contents of URL (POST JSON with from_number, body, optional from_name) → add header X-Sms-Token with your token above.",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -225,6 +237,12 @@ export const translations = {
       originalEmail: "原始邮件",
       loadingEmail: "正在加载完整邮件…",
       albertSummary: "摘要",
+      openInMessages: "在「信息」中发送",
+      smsOpened: "已在「信息」中填好草稿 — 确认后点发送即可。",
+      smsMissingPhone: "缺少对方号码，无法打开短信。",
+    },
+    sms: {
+      messageLabel: "短信",
     },
     settings: {
       you: "我的",
@@ -236,6 +254,11 @@ export const translations = {
       reconnectForRead: "点击重新授权已读同步",
       connectedMailboxes: "已连接邮箱",
       disconnectMailbox: "断开",
+      smsTitle: "短信转发",
+      smsHint: "用 iOS 快捷指令把收到的短信转发给 Albert。Webhook 地址：",
+      smsTokenLabel: "请求头 X-Sms-Token：",
+      smsSteps:
+        "快捷指令：收到信息时 → 获取 URL 内容（POST JSON：from_number、body，可选 from_name）→ 添加请求头 X-Sms-Token（使用上方令牌）。",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",

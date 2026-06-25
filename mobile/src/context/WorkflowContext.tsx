@@ -25,6 +25,8 @@ export type ChatMode = "free" | "reply" | "delegate" | "proactive";
 
 export type WorkflowThread = {
   messageId: string;
+  source: "email" | "sms";
+  replyPhone: string | null;
   sender: string;
   subject: string;
   summary: string | null;
@@ -93,6 +95,8 @@ export function WorkflowProvider({
       const item = itemById(messageId);
       setThread({
         messageId,
+        source: item?.source ?? "email",
+        replyPhone: item?.replyPhone ?? null,
         sender: item?.sender ?? "Contact",
         subject: item?.title ?? "Message",
         summary: item?.take || null,
@@ -122,6 +126,8 @@ export function WorkflowProvider({
             current?.messageId === messageId
               ? {
                   ...current,
+                  source: detail.source === "sms" ? "sms" : "email",
+                  replyPhone: detail.reply_phone?.trim() || current.replyPhone,
                   sender: detail.sender,
                   subject: detail.subject?.trim() || current.subject,
                   summary: detail.take?.trim() || current.summary,

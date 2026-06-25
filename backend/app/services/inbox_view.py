@@ -48,6 +48,14 @@ def is_gmail_unread(labels: list[str] | None) -> bool:
     return "UNREAD" in labels
 
 
+def is_message_unread(message: Message) -> bool:
+    if message.source == "sms":
+        from app.services.sms_inbox import is_sms_unread
+
+        return is_sms_unread(message)
+    return is_gmail_unread(message.gmail_labels)
+
+
 def user_replied_message_ids(db: Session, user_id: str) -> set[str]:
     rows = db.scalars(
         select(OutboundReply.source_message_id).where(OutboundReply.user_id == user_id)

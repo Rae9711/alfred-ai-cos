@@ -40,12 +40,24 @@ export function SettingsScreen() {
   const { syncAndRefresh } = useMailbox();
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [smsToken, setSmsToken] = useState<string | null>(null);
+  const [smsWebhook, setSmsWebhook] = useState<string | null>(null);
 
   useEffect(() => {
     api
       .getMe()
       .then(setMe)
       .catch(() => setMe(null));
+    api
+      .getSmsForwarding()
+      .then((cfg) => {
+        setSmsToken(cfg.token);
+        setSmsWebhook(cfg.webhook_url);
+      })
+      .catch(() => {
+        setSmsToken(null);
+        setSmsWebhook(null);
+      });
   }, []);
 
   const editQuietHours = useCallback(() => {
@@ -229,6 +241,25 @@ export function SettingsScreen() {
         />
       </View>
       <Meta style={styles.langHint}>{t.settings.languageDetail}</Meta>
+
+      <SectionTitle label={t.settings.smsTitle} />
+      <View style={styles.smsCard}>
+        <Text style={styles.smsHint}>{t.settings.smsHint}</Text>
+        {smsWebhook ? (
+          <Text selectable style={styles.smsMono}>
+            {smsWebhook}
+          </Text>
+        ) : null}
+        {smsToken ? (
+          <>
+            <Text style={styles.smsLabel}>{t.settings.smsTokenLabel}</Text>
+            <Text selectable style={styles.smsMono}>
+              {smsToken}
+            </Text>
+          </>
+        ) : null}
+        <Text style={styles.smsSteps}>{t.settings.smsSteps}</Text>
+      </View>
 
       {/* Integrations */}
       <SectionTitle label="Integrations" />
@@ -528,6 +559,30 @@ const styles = StyleSheet.create({
   approvalDesc: { fontSize: 13, color: colors.ink2, marginTop: 4 },
 
   langHint: { marginTop: 8, marginBottom: 4 },
+  smsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair,
+    padding: 14,
+    gap: 10,
+    marginBottom: 8,
+  },
+  smsHint: { fontSize: 13, color: colors.ink2, lineHeight: 19 },
+  smsLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  smsMono: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: colors.ink,
+    lineHeight: 16,
+  },
+  smsSteps: { fontSize: 12, color: colors.ink3, lineHeight: 18 },
   langCheck: {
     width: 22,
     height: 22,

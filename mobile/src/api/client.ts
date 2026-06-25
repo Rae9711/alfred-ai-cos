@@ -22,6 +22,7 @@ import type {
   Me,
   MeetingPrep,
   OnboardingPrefs,
+  SmsForwarding,
   SessionToken,
   SyncResponse,
   Task,
@@ -309,6 +310,7 @@ export const api = {
   },
   getWaiting: () => request<WaitingView>("/waiting"),
   getMe: () => request<Me>("/me"),
+  getSmsForwarding: () => request<SmsForwarding>("/me/sms-forwarding"),
   submitOnboarding: (prefs: OnboardingPrefs) =>
     request<Me>("/onboarding", { method: "POST", body: JSON.stringify(prefs) }),
   registerDevice: (push_token: string, platform?: string) =>

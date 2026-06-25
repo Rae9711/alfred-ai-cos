@@ -38,6 +38,7 @@ export function MessageDetailSheet({
   const [summary, setSummary] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [read, setRead] = useState(!isUnread);
+  const [isSms, setIsSms] = useState(false);
 
   useEffect(() => {
     setRead(!isUnread);
@@ -51,10 +52,11 @@ export function MessageDetailSheet({
       try {
         const detail = await api.getMessage(messageId);
         if (cancelled) return;
-        setSubject(detail.subject?.trim() || "(No subject)");
+        setSubject(detail.subject?.trim() || (detail.source === "sms" ? t.sms.messageLabel : "(No subject)"));
         setSender(detail.sender);
         setSummary(detail.take?.trim() || null);
         setBody(detail.body);
+        setIsSms(detail.source === "sms");
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Couldn't load email");
@@ -77,7 +79,9 @@ export function MessageDetailSheet({
   return (
     <View style={styles.sheet}>
       <View style={styles.header}>
-        <Text style={styles.label}>{t.ask.originalEmail}</Text>
+        <Text style={styles.label}>
+          {isSms ? t.sms.messageLabel : t.ask.originalEmail}
+        </Text>
         <Pressable onPress={onClose} hitSlop={12}>
           <Text style={styles.close}>{t.ask.cancel}</Text>
         </Pressable>
@@ -109,7 +113,7 @@ export function MessageDetailSheet({
       )}
 
       <View style={styles.footer}>
-        {!read ? (
+        {!read && !isSms ? (
           <Pressable style={styles.markReadBtn} onPress={handleMarkRead}>
             <Text style={styles.markReadText}>{t.inbox.markReadAction}</Text>
           </Pressable>

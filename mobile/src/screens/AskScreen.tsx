@@ -25,6 +25,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { Btn, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
+import { openSmsCompose } from "@/lib/sms";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type TaskMessage = {
@@ -127,6 +128,22 @@ export function AskScreen() {
 
   const handleSendDirectly = () => {
     if (!thread || sending || thread.draftLoading) return;
+
+    if (thread.source === "sms") {
+      const phone = thread.replyPhone;
+      const body = thread.draft.body?.trim();
+      if (!phone || !body) {
+        showToast(t.ask.smsMissingPhone);
+        return;
+      }
+      openSmsCompose(phone, body);
+      void markRead(thread.messageId).catch(() => undefined);
+      void syncAndRefresh();
+      showToast(t.ask.smsOpened);
+      completeChat();
+      return;
+    }
+
     if (!thread.draftId) {
       openSheet(
         <ApprovalSheet
@@ -262,10 +279,20 @@ export function AskScreen() {
         ) : (
           <View style={styles.taskActions}>
             <Btn
-              label={sending ? "…" : t.ask.sendDirectly}
+              label={
+                thread.source === "sms"
+                  ? t.ask.openInMessages
+                  : sending
+                    ? "…"
+                    : t.ask.sendDirectly
+              }
               onPress={handleSendDirectly}
               disabled={
-                sending || thread.draftLoading || Boolean(thread.draftError)
+                sending ||
+                thread.draftLoading ||
+                Boolean(thread.draftError) ||
+                (thread.source === "sms" &&
+                  (!thread.replyPhone || !thread.draft.body?.trim()))
               }
             />
             <Pressable
