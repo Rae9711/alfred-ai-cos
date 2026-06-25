@@ -6,58 +6,72 @@ from your personal number.
 
 Email/Gmail sync is unchanged. SMS uses a separate webhook.
 
-## One-tap install (recommended)
+## Setup in Albert
 
-1. Open **You** (settings) in the Albert app.
-2. Tap **Install Shortcut** — Shortcuts opens and imports **Albert SMS Forward**.
-3. When prompted, paste your **X-Sms-Token** (tap **Copy Token** in Albert if needed).
+1. Open **You** (settings).
+2. Under **SMS forwarding**, copy:
+  - **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
+  - **X-Sms-Token** — your personal secret (never share publicly).
 
-Then create the automation (two steps after install):
+## iOS Shortcut (recommended)
 
-1. **Shortcuts → Automations → + → Message** → *When I receive a message* → **Run Immediately** → select **Albert SMS Forward**.
-2. Send yourself a test text and confirm it appears in **Inbox → SMS**.
+Albert ships a **signed** shortcut file. iOS rejects unsigned `.shortcut` downloads with
+*Importing unsigned shortcut files is not supported* — always use the link from Albert
+settings or the signed URL below, not a hand-built unsigned plist.
 
-### Import URL pattern
+### One-tap install (easiest)
 
-The app calls `GET /api/v1/me/sms-forwarding/install` (JWT) and opens:
+1. Open **You** → **SMS forwarding**.
+2. Tap **Install shortcut** (opens Shortcuts via `shortcuts://import-shortcut`).
+3. When prompted, paste your **X-Sms-Token** from the same screen.
+4. Create the automation: **When I receive a message** → run **Albert SMS Forward**
+   immediately.
 
-```text
-shortcuts://import-shortcut?url=<encoded-shortcut-download>&name=Albert%20SMS%20Forward
+Direct download (Safari):  
+`https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Forward.shortcut`  
+A signed file is ~23 KB; if the download is only ~2 KB, the server is serving an
+unsigned build — contact support or retry after a redeploy.
+
+### Manual build (maintainers)
+
+From a Mac with the `shortcuts` CLI:
+
+```bash
+python3 backend/scripts/build_sms_shortcut.py
 ```
 
-The signed shortcut file is served at:
+Commit or ship `backend/integrations/ios/Albert-SMS-Forward.shortcut` before deploying.
+The deploy image bundles that file; unsigned plists are generated at build time on macOS
+only.
 
-```text
-https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Forward.shortcut
-```
+### iCloud share link (fallback)
 
-On import, Shortcuts asks for your token once; it is stored in the shortcut header as `X-Sms-Token`.
+If Safari import still fails on some iOS versions:
 
-## Manual setup (advanced)
+1. On a Mac, open the signed `.shortcut` in Shortcuts.
+2. **Share** → **Copy iCloud Link**.
+3. Open that link on the iPhone and tap **Add Shortcut**.
 
-If one-tap import is unavailable, copy from **You → SMS forwarding**:
-
-- **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
-- **X-Sms-Token** — your personal secret (never share publicly).
+### Manual shortcut (advanced)
 
 Create an automation in the **Shortcuts** app:
 
 1. **Trigger:** *When I receive a message* → Run Immediately.
-2. **Get Details of Shortcut Input** → **Phone Number** (or **Sender**).
-   - Prefer **Text** from Get Details, not the **Numbers** magic variable (Numbers often
-     arrives as a JSON array and can cause 422 errors on older app builds).
-3. **Get Details of Shortcut Input** → **Body** (message text).
+2. **Find Messages** where *Is from the sender* is *Shortcut Input* (the incoming message).
+3. **Get Details of Messages** → **Sender** (or **Phone Number** if Sender is empty).
+  - Prefer **Text** from Get Details, not the **Numbers** magic variable (Numbers often
+   arrives as a JSON array and can cause 422 errors on older app builds).
 4. **Dictionary** with keys:
-   - `from_number` → Sender / Phone Number text from step 2
-   - `body` → message Body from step 3 (not a blank variable)
-   - `from_name` → (optional) contact name if you have it
+  - `from_number` → Sender / Phone Number text from step 3
+  - `body` → Shortcut Input (the message text)
+  - `from_name` → (optional) contact name if you have it
 5. **Get Contents of URL**
-   - Method: **POST**
-   - URL: webhook from Albert settings
-   - Headers:
-     - `Content-Type: application/json`
-     - `X-Sms-Token: <your token>`
-   - Request body: **File** → the Dictionary from step 4 (Shortcuts serializes it as JSON)
+  - Method: **POST**
+  - URL: webhook from Albert settings
+  - Headers:
+    - `Content-Type: application/json`
+    - `X-Sms-Token: <your token>`
+  - Request body: **File** → the Dictionary from step 4 (Shortcuts serializes it as JSON)
 
 ### Without the Sender magic variable
 
@@ -97,14 +111,16 @@ Success looks like:
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| **401 Missing/Invalid X-Sms-Token** | Wrong or missing header | Copy token again from Albert → You → SMS forwarding |
-| **422 Unprocessable Entity** | Body shape from Shortcuts | Use **Text** for phone, not **Numbers**; ensure `body` is message text |
-| **400 Invalid sender phone number** | Empty or non-phone `from_number` | Check Get Details → Sender / Phone Number is populated |
-| **400 SMS body is required** | Empty message text | Map `body` to Shortcut Input, not a blank variable |
-| SMS missing in Inbox | Old app build or sync delay | Pull to refresh; confirm curl returns 200 first |
-| Install Shortcut does nothing | Shortcuts not installed / blocked URL | Install Apple Shortcuts; retry from Albert → You |
+
+| Symptom                             | Likely cause                     | Fix                                                                    |
+| ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
+| **Importing unsigned shortcut files is not supported** | Unsigned `.shortcut` from server | Use **Install shortcut** in Albert → You, or the signed URL (~23 KB). Maintainer: run `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
+| **401 Missing/Invalid X-Sms-Token** | Wrong or missing header          | Copy token again from Albert → You → SMS forwarding                    |
+| **422 Unprocessable Entity**        | Body shape from Shortcuts        | Use **Text** for phone, not **Numbers**; ensure `body` is message text |
+| **400 Invalid sender phone number** | Empty or non-phone `from_number` | Check Get Details → Sender / Phone Number is populated                 |
+| **400 SMS body is required**        | Empty message text               | Map `body` to Shortcut Input, not a blank variable                     |
+| SMS missing in Inbox                | Old app build or sync delay      | Pull to refresh; confirm curl returns 200 first                        |
+
 
 ## Reply flow in the app
 
@@ -115,9 +131,10 @@ Success looks like:
 
 ## API
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/api/v1/me/sms-forwarding` | JWT (app session) |
-| GET | `/api/v1/me/sms-forwarding/install` | JWT (app session) |
-| GET | `/api/v1/integrations/ios/Albert-SMS-Forward.shortcut` | Public (signed file) |
-| POST | `/api/v1/inbox/sms` | Header `X-Sms-Token` |
+
+| Method | Path                        | Auth                 |
+| ------ | --------------------------- | -------------------- |
+| GET    | `/api/v1/me/sms-forwarding` | JWT (app session)    |
+| POST   | `/api/v1/inbox/sms`         | Header `X-Sms-Token` |
+
+
