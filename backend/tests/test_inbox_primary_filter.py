@@ -35,6 +35,21 @@ def test_primary_tab_message_visible(db: Session, user: User) -> None:
     assert message_in_primary_inbox(m) is True
 
 
+def test_updates_tab_visible(db: Session, user: User) -> None:
+    m = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="upd1",
+        sender="registrar@umich.edu",
+        recipients=[],
+        subject="Enrollment notice",
+        gmail_labels=["INBOX", "CATEGORY_UPDATES"],
+        classification=MessageClassification.informational,
+        sender_classification="person",
+    )
+    assert message_in_primary_inbox(m) is True
+
+
 def test_promotions_tab_hidden(db: Session, user: User) -> None:
     m = Message(
         user_id=user.id,

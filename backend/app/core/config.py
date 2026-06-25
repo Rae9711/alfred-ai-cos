@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     sync_incremental_fallback_max: int = 20
     sync_unread_max_results: int = 200
     sync_recent_primary_max: int = 40
+    sync_incremental_catchup_max: int = 20
 
     # Gmail OAuth scopes for the first slice: read inbox, create drafts. No send scope yet.
     google_scopes: list[str] = [

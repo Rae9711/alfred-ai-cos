@@ -45,6 +45,10 @@ def use_gmail_credentials(creds: Credentials):
 InboxTab = Literal["all", "primary"]
 
 _PRIMARY_LABEL = "CATEGORY_PERSONAL"
+# Promotions/Social/Forums stay out of Albert; Updates (school, receipts) are included.
+_SKIPPED_INGEST_TABS = frozenset(
+    {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"}
+)
 _NON_PRIMARY_TABS = frozenset(
     {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS"}
 )
@@ -87,13 +91,14 @@ def should_ingest_inbox_message(labels: list[str] | None) -> bool:
     """Whether to store a message during sync.
 
     Gmail often delivers new Primary mail with only INBOX/UNREAD before
-    CATEGORY_PERSONAL is applied. Ingest those; skip Promotions/Social/etc.
+    CATEGORY_PERSONAL is applied. Ingest those; skip Promotions/Social/Forums.
+    Updates (e.g. school notifications) are included.
     """
     if not labels:
         return False
     if "INBOX" not in labels:
         return False
-    if is_non_primary_tab(labels):
+    if _SKIPPED_INGEST_TABS.intersection(labels):
         return False
     return True
 

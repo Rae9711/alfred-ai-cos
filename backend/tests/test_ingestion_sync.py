@@ -195,7 +195,7 @@ def test_incremental_sync_skips_catchup_and_unread(
     result = ingestion.sync_messages(db, user.id, incremental=True)
 
     assert len(result.new_messages) == 1
-    assert calls == []
+    assert calls == ["recent"]
 
 
 def test_deep_sync_runs_catchup_after_initial(

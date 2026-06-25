@@ -106,8 +106,8 @@ export function InboxScreen() {
 
   const onPullRefresh = async () => {
     try {
-      await syncAndRefresh();
-      showToast(t.inbox.refreshed);
+      const ingested = await syncAndRefresh();
+      showToast(ingested > 0 ? t.inbox.refreshed : t.inbox.upToDate);
     } catch {
       // error banner in MailboxContext
     }

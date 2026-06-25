@@ -52,6 +52,7 @@ export const translations = {
       syncing: "Syncing your inbox…",
       pullToSync: "Pull down to sync",
       refreshed: "Inbox updated",
+      upToDate: "Already up to date",
       syncedJustNow: "Synced just now",
       retry: "Tap to retry",
       filters: {
@@ -167,6 +168,7 @@ export const translations = {
       syncing: "正在同步收件箱…",
       pullToSync: "下拉同步收件箱",
       refreshed: "收件箱已更新",
+      upToDate: "暂无新邮件",
       syncedJustNow: "刚刚同步",
       retry: "点击重试",
       filters: {

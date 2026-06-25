@@ -31,7 +31,7 @@ type MailboxState = {
   lastSyncedAt: Date | null;
   setInboxFilter: (filter: InboxFilter) => Promise<void>;
   refresh: () => Promise<void>;
-  syncAndRefresh: () => Promise<void>;
+  syncAndRefresh: () => Promise<number>;
   markRead: (id: string) => Promise<void>;
   itemById: (id: string) => AppInboxItem | undefined;
 };
@@ -104,15 +104,18 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     setSyncing(true);
     setError(null);
     const { scope, mailbox } = filterRef.current;
+    let ingested = 0;
     try {
       await loadInbox(scope, mailbox);
-      await api.sync({ background: true });
+      const result = await api.sync({ ingestOnly: true });
+      ingested = result.ingested;
+      await loadInbox(scope, mailbox);
       setLastSyncedAt(new Date());
-      for (const delay of [3_000, 10_000, 20_000]) {
+      if (ingested > 0) {
         setTimeout(() => {
           const current = filterRef.current;
           void loadInbox(current.scope, current.mailbox).catch(() => undefined);
-        }, delay);
+        }, 5_000);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
@@ -122,6 +125,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       const wait = Math.max(0, minSpinnerMs - (Date.now() - started));
       setTimeout(() => setSyncing(false), wait);
     }
+    return ingested;
   }, [loadInbox]);
 
   const markRead = useCallback(async (id: string) => {

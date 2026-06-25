@@ -220,6 +220,19 @@ def _apply_history_label_changes(
             continue
 
 
+def _sync_incremental_inbox_catchup(
+    db: Session, account: ConnectedAccount, token: dict
+) -> list[Message]:
+    """Pick up new inbox mail History missed (only ids not already stored)."""
+    settings = get_settings()
+    recent_ids = gmail.list_recent_message_ids(
+        token,
+        max_results=settings.sync_incremental_catchup_max,
+        inbox_tab="all",
+    )
+    return _ingest_message_ids(db, account, token, recent_ids)
+
+
 def _sync_account(
     db: Session, account: ConnectedAccount, *, incremental: bool = True
 ) -> SyncIngestResult:
@@ -265,6 +278,9 @@ def _sync_account(
                         inbox_tab="primary",
                     )
                     new_messages = _ingest_message_ids(db, account, token, message_ids)
+
+            if incremental and not initial_backfill:
+                new_messages.extend(_sync_incremental_inbox_catchup(db, account, token))
 
             if account.gmail_history_id:
                 _apply_history_label_changes(db, account, token, account.gmail_history_id)

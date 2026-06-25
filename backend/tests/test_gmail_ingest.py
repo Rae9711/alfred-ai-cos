@@ -15,5 +15,9 @@ def test_skip_promotions() -> None:
     assert should_ingest_inbox_message(["INBOX", "CATEGORY_PROMOTIONS", "UNREAD"]) is False
 
 
+def test_ingest_updates_tab() -> None:
+    assert should_ingest_inbox_message(["INBOX", "CATEGORY_UPDATES", "UNREAD"]) is True
+
+
 def test_skip_non_inbox() -> None:
     assert should_ingest_inbox_message(["SENT"]) is False
