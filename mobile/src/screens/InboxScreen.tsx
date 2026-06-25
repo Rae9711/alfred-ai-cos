@@ -51,6 +51,7 @@ export function InboxScreen() {
     error,
     lastSyncedAt,
     syncAndRefresh,
+    refresh,
     markRead,
     setInboxFilter,
   } = useMailbox();
@@ -61,12 +62,18 @@ export function InboxScreen() {
     () => [
       { id: "inbox", label: t.inbox.filters.inbox },
       { id: "unread", label: t.inbox.filters.unread },
+      { id: "sms", label: t.inbox.filters.sms },
       ...mailboxes.map((email) => ({
         id: email,
         label: mailboxTabLabel(email),
       })),
     ],
-    [mailboxes, t.inbox.filters.inbox, t.inbox.filters.unread],
+    [
+      mailboxes,
+      t.inbox.filters.inbox,
+      t.inbox.filters.unread,
+      t.inbox.filters.sms,
+    ],
   );
 
   const live = useMemo(
@@ -128,6 +135,11 @@ export function InboxScreen() {
 
   const onPullRefresh = async () => {
     try {
+      if (filter === "sms") {
+        await refresh();
+        showToast(t.inbox.refreshed);
+        return;
+      }
       const ingested = await syncAndRefresh();
       showToast(ingested > 0 ? t.inbox.refreshed : t.inbox.upToDate);
     } catch {
@@ -268,9 +280,11 @@ export function InboxScreen() {
       {filtered.length === 0 ? (
         <View style={styles.empty}>
           <Serif size={17} italic color={colors.ink3}>
-            {t.inbox.inboxZero}
+            {filter === "sms" ? t.inbox.smsEmpty : t.inbox.inboxZero}
           </Serif>
-          <Text style={styles.pullHint}>{t.inbox.pullToSync}</Text>
+          <Text style={styles.pullHint}>
+            {filter === "sms" ? t.inbox.smsEmptySub : t.inbox.pullToSync}
+          </Text>
         </View>
       ) : null}
 

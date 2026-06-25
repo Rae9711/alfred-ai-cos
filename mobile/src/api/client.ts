@@ -165,7 +165,10 @@ export const api = {
     );
   },
   getToday: () => request<TodayDashboard>("/today"),
-  getInbox: (opts?: { scope?: "unread" | "today" | "synced"; mailbox?: string }) => {
+  getInbox: (opts?: {
+    scope?: "unread" | "today" | "synced" | "sms";
+    mailbox?: string;
+  }) => {
     const params = new URLSearchParams();
     if (opts?.scope) params.set("scope", opts.scope);
     if (opts?.mailbox) params.set("mailbox", opts.mailbox);

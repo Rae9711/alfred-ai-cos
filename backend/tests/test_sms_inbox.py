@@ -160,3 +160,37 @@ def test_ingest_sms_succeeds_when_auto_draft_fails(
     msg = db.get(Message, result.message_id)
     assert msg is not None
     assert msg.source == "sms"
+
+
+def test_list_inbox_sms_scope_returns_only_texts(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.api.v1 import messages as messages_mod
+
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    sms_inbox.ingest_sms(
+        db,
+        user=user,
+        from_number="+15551234567",
+        body="Text me back",
+        message_id="sms-tab-1",
+    )
+    db.add(
+        Message(
+            user_id=user.id,
+            source="gmail",
+            external_id="gmail:1",
+            sender="boss@corp.com",
+            subject="Quarterly review",
+            snippet="Please review",
+            sent_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+
+    out = messages_mod.list_inbox(scope="sms", user=user, db=db)
+    assert len(out.messages) == 1
+    assert out.messages[0].source == "sms"
+    assert "Text me back" in (out.messages[0].snippet or "")

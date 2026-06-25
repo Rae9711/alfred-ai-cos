@@ -17,8 +17,8 @@ import { registerForPush } from "@/api/push";
 import { useMailAutoSync } from "@/hooks/useMailAutoSync";
 import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
 
-export type InboxScope = "unread" | "today" | "synced";
-export type InboxFilter = "inbox" | "unread" | "today" | string;
+export type InboxScope = "unread" | "today" | "synced" | "sms";
+export type InboxFilter = "inbox" | "unread" | "today" | "sms" | string;
 
 type MailboxState = {
   items: AppInboxItem[];
@@ -77,6 +77,8 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
           await loadInbox("unread");
         } else if (filter === "today") {
           await loadInbox("today");
+        } else if (filter === "sms") {
+          await loadInbox("sms");
         } else {
           await loadInbox("synced", filter);
         }

@@ -45,7 +45,8 @@ def list_inbox(
     scope: str = Query(
         default="synced",
         description="'synced' = latest synced Primary mail (default); "
-        "'unread' = unread Primary only; 'today' = since local midnight",
+        "'unread' = unread Primary only; 'today' = since local midnight; "
+        "'sms' = forwarded text messages only",
     ),
     mailbox: str | None = Query(
         default=None,
@@ -77,7 +78,9 @@ def list_inbox(
         .where(Message.sent_at.is_not(None))
         .order_by(Message.sent_at.desc().nullslast())
     )
-    if scope == "today":
+    if scope == "sms":
+        stmt = stmt.where(Message.source == "sms").limit(synced_limit)
+    elif scope == "today":
         stmt = stmt.where(Message.sent_at >= today_start)
     elif scope == "unread":
         stmt = stmt.limit(unread_limit * 2)
@@ -93,9 +96,11 @@ def list_inbox(
             break
         if scope == "unread" and len(messages) >= unread_limit:
             break
-        if filter_account_id and m.connected_account_id != filter_account_id:
+        if scope == "sms" and len(messages) >= synced_limit:
+            break
+        if filter_account_id and scope != "sms" and m.connected_account_id != filter_account_id:
             continue
-        if m.source != "sms":
+        if scope != "sms" and m.source != "sms":
             if not message_in_primary_inbox(m):
                 filtered += 1
                 continue
