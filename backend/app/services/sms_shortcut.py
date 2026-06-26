@@ -48,13 +48,22 @@ def _shortcut_input_attachment() -> dict[str, Any]:
     }
 
 
+def _shortcut_input_variable() -> dict[str, Any]:
+    """Unwrapped variable ref — required by message actions on some iOS builds."""
+    return {
+        "Type": "Variable",
+        "VariableName": "Shortcut Input",
+    }
+
+
 def _detect_text_from_shortcut_input(*, output_name: str) -> tuple[dict[str, Any], str]:
     action_uuid = _uid()
     return {
         "WFWorkflowActionIdentifier": DETECT_TEXT_ACTION,
         "WFWorkflowActionParameters": {
             "UUID": action_uuid,
-            "WFInput": _shortcut_input_attachment(),
+            # Unwrapped Shortcut Input — wrapped refs often yield empty text in automations.
+            "WFInput": _shortcut_input_variable(),
             "CustomOutputName": output_name,
         },
     }, action_uuid
@@ -94,16 +103,14 @@ def _post_sms_webhook_action(
     webhook_url: str,
     dict_uuid: str,
     token_header_value: dict[str, Any],
+    json_values: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     post_uuid = _uid()
-    return {
-        "WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
-        "WFWorkflowActionParameters": {
+    params: dict[str, Any] = {
             "UUID": post_uuid,
             "WFURL": webhook_url,
             "WFHTTPMethod": "POST",
-            "WFHTTPBodyType": "File",
-            "WFRequestVariable": _attachment(dict_uuid, "Dictionary"),
+            "WFHTTPBodyType": "Json" if json_values else "File",
             "WFHTTPHeaders": {
                 "Value": {
                     "WFDictionaryFieldValueItems": [
@@ -128,7 +135,35 @@ def _post_sms_webhook_action(
                 },
                 "WFSerializationType": "WFDictionaryFieldValue",
             },
+    }
+    if json_values:
+        params["WFJSONValues"] = json_values
+    else:
+        params["WFRequestVariable"] = _attachment(dict_uuid, "Dictionary")
+    return {
+        "WFWorkflowActionIdentifier": "is.workflow.actions.downloadurl",
+        "WFWorkflowActionParameters": params,
+    }
+
+
+def _payload_dict_items(
+    *,
+    body_attachment: dict[str, Any],
+    extra: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Dictionary action items for the SMS webhook JSON body."""
+    items: list[dict[str, Any]] = [
+        _dict_field("body", body_attachment),
+        _dict_field("shortcut_input", body_attachment),
+        _dict_field("text", body_attachment),
+    ]
+    if extra:
+        items.extend(extra)
+    return {
+        "Value": {
+            "WFDictionaryFieldValueItems": items,
         },
+        "WFSerializationType": "WFDictionaryFieldValue",
     }
 
 
@@ -165,26 +200,19 @@ def build_sms_forward_shortcut(
     When ``sms_token`` is set (personalized download), it is embedded in the header.
     Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
 
-    Message Received passes the incoming message as Shortcut Input. We read body via
-    detect.text only — sender phone/name actions often show as *Unknown Action* on
-    recent iOS builds when embedded in signed plists. Users can add **Get Details of
-    Messages** manually in Shortcuts if their device supports it.
+    Message Received passes the incoming message as Shortcut Input. We map Shortcut Input
+    directly into the JSON body (body/text/shortcut_input) — ``detect.text`` alone often
+    returns empty in automations on recent iOS builds.
     """
     dict_uuid = _uid()
-    get_body, body_uuid = _detect_text_from_shortcut_input(output_name="Message Text")
+    input_ref = _shortcut_input_attachment()
 
+    json_values = _payload_dict_items(body_attachment=input_ref)
     payload_dict = {
         "WFWorkflowActionIdentifier": "is.workflow.actions.dictionary",
         "WFWorkflowActionParameters": {
             "UUID": dict_uuid,
-            "WFItems": {
-                "Value": {
-                    "WFDictionaryFieldValueItems": [
-                        _dict_field("body", _attachment(body_uuid, "Message Text")),
-                    ]
-                },
-                "WFSerializationType": "WFDictionaryFieldValue",
-            },
+            "WFItems": json_values,
         },
     }
 
@@ -195,16 +223,17 @@ def build_sms_forward_shortcut(
             "WFSerializationType": "WFTextTokenString",
         }
         import_questions: list[dict[str, Any]] = []
-        actions: list[dict[str, Any]] = [get_body, payload_dict]
+        actions: list[dict[str, Any]] = [payload_dict]
     else:
         token_action, token_header_value, import_questions = _token_prompt_action()
-        actions = [token_action, get_body, payload_dict]
+        actions = [token_action, payload_dict]
 
     actions.append(
         _post_sms_webhook_action(
             webhook_url=webhook_url,
             dict_uuid=dict_uuid,
             token_header_value=token_header_value,
+            json_values=json_values,
         )
     )
 
@@ -287,26 +316,31 @@ def build_sms_share_shortcut(
     Re-running on the same body is safe — ``message_id`` is a stable hash for dedup.
     """
     dict_uuid = _uid()
+    input_ref = _shortcut_input_attachment()
     get_body, body_uuid = _detect_text_from_shortcut_input(output_name="Message Text")
+    body_ref = _attachment(body_uuid, "Message Text")
     get_hash, hash_uuid = _hash_action(
-        input_attachment=_attachment(body_uuid, "Message Text"),
+        input_attachment=input_ref,
         output_name="Message ID",
     )
 
+    json_values = {
+        "Value": {
+            "WFDictionaryFieldValueItems": [
+                _dict_field("body", body_ref),
+                _dict_field("text", body_ref),
+                _dict_field("shortcut_input", input_ref),
+                _dict_field("message_id", _attachment(hash_uuid, "Message ID")),
+                _dict_field_text("backfill", "true"),
+            ],
+        },
+        "WFSerializationType": "WFDictionaryFieldValue",
+    }
     payload_dict = {
         "WFWorkflowActionIdentifier": "is.workflow.actions.dictionary",
         "WFWorkflowActionParameters": {
             "UUID": dict_uuid,
-            "WFItems": {
-                "Value": {
-                    "WFDictionaryFieldValueItems": [
-                        _dict_field("body", _attachment(body_uuid, "Message Text")),
-                        _dict_field("message_id", _attachment(hash_uuid, "Message ID")),
-                        _dict_field_text("backfill", "true"),
-                    ]
-                },
-                "WFSerializationType": "WFDictionaryFieldValue",
-            },
+            "WFItems": json_values,
         },
     }
 
@@ -327,6 +361,7 @@ def build_sms_share_shortcut(
             webhook_url=webhook_url,
             dict_uuid=dict_uuid,
             token_header_value=token_header_value,
+            json_values=json_values,
         )
     )
 

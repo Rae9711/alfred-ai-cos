@@ -24,7 +24,14 @@ import { type ChatMessage } from "@/data/demo";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
+import { SmsComposeSheet } from "@/screens/sheets/SmsComposeSheet";
 import { Btn, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
+import {
+  requestContactsPermission,
+  searchContactsByName,
+  type ContactMatch,
+} from "@/lib/contacts";
+import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -34,6 +41,15 @@ type TaskMessage = {
   showDraft?: boolean;
 };
 
+type FreeMsg = ChatMessage & {
+  smsDraft?: { name: string; phone: string; body: string };
+};
+
+type AwaitingSmsBody = {
+  displayName: string;
+  phone: string;
+};
+
 export function AskScreen() {
   const { openSheet, showToast } = useShell();
   const { syncAndRefresh, markRead } = useMailbox();
@@ -41,12 +57,15 @@ export function AskScreen() {
   const { locale, t } = useLocale();
   const { thread, completeChat, cancelChat, reviseDraft } = useWorkflow();
 
-  const [freeChat, setFreeChat] = useState<ChatMessage[]>([]);
+  const [freeChat, setFreeChat] = useState<FreeMsg[]>([]);
   const [taskChat, setTaskChat] = useState<TaskMessage[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinkingLocal] = useState(false);
   const [sending, setSending] = useState(false);
   const [reviseMode, setReviseMode] = useState(false);
+  const [awaitingSmsBody, setAwaitingSmsBody] = useState<AwaitingSmsBody | null>(
+    null,
+  );
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -72,14 +91,134 @@ export function AskScreen() {
     [setThinking],
   );
 
+  const appendSmsDraft = useCallback(
+    (name: string, phone: string, body: string) => {
+      setFreeChat((c) => [
+        ...c,
+        {
+          role: "alfred",
+          text: t.smsCompose.ready(name),
+          ts: "now",
+          smsDraft: { name, phone, body },
+        },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
+    },
+    [t.smsCompose],
+  );
+
+  const resolveSmsRecipient = useCallback(
+  (displayName: string, phone: string, bodyHint: string | null) => {
+      if (bodyHint) {
+        appendSmsDraft(displayName, phone, bodyHint);
+        return;
+      }
+      setAwaitingSmsBody({ displayName, phone });
+      setFreeChat((c) => [
+        ...c,
+        { role: "alfred", text: t.smsCompose.askBody(displayName), ts: "now" },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
+    },
+    [appendSmsDraft, t.smsCompose],
+  );
+
+  const startSmsCompose = useCallback(
+    (recipientName: string, bodyHint: string | null) => {
+      setThinkingBoth(true);
+      scrollRef.current?.scrollToEnd({ animated: true });
+      void (async () => {
+        try {
+          const granted = await requestContactsPermission();
+          if (!granted) {
+            setFreeChat((c) => [
+              ...c,
+              { role: "alfred", text: t.smsCompose.permissionDenied, ts: "now" },
+            ]);
+            return;
+          }
+          const matches = await searchContactsByName(recipientName);
+          if (matches.length === 0) {
+            setFreeChat((c) => [
+              ...c,
+              {
+                role: "alfred",
+                text: t.smsCompose.noMatches(recipientName),
+                ts: "now",
+              },
+            ]);
+            openSheet(
+              <SmsComposeSheet
+                mode="phone"
+                recipientName={recipientName}
+                onSubmit={(phone) =>
+                  resolveSmsRecipient(recipientName, phone, bodyHint)
+                }
+              />,
+            );
+            return;
+          }
+          if (matches.length === 1) {
+            const only = matches[0]!;
+            resolveSmsRecipient(only.name, only.phone, bodyHint);
+            return;
+          }
+          openSheet(
+            <SmsComposeSheet
+              mode="pick"
+              matches={matches}
+              onSelect={(m: ContactMatch) =>
+                resolveSmsRecipient(m.name, m.phone, bodyHint)
+              }
+            />,
+          );
+        } catch (e) {
+          setFreeChat((c) => [
+            ...c,
+            {
+              role: "alfred",
+              text:
+                e instanceof Error ? e.message : t.freeChat.fallback,
+              ts: "now",
+            },
+          ]);
+        } finally {
+          setThinkingBoth(false);
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      })();
+    },
+    [
+      openSheet,
+      resolveSmsRecipient,
+      setThinkingBoth,
+      t.freeChat.fallback,
+      t.smsCompose,
+    ],
+  );
+
   const sendFree = useCallback(
     (text: string) => {
       const q = text.trim();
       if (!q || thinking) return;
       setFreeChat((c) => [...c, { role: "user", text: q, ts: "now" }]);
       setInput("");
-      setThinkingBoth(true);
       scrollRef.current?.scrollToEnd({ animated: true });
+
+      if (awaitingSmsBody) {
+        const { displayName, phone } = awaitingSmsBody;
+        setAwaitingSmsBody(null);
+        appendSmsDraft(displayName, phone, q);
+        return;
+      }
+
+      const smsIntent = parseSmsComposeIntent(q);
+      if (smsIntent) {
+        startSmsCompose(smsIntent.recipientName, smsIntent.bodyHint);
+        return;
+      }
+
+      setThinkingBoth(true);
       void (async () => {
         try {
           const res = await api.ask(q);
@@ -98,7 +237,14 @@ export function AskScreen() {
         }
       })();
     },
-    [thinking, setThinkingBoth, t.freeChat.fallback],
+    [
+      appendSmsDraft,
+      awaitingSmsBody,
+      startSmsCompose,
+      thinking,
+      setThinkingBoth,
+      t.freeChat.fallback,
+    ],
   );
 
   const sendRevise = () => {
@@ -332,7 +478,15 @@ export function AskScreen() {
         }
       >
         {freeChat.map((m, i) => (
-          <FreeBubble key={i} msg={m} />
+          <FreeBubble
+            key={i}
+            msg={m}
+            onOpenSms={(phone, body) => {
+              openSmsCompose(phone, body);
+              showToast(t.ask.smsOpened);
+            }}
+            openLabel={t.smsCompose.openInMessages}
+          />
         ))}
         {thinking ? (
           <Text style={styles.thinking}>{t.ask.thinking}</Text>
@@ -434,14 +588,38 @@ function EmailSourceCard({
   );
 }
 
-function FreeBubble({ msg }: { msg: ChatMessage }) {
+function FreeBubble({
+  msg,
+  onOpenSms,
+  openLabel,
+}: {
+  msg: FreeMsg;
+  onOpenSms?: (phone: string, body: string) => void;
+  openLabel: string;
+}) {
   const isAlf = msg.role === "alfred";
   return (
     <View style={[styles.bubbleWrap, isAlf ? styles.left : styles.right]}>
       {isAlf ? (
-        <Serif size={17} style={styles.alfText}>
-          {msg.text}
-        </Serif>
+        <>
+          <Serif size={17} style={styles.alfText}>
+            {msg.text}
+          </Serif>
+          {msg.smsDraft ? (
+            <View style={styles.smsDraftCard}>
+              <Text style={styles.smsDraftTo}>
+                {msg.smsDraft.name} · {msg.smsDraft.phone}
+              </Text>
+              <Text style={styles.smsDraftBody}>{msg.smsDraft.body}</Text>
+              <Btn
+                label={openLabel}
+                onPress={() =>
+                  onOpenSms?.(msg.smsDraft!.phone, msg.smsDraft!.body)
+                }
+              />
+            </View>
+          ) : null}
+        </>
       ) : (
         <View style={styles.userBubble}>
           <Text style={styles.userText}>{msg.text}</Text>
@@ -603,6 +781,17 @@ const styles = StyleSheet.create({
   left: { alignSelf: "flex-start" },
   right: { alignSelf: "flex-end" },
   alfText: { lineHeight: 25 },
+  smsDraftCard: {
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    gap: 10,
+  },
+  smsDraftTo: { fontSize: 13, color: colors.ink3 },
+  smsDraftBody: { fontSize: 15, lineHeight: 22, color: colors.ink2 },
   userBubble: {
     backgroundColor: colors.ink,
     paddingVertical: 10,

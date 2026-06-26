@@ -19,7 +19,8 @@
       "bundleIdentifier": "com.alfredassistants.albert",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["shortcuts"]
+        "LSApplicationQueriesSchemes": ["shortcuts"],
+        "NSContactsUsageDescription": "Albert looks up contacts when you ask to text someone by name."
       }
     },
     "android": {
@@ -36,7 +37,13 @@
       "expo-audio",
       "expo-web-browser",
       "expo-font",
-      "expo-updates"
+      "expo-updates",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Albert looks up contacts when you ask to text someone by name."
+        }
+      ]
     ],
     "extra": {
       "apiBaseUrl": "https://alfredaitech.com",

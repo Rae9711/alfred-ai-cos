@@ -25,23 +25,24 @@ def _action_ids(data: dict) -> list[str]:
     return [a["WFWorkflowActionIdentifier"] for a in data["WFWorkflowActions"]]
 
 
-def test_build_sms_forward_shortcut_minimal_body_only_payload() -> None:
+def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
     assert _action_ids(data) == [
-        DETECT_TEXT_ACTION,
         "is.workflow.actions.dictionary",
         "is.workflow.actions.downloadurl",
     ]
 
-    detect = data["WFWorkflowActions"][0]
-    assert detect["WFWorkflowActionParameters"]["CustomOutputName"] == "Message Text"
-    wf_input = detect["WFWorkflowActionParameters"]["WFInput"]
-    assert wf_input["Value"]["VariableName"] == "Shortcut Input"
-
-    dict_action = data["WFWorkflowActions"][1]
+    dict_action = data["WFWorkflowActions"][0]
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}
-    assert keys == {"body"}
+    assert keys == {"body", "shortcut_input", "text"}
+    for item in items:
+        wf_input = item["WFValue"]["Value"]
+        assert wf_input["VariableName"] == "Shortcut Input"
+
+    post = data["WFWorkflowActions"][-1]
+    assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
+    assert "WFJSONValues" in post["WFWorkflowActionParameters"]
 
 
 def test_build_sms_forward_shortcut_does_not_use_unsupported_message_actions() -> None:
@@ -76,7 +77,9 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
         build_sms_forward_shortcut(webhook_url="https://example.test/sms", sms_token="tok")
     )
     assert data["WFWorkflowImportQuestions"] == []
-    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == DETECT_TEXT_ACTION
+    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
+        "is.workflow.actions.dictionary"
+    )
     post = data["WFWorkflowActions"][-1]
     headers = post["WFWorkflowActionParameters"]["WFHTTPHeaders"]["Value"][
         "WFDictionaryFieldValueItems"
@@ -117,10 +120,10 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
     )
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}
-    assert keys == {"body", "message_id", "backfill"}
+    assert keys == {"body", "text", "shortcut_input", "message_id", "backfill"}
 
     post = data["WFWorkflowActions"][-1]
-    assert post["WFWorkflowActionParameters"]["WFURL"] == DEFAULT_WEBHOOK_URL
+    assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
 
 
 def test_build_sms_share_shortcut_does_not_use_unsupported_message_actions() -> None:

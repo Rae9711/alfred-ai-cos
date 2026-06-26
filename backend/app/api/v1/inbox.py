@@ -14,11 +14,12 @@ Security posture:
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -107,7 +108,18 @@ def _coerce_body(value: Any) -> str | None:
         stripped = value.strip()
         return stripped or None
     if isinstance(value, dict):
-        for key in ("text", "message", "body", "content", "value"):
+        for key in (
+            "text",
+            "message",
+            "body",
+            "content",
+            "value",
+            "WFString",
+            "string",
+            "Message",
+            "Text",
+            "Contents",
+        ):
             if key in value:
                 coerced = _coerce_body(value[key])
                 if coerced:
@@ -240,8 +252,8 @@ class SmsIn(BaseModel):
 
 
 @router.post("/sms", response_model=SmsIngestOut)
-def sms_inbox_webhook(
-    payload: SmsIn,
+async def sms_inbox_webhook(
+    request: Request,
     x_sms_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> SmsIngestOut:
@@ -250,6 +262,40 @@ def sms_inbox_webhook(
     user = sms_inbox.find_user_by_sms_token(db, x_sms_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid SMS token")
+
+    raw_bytes = await request.body()
+    data: Any
+    try:
+        data = json.loads(raw_bytes.decode("utf-8") if raw_bytes else "{}")
+    except json.JSONDecodeError:
+        text = raw_bytes.decode("utf-8", errors="replace").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="SMS body is required") from None
+        data = {"body": text}
+
+    if isinstance(data, dict) and not data:
+        logger.warning(
+            "SMS inbox empty JSON body user=%s — shortcut likely failed to pass message text",
+            user.id,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="SMS body is required — re-import Albert SMS Forward from You → SMS forwarding",
+        )
+
+    try:
+        payload = SmsIn.model_validate(data)
+    except Exception as exc:
+        logger.warning(
+            "SMS inbox payload validation failed user=%s errors=%s raw=%r",
+            user.id,
+            exc,
+            raw_bytes[:500].decode("utf-8", errors="replace"),
+        )
+        raise
+
+    if not payload.body.strip():
+        raise HTTPException(status_code=400, detail="SMS body is required")
 
     try:
         result = sms_inbox.ingest_sms(

@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  AppState,
   Linking,
   Pressable,
   ScrollView,
@@ -35,6 +36,11 @@ import {
   SerifEm,
 } from "@/components/ui";
 import { colors, fonts, layout, spacing } from "@/theme/theme";
+import {
+  getContactsPermissionStatus,
+  requestContactsPermission,
+  type ContactsPermissionStatus,
+} from "@/lib/contacts";
 
 export function SettingsScreen() {
   const { signOut } = useAuth();
@@ -47,6 +53,9 @@ export function SettingsScreen() {
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
   const [smsBackfillShortcutUrl, setSmsBackfillShortcutUrl] = useState<string | null>(null);
   const [smsBackfillImportUrl, setSmsBackfillImportUrl] = useState<string | null>(null);
+  const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
+    null,
+  );
 
   useEffect(() => {
     api
@@ -76,6 +85,51 @@ export function SettingsScreen() {
         setSmsBackfillImportUrl(null);
       });
   }, []);
+
+  const refreshContactsStatus = useCallback(async () => {
+    try {
+      setContactsStatus(await getContactsPermissionStatus());
+    } catch {
+      setContactsStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshContactsStatus();
+  }, [refreshContactsStatus]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refreshContactsStatus();
+    });
+    return () => sub.remove();
+  }, [refreshContactsStatus]);
+
+  const handleContactsPermission = useCallback(async () => {
+    setNote(null);
+    if (contactsStatus === "denied") {
+      try {
+        await Linking.openSettings();
+      } catch {
+        setNote(t.settings.contactsDeniedToast);
+      }
+      return;
+    }
+    try {
+      const granted = await requestContactsPermission();
+      await refreshContactsStatus();
+      setNote(
+        granted ? t.settings.contactsGrantedToast : t.settings.contactsDeniedToast,
+      );
+    } catch {
+      setNote(t.settings.contactsDeniedToast);
+    }
+  }, [
+    contactsStatus,
+    refreshContactsStatus,
+    t.settings.contactsDeniedToast,
+    t.settings.contactsGrantedToast,
+  ]);
 
   const editQuietHours = useCallback(() => {
     // iOS-only Alert.prompt; on Android fall back to a note. Saves via the real API.
@@ -277,6 +331,16 @@ export function SettingsScreen() {
   const qh = me?.preferences?.["quiet_hours"];
   const quietHours = typeof qh === "string" && qh ? qh : null;
   const connectedMailboxes = me?.connected_mailboxes ?? [];
+  const contactsStatusLabel =
+    contactsStatus === "granted"
+      ? t.settings.contactsStatusGranted
+      : contactsStatus === "denied"
+        ? t.settings.contactsStatusDenied
+        : t.settings.contactsStatusUndetermined;
+  const contactsActionLabel =
+    contactsStatus === "denied"
+      ? t.settings.contactsOpenSettings
+      : t.settings.contactsAllow;
 
   return (
     <ScrollView
@@ -345,6 +409,31 @@ export function SettingsScreen() {
           </>
         ) : null}
         <Text style={styles.smsSteps}>{t.settings.smsSteps}</Text>
+      </View>
+
+      <SectionTitle label={t.settings.contactsTitle} />
+      <View style={styles.smsCard}>
+        <Text style={styles.smsHint}>{t.settings.contactsHint}</Text>
+        <View style={styles.contactsStatusRow}>
+          <View
+            style={[
+              styles.contactsDot,
+              contactsStatus === "granted" && styles.contactsDotGranted,
+              contactsStatus === "denied" && styles.contactsDotDenied,
+            ]}
+          />
+          <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
+        </View>
+        {contactsStatus !== "granted" ? (
+          <View style={styles.smsActions}>
+            <Btn
+              label={contactsActionLabel}
+              kind="accent"
+              tiny
+              onPress={() => void handleContactsPermission()}
+            />
+          </View>
+        ) : null}
       </View>
 
       {/* Integrations */}
@@ -670,6 +759,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   smsSteps: { fontSize: 12, color: colors.ink3, lineHeight: 18 },
+  contactsStatusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  contactsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.ink4,
+  },
+  contactsDotGranted: { backgroundColor: colors.success },
+  contactsDotDenied: { backgroundColor: colors.warn },
+  contactsStatusText: { fontSize: 13, fontWeight: "500", color: colors.ink2 },
   langCheck: {
     width: 22,
     height: 22,

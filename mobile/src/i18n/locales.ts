@@ -70,7 +70,8 @@ export const translations = {
         sms: "SMS",
       },
       smsEmpty: "No texts here yet.",
-      smsEmptySub: "Set up SMS forwarding in You → Settings, then pull to refresh.",
+      smsEmptySub:
+        "Set up forwarding in You → Settings. New texts arrive automatically; older ones must be shared one at a time (iOS cannot bulk-sync the last 10).",
       unreadLabel: "Unread",
       readLabel: "Read",
       mailboxChip: "Mailbox",
@@ -111,6 +112,24 @@ export const translations = {
     sms: {
       messageLabel: "Text message",
     },
+    smsCompose: {
+      searching: (name: string) => `Looking up “${name}” in your contacts…`,
+      permissionDenied:
+        "I need Contacts access to find who you mean. Enable it in Settings → Albert → Contacts, then try again.",
+      noMatches: (name: string) =>
+        `I couldn't find “${name}” in your contacts.`,
+      pickTitle: "Choose contact",
+      pickSubtitle: "Several people matched — which one?",
+      phoneTitle: "Phone number",
+      phoneSubtitle: (name: string) => `No contact for “${name}”. What's their number?`,
+      phonePlaceholder: "+1 555 123 4567",
+      phoneContinue: "Continue",
+      askBody: (name: string) =>
+        `Got it — ${name}. What should the message say?`,
+      ready: (name: string) =>
+        `Here's your draft for ${name}. Open Messages when you're ready.`,
+      openInMessages: "Open in Messages",
+    },
     settings: {
       you: "You",
       language: "Language",
@@ -123,15 +142,27 @@ export const translations = {
       disconnectMailbox: "Disconnect",
       smsTitle: "SMS forwarding",
       smsHint:
-        "Install Albert's Shortcut, paste your token when prompted, then turn on the automation below. If you see Unknown Action after import, delete the shortcut and install again from here.",
+        "New texts forward automatically once the automation is on. iOS does not let Albert bulk-sync your last 10 messages — use Share to import older texts one at a time. If you see Unknown Action after import, delete the shortcut and install again from here.",
       smsTokenLabel: "X-Sms-Token (for import prompt):",
-      smsInstallShortcut: "Install Shortcut",
-      smsShareShortcut: "Install Share shortcut",
+      smsInstallShortcut: "Install forward shortcut",
+      smsShareShortcut: "Import older texts (Share)",
       smsCopyToken: "Copy Token",
       smsTokenCopied: "Token copied.",
       smsInstallFailed: "Could not open Shortcuts.",
+      smsFirstForwardTip:
+        "Text forwarded! For older messages: Messages → long-press → Share → Albert SMS Share.",
       smsSteps:
-        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. For older texts: Messages → long-press a message → Share → Albert SMS Share.\n3. Send yourself a test text and check Inbox → SMS.\n\nReply may not pre-fill the recipient until you add Get Details of Messages manually in Shortcuts (see docs).",
+        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → Albert SMS Forward.\n2. Older texts (not automatic): Messages → long-press → Share → Albert SMS Share — repeat per message.\n3. Send yourself a test text; check Inbox → SMS.\n\nThere is no reliable one-tap “sync last 10” on recent iOS. Reply may not pre-fill the recipient until you add Get Details of Messages manually in Shortcuts (see docs).",
+      contactsTitle: "Contacts",
+      contactsHint:
+        "Needed when you ask Albert to text someone by name in Ask — e.g. “text Mom: see you tomorrow”. Albert looks up the number in your contacts; nothing is uploaded.",
+      contactsStatusGranted: "Access granted",
+      contactsStatusDenied: "Denied",
+      contactsStatusUndetermined: "Not set",
+      contactsAllow: "Allow access",
+      contactsOpenSettings: "Open Settings",
+      contactsGrantedToast: "Contacts access enabled.",
+      contactsDeniedToast: "Contacts access denied — enable in Settings.",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -216,7 +247,8 @@ export const translations = {
         sms: "短信",
       },
       smsEmpty: "暂无短信。",
-      smsEmptySub: "请在「我的」→ 设置中配置短信转发，然后下拉刷新。",
+      smsEmptySub:
+        "请在「我的」配置短信转发。新短信会自动出现；旧短信需逐条「分享」导入，iOS 无法自动同步最近 10 条。",
       unreadLabel: "未读",
       readLabel: "已读",
       mailboxChip: "邮箱",
@@ -256,6 +288,21 @@ export const translations = {
     sms: {
       messageLabel: "短信",
     },
+    smsCompose: {
+      searching: (name: string) => `正在通讯录里查找「${name}」…`,
+      permissionDenied:
+        "需要通讯录权限才能找到联系人。请在 设置 → Albert → 通讯录 中开启后重试。",
+      noMatches: (name: string) => `通讯录里没有找到「${name}」。`,
+      pickTitle: "选择联系人",
+      pickSubtitle: "找到多位匹配 — 选哪一个？",
+      phoneTitle: "手机号码",
+      phoneSubtitle: (name: string) => `没找到「${name}」的联系人，号码是多少？`,
+      phonePlaceholder: "138 0000 0000",
+      phoneContinue: "继续",
+      askBody: (name: string) => `好的，${name}。短信内容是什么？`,
+      ready: (name: string) => `已为 ${name} 起草短信，准备好后在「信息」中发送。`,
+      openInMessages: "在「信息」中发送",
+    },
     settings: {
       you: "我的",
       language: "语言",
@@ -267,15 +314,28 @@ export const translations = {
       connectedMailboxes: "已连接邮箱",
       disconnectMailbox: "断开",
       smsTitle: "短信转发",
-      smsHint: "安装 Albert 快捷指令，按提示粘贴令牌，然后开启下方自动化。若导入后出现未知操作，请删除快捷指令后从此处重新安装。",
+      smsHint:
+        "开启自动化后，新短信会自动转发。受 iOS 限制，Albert 无法自动同步最近 10 条 — 请用「分享」逐条导入旧短信。若导入后出现未知操作，请删除快捷指令后从此处重新安装。",
       smsTokenLabel: "X-Sms-Token（导入时粘贴）：",
-      smsInstallShortcut: "安装快捷指令",
-      smsShareShortcut: "安装分享快捷指令",
+      smsInstallShortcut: "安装转发快捷指令",
+      smsShareShortcut: "导入旧短信（分享）",
       smsCopyToken: "复制令牌",
       smsTokenCopied: "已复制令牌。",
       smsInstallFailed: "无法打开快捷指令。",
+      smsFirstForwardTip:
+        "短信已转发！导入更早的短信：信息 → 长按消息 → 分享 → Albert SMS Share。",
       smsSteps:
-        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 导入旧短信：信息 → 长按消息 → 分享 → Albert SMS Share。\n3. 给自己发一条测试短信，在收件箱 → 短信中查看。\n\n若需回复时自动填入收件人，请在快捷指令中手动添加「获取信息详细信息」（见文档）。",
+        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → Albert SMS Forward。\n2. 旧短信（非自动）：信息 → 长按 → 分享 → Albert SMS Share，每条重复一次。\n3. 给自己发测试短信，在收件箱 → 短信中查看。\n\n近期 iOS 上没有可靠的一键「同步最近 10 条」。若需回复时自动填入收件人，请在快捷指令中手动添加「获取信息详细信息」（见文档）。",
+      contactsTitle: "通讯录",
+      contactsHint:
+        "在「对话」里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Albert 只在本地查找号码，不会上传通讯录。",
+      contactsStatusGranted: "已授权",
+      contactsStatusDenied: "已拒绝",
+      contactsStatusUndetermined: "未设置",
+      contactsAllow: "允许访问",
+      contactsOpenSettings: "打开设置",
+      contactsGrantedToast: "已开启通讯录访问。",
+      contactsDeniedToast: "通讯录访问被拒绝 — 请在设置中开启。",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",

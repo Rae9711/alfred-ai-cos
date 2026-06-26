@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from app.db.models import DraftReply, Message, User
 from app.services import extraction, sms_inbox
 from tests.fakes import FakeLLM, fake_commitment
+
+
+async def _post_sms_webhook(
+    *,
+    token: str,
+    payload: dict[str, object],
+    db: Session,
+):
+    from app.api.v1 import inbox as inbox_mod
+
+    body = json.dumps(payload).encode()
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request = Request(
+        {"type": "http", "headers": [(b"x-sms-token", token.encode())]},
+        receive,
+    )
+    return await inbox_mod.sms_inbox_webhook(request, x_sms_token=token, db=db)
 
 
 @pytest.fixture
@@ -116,16 +140,16 @@ def test_display_sender_uses_name_when_phone_unknown() -> None:
 def test_sms_webhook_accepts_body_only_payload(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.api.v1 import inbox as inbox_mod
-
     _patch_llm(monkeypatch, FakeLLM(commitments=[]))
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
 
-    out = inbox_mod.sms_inbox_webhook(
-        inbox_mod.SmsIn.model_validate({"body": "Hello from minimal shortcut"}),
-        x_sms_token=token,
-        db=db,
+    out = asyncio.run(
+        _post_sms_webhook(
+            token=token,
+            payload={"body": "Hello from minimal shortcut"},
+            db=db,
+        )
     )
     assert out.deduped is False
     msg = db.get(Message, out.message_id)
@@ -134,16 +158,16 @@ def test_sms_webhook_accepts_body_only_payload(
 
 
 def test_sms_webhook_endpoint(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.api.v1 import inbox as inbox_mod
-
     _patch_llm(monkeypatch, FakeLLM(commitments=[]))
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
 
-    out = inbox_mod.sms_inbox_webhook(
-        inbox_mod.SmsIn(from_number="+15559876543", body="Hi there"),
-        x_sms_token=token,
-        db=db,
+    out = asyncio.run(
+        _post_sms_webhook(
+            token=token,
+            payload={"from_number": "+15559876543", "body": "Hi there"},
+            db=db,
+        )
     )
     assert out.deduped is False
     assert out.message_id
@@ -172,21 +196,43 @@ def test_sms_in_coerces_ios_shortcut_payload(raw: dict, expected_phone: str) -> 
     assert parsed.body in ("Hello", "Fallback text")
 
 
-def test_sms_webhook_accepts_array_from_number(
+def test_sms_webhook_rejects_empty_json_body(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from fastapi import HTTPException
+
     from app.api.v1 import inbox as inbox_mod
 
     _patch_llm(monkeypatch, FakeLLM(commitments=[]))
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
 
-    out = inbox_mod.sms_inbox_webhook(
-        inbox_mod.SmsIn.model_validate(
-            {"from_number": ["+15551112222"], "body": "Shortcut array phone"}
-        ),
-        x_sms_token=token,
-        db=db,
+    async def receive():
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    request = Request(
+        {"type": "http", "headers": [(b"x-sms-token", token.encode())]},
+        receive,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(inbox_mod.sms_inbox_webhook(request, x_sms_token=token, db=db))
+    assert exc.value.status_code == 400
+
+
+def test_sms_webhook_accepts_array_from_number(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+
+    out = asyncio.run(
+        _post_sms_webhook(
+            token=token,
+            payload={"from_number": ["+15551112222"], "body": "Shortcut array phone"},
+            db=db,
+        )
     )
     assert out.deduped is False
     msg = db.get(Message, out.message_id)

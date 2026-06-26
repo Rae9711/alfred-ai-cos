@@ -19,6 +19,7 @@ import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
+import { useSmsShareTip } from "@/hooks/useSmsShareTip";
 import type { AppInboxItem } from "@/lib/inbox";
 import { MessageDetailSheet } from "@/screens/sheets/MessageDetailSheet";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
@@ -55,6 +56,7 @@ export function InboxScreen() {
     markRead,
     setInboxFilter,
   } = useMailbox();
+  useSmsShareTip(items);
   const [filter, setFilter] = useState("inbox");
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
 
