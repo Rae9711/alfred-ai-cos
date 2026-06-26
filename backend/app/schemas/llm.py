@@ -64,7 +64,10 @@ class AssistantInterpretation(BaseModel):
     """How Albert read a free-text request from the Ask screen."""
 
     intent: str = Field(
-        description="One of: book_calendar, reschedule_calendar, cancel_calendar, none."
+        description=(
+            "One of: book_calendar, reschedule_calendar, cancel_calendar, "
+            "check_calendar, none."
+        )
     )
     reply: str = Field(
         description="A short, calm one-line reply to show the user."

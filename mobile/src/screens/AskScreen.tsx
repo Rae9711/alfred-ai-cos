@@ -31,7 +31,7 @@ import {
   searchContactsByName,
   type ContactMatch,
 } from "@/lib/contacts";
-import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
+import { isCalendarOnlyRefusal, parseSmsComposeIntent } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -230,9 +230,12 @@ export function AskScreen() {
       void (async () => {
         try {
           const res = await api.ask(q);
+          const reply = isCalendarOnlyRefusal(res.reply)
+            ? t.freeChat.fallback
+            : res.reply;
           setFreeChat((c) => [
             ...c,
-            { role: "alfred", text: res.reply, ts: "now" },
+            { role: "alfred", text: reply, ts: "now" },
           ]);
         } catch {
           setFreeChat((c) => [
