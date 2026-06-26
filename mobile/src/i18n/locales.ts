@@ -118,6 +118,10 @@ export const translations = {
         "I need Contacts access to find who you mean. Enable it in Settings → Albert → Contacts, then try again.",
       noMatches: (name: string) =>
         `I couldn't find “${name}” in your contacts.`,
+      askPhone: (name: string) =>
+        `I couldn't find “${name}” in your contacts. What's their phone number?`,
+      askWho: "Who should I text?",
+      askPhoneInvalid: "That doesn't look like a phone number — try again.",
       pickTitle: "Choose contact",
       pickSubtitle: "Several people matched — which one?",
       phoneTitle: "Phone number",
@@ -187,8 +191,9 @@ export const translations = {
     freeChat: {
       seed:
         "I can check or book your calendar and draft a text by name — you tap Send in Messages. Tap an example below, or open a thread from Inbox to draft a reply.",
-      fallback:
-        "I can book or check calendar time, or draft a text by name (e.g. “text Mom: see you”). Email and SMS replies start from Inbox.",
+      fallback: "Something went wrong — try again in a moment.",
+      legacyRefusal:
+        "I can check or book your calendar, draft a text by name, or help reply from Inbox.",
     },
   },
   zh: {
@@ -301,6 +306,10 @@ export const translations = {
       permissionDenied:
         "需要通讯录权限才能找到联系人。请在 设置 → Albert → 通讯录 中开启后重试。",
       noMatches: (name: string) => `通讯录里没有找到「${name}」。`,
+      askPhone: (name: string) =>
+        `通讯录里没有「${name}」。对方的手机号是多少？`,
+      askWho: "发给谁？",
+      askPhoneInvalid: "这不像手机号，请再试一次。",
       pickTitle: "选择联系人",
       pickSubtitle: "找到多位匹配 — 选哪一个？",
       phoneTitle: "手机号码",
@@ -368,8 +377,8 @@ export const translations = {
     freeChat: {
       seed:
         "可以查/订日历、按姓名起草短信 — 发送需在「信息」里确认。点下面的例子试试，或从收件箱进入起草回复。",
-      fallback:
-        "我可以查/订日历，或按姓名起草短信（例如「给 Mom 发：明天见」）。邮件和短信回复请从收件箱进入。",
+      fallback: "出了点问题，请稍后再试。",
+      legacyRefusal: "我可以查/订日历、按姓名起草短信，或从收件箱回复。",
     },
   },
 } as const;

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import type { ContactMatch } from "@/lib/contacts";
+import { normalizePhoneInput } from "@/lib/smsComposeIntent";
 import { useLocale } from "@/context/LocaleContext";
 import { useShell } from "@/components/Shell";
 import { Btn, Eyebrow, H2, inputPlaceholder } from "@/components/ui";
@@ -58,7 +59,7 @@ export function SmsComposeSheet(props: Props) {
   }
 
   const submitPhone = () => {
-    const digits = phone.trim();
+    const digits = normalizePhoneInput(phone);
     if (!digits) return;
     finish(() => props.onSubmit(digits));
   };
@@ -76,7 +77,6 @@ export function SmsComposeSheet(props: Props) {
         placeholderTextColor={inputPlaceholder}
         style={styles.input}
         keyboardType="phone-pad"
-        autoFocus
       />
       <Btn label={t.smsCompose.phoneContinue} onPress={submitPhone} />
     </View>

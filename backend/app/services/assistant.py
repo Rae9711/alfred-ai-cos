@@ -143,11 +143,12 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         return AssistantOutcome(action="none", reply=reply)
 
     reply = (interp.reply or "").strip()
-    if not reply or re.search(_CALENDAR_ONLY_RE, reply, re.IGNORECASE):
+    if not reply:
+        reply = "I'm not sure how to help with that — try asking about your calendar."
+    elif re.search(_CALENDAR_ONLY_RE, reply, re.IGNORECASE):
         reply = (
             "I can check or book your calendar, draft a text by name "
-            '(e.g. "text Mom: see you tomorrow" or "给 Mom 发：明天见"), '
-            "or help reply from Inbox. What would you like?"
+            '(e.g. "text Mom: see you tomorrow"), or help reply from Inbox.'
         )
     return AssistantOutcome(action="none", reply=reply)
 

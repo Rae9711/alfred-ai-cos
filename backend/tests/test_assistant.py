@@ -73,3 +73,17 @@ def test_none_replaces_calendar_only_refusal(
     assert out.action == "none"
     assert "only help with calendar" not in out.reply.lower()
     assert "Inbox" in out.reply
+
+
+def test_none_passes_through_general_reply(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="none",
+            reply="The capital of France is Paris.",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    out = interpret_and_act(db, user, text="What is the capital of France?", tz="America/New_York")
+    assert out.reply == "The capital of France is Paris."

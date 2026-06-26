@@ -31,7 +31,12 @@ import {
   searchContactsByName,
   type ContactMatch,
 } from "@/lib/contacts";
-import { isCalendarOnlyRefusal, parseSmsComposeIntent } from "@/lib/smsComposeIntent";
+import {
+  isCalendarOnlyRefusal,
+  normalizePhoneInput,
+  parseSmsComposeIntent,
+  parseSmsComposeStarter,
+} from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -48,6 +53,15 @@ type FreeMsg = ChatMessage & {
 type AwaitingSmsBody = {
   displayName: string;
   phone: string;
+};
+
+type AwaitingSmsPhone = {
+  displayName: string;
+  bodyHint: string | null;
+};
+
+type AwaitingSmsRecipient = {
+  bodyHint: string | null;
 };
 
 export function AskScreen() {
@@ -67,6 +81,11 @@ export function AskScreen() {
   const [awaitingSmsBody, setAwaitingSmsBody] = useState<AwaitingSmsBody | null>(
     null,
   );
+  const [awaitingSmsPhone, setAwaitingSmsPhone] = useState<AwaitingSmsPhone | null>(
+    null,
+  );
+  const [awaitingSmsRecipient, setAwaitingSmsRecipient] =
+    useState<AwaitingSmsRecipient | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -147,23 +166,15 @@ export function AskScreen() {
           }
           const matches = await searchContactsByName(recipientName);
           if (matches.length === 0) {
+            setAwaitingSmsPhone({ displayName: recipientName, bodyHint });
             setFreeChat((c) => [
               ...c,
               {
                 role: "alfred",
-                text: t.smsCompose.noMatches(recipientName),
+                text: t.smsCompose.askPhone(recipientName),
                 ts: "now",
               },
             ]);
-            openSheet(
-              <SmsComposeSheet
-                mode="phone"
-                recipientName={recipientName}
-                onSubmit={(phone) =>
-                  resolveSmsRecipient(recipientName, phone, bodyHint)
-                }
-              />,
-            );
             return;
           }
           if (matches.length === 1) {
@@ -220,9 +231,42 @@ export function AskScreen() {
         return;
       }
 
+      if (awaitingSmsPhone) {
+        const phone = normalizePhoneInput(q);
+        if (!phone) {
+          setFreeChat((c) => [
+            ...c,
+            { role: "alfred", text: t.smsCompose.askPhoneInvalid, ts: "now" },
+          ]);
+          scrollRef.current?.scrollToEnd({ animated: true });
+          return;
+        }
+        const { displayName, bodyHint } = awaitingSmsPhone;
+        setAwaitingSmsPhone(null);
+        resolveSmsRecipient(displayName, phone, bodyHint);
+        return;
+      }
+
+      if (awaitingSmsRecipient) {
+        const { bodyHint } = awaitingSmsRecipient;
+        setAwaitingSmsRecipient(null);
+        startSmsCompose(q, bodyHint);
+        return;
+      }
+
       const smsIntent = parseSmsComposeIntent(q);
       if (smsIntent) {
         startSmsCompose(smsIntent.recipientName, smsIntent.bodyHint);
+        return;
+      }
+
+      if (parseSmsComposeStarter(q)) {
+        setAwaitingSmsRecipient({ bodyHint: null });
+        setFreeChat((c) => [
+          ...c,
+          { role: "alfred", text: t.smsCompose.askWho, ts: "now" },
+        ]);
+        scrollRef.current?.scrollToEnd({ animated: true });
         return;
       }
 
@@ -231,7 +275,7 @@ export function AskScreen() {
         try {
           const res = await api.ask(q);
           const reply = isCalendarOnlyRefusal(res.reply)
-            ? t.freeChat.fallback
+            ? t.freeChat.legacyRefusal
             : res.reply;
           setFreeChat((c) => [
             ...c,
@@ -251,10 +295,15 @@ export function AskScreen() {
     [
       appendSmsDraft,
       awaitingSmsBody,
+      awaitingSmsPhone,
+      awaitingSmsRecipient,
+      resolveSmsRecipient,
       startSmsCompose,
       thinking,
       setThinkingBoth,
       t.freeChat.fallback,
+      t.freeChat.legacyRefusal,
+      t.smsCompose,
     ],
   );
 
@@ -543,10 +592,15 @@ export function AskScreen() {
           <TextInput
             value={input}
             onChangeText={setInput}
-            placeholder={t.ask.freePlaceholder}
+            placeholder={
+              awaitingSmsPhone
+                ? t.smsCompose.phonePlaceholder
+                : t.ask.freePlaceholder
+            }
             placeholderTextColor={inputPlaceholder}
             style={styles.composerInput}
             multiline
+            keyboardType={awaitingSmsPhone ? "phone-pad" : "default"}
             onSubmitEditing={() => sendFree(input)}
           />
           <Pressable

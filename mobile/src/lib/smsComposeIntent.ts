@@ -46,6 +46,33 @@ export function isCalendarOnlyRefusal(reply: string): boolean {
   );
 }
 
+const STARTER_PATTERNS: RegExp[] = [
+  /^给谁发短信$/iu,
+  /^发短信$/iu,
+  /^发信息$/iu,
+  /^(?:发短信|发信息)给(?:谁)?$/iu,
+  /^(?:text|message|sms)\s+someone$/iu,
+  /^send\s+(?:a\s+)?(?:text|message|sms)$/iu,
+  /^send\s+(?:a\s+)?(?:text|message|sms)\s+to\s+someone$/iu,
+];
+
+/** User wants to text but didn't name a recipient yet. */
+export function parseSmsComposeStarter(text: string): boolean {
+  const q = text.trim();
+  if (!q) return false;
+  return STARTER_PATTERNS.some((p) => p.test(q));
+}
+
+/** Normalize free-text phone entry from chat or sheet. */
+export function normalizePhoneInput(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/[^\d+]/g, "");
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length < 7) return null;
+  return normalized.startsWith("+") ? `+${digits}` : digits;
+}
+
 export function parseSmsComposeIntent(text: string): SmsComposeIntent | null {
   const q = text.trim();
   if (!q) return null;

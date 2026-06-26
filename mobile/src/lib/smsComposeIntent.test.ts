@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSmsComposeIntent, isCalendarOnlyRefusal } from "./smsComposeIntent";
+import {
+  normalizePhoneInput,
+  parseSmsComposeIntent,
+  parseSmsComposeStarter,
+  isCalendarOnlyRefusal,
+} from "./smsComposeIntent";
 
 describe("parseSmsComposeIntent", () => {
   it("parses Chinese 给 name 发：body", () => {
@@ -41,5 +46,17 @@ describe("parseSmsComposeIntent", () => {
 
   it("returns null for unrelated chat", () => {
     expect(parseSmsComposeIntent("What am I forgetting?")).toBeNull();
+  });
+
+  it("detects SMS starter without recipient", () => {
+    expect(parseSmsComposeStarter("给谁发短信")).toBe(true);
+    expect(parseSmsComposeStarter("text someone")).toBe(true);
+    expect(parseSmsComposeStarter("text Mom: hi")).toBe(false);
+  });
+
+  it("normalizes phone numbers", () => {
+    expect(normalizePhoneInput("+1 (555) 123-4567")).toBe("+15551234567");
+    expect(normalizePhoneInput("13800000000")).toBe("13800000000");
+    expect(normalizePhoneInput("123")).toBeNull();
   });
 });
