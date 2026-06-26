@@ -90,6 +90,7 @@ export const translations = {
       freeTitlePlain: "What's on your",
       freePlaceholder: "Ask Alfred anything…",
       tryAsking: "Try asking",
+      capabilitiesLabel: "Or try",
       thinking: "Alfred · thinking…",
       taskOpenReply: (sender: string) =>
         `Got it. I'll help you reply to ${sender} — I've read the thread.`,
@@ -174,13 +175,15 @@ export const translations = {
     suggest: [
       "What am I forgetting?",
       "Who's waiting on me?",
-      "Help me prep for office hours",
-      "What should I do first?",
+    ],
+    askCapabilities: [
+      "text Mom: see you tomorrow",
+      "Book tomorrow 3-4pm",
     ],
     freeChat: {
       seed:
-        "Morning. Quieter than yesterday — three things matter, and one of them is a one-line reply. Ask me anything, or tap a suggestion.",
-      fallback: "I can do that. Want me to look at Today, the inbox, or your calendar?",
+        "Ask me anything — book calendar time, text someone by name, or tap a suggestion below.",
+      fallback: "I can book calendar time or help you text someone by name (e.g. “text Mom: see you”). For inbox and email drafts, check Inbox.",
     },
   },
   zh: {
@@ -267,6 +270,7 @@ export const translations = {
       freeTitlePlain: "想聊点",
       freePlaceholder: "问管家任何问题…",
       tryAsking: "试试这样问",
+      capabilitiesLabel: "也可以试试",
       thinking: "管家 · 思考中…",
       taskOpenReply: (sender: string) =>
         `收到。我来帮您回复${sender}，已读取邮件内容。`,
@@ -347,12 +351,14 @@ export const translations = {
     suggest: [
       "我忘了什么？",
       "谁在等我回复？",
-      "帮我准备答疑",
-      "我应该先做什么？",
+    ],
+    askCapabilities: [
+      "给 Mom 发：明天见",
+      "明天下午3点到4点帮我空出来",
     ],
     freeChat: {
-      seed: "上午好。今天比昨天安静一些 — 有三件事值得处理，其中一件只需一行回复。随便问，或点下面的建议。",
-      fallback: "好的。需要我看一下首页、收件箱，还是日历？",
+      seed: "随便问 — 可以订日历、按姓名发短信，或点下面的建议。",
+      fallback: "我可以帮你订日历，或按姓名发短信（例如「给 Mom 发：明天见」）。邮件回复请去收件箱。",
     },
   },
 } as const;

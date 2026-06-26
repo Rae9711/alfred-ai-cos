@@ -1,10 +1,22 @@
-import * as Contacts from "expo-contacts";
+import type * as Contacts from "expo-contacts";
 
 export type ContactMatch = {
   id: string;
   name: string;
   phone: string;
 };
+
+export type ContactsPermissionStatus = "granted" | "denied" | "undetermined";
+
+async function loadContactsModule(): Promise<typeof Contacts> {
+  try {
+    return await import("expo-contacts");
+  } catch {
+    throw new Error(
+      "Contacts is not available in this build — reinstall Albert from Settings or rebuild the app.",
+    );
+  }
+}
 
 function displayName(contact: Contacts.Contact): string {
   const parts = [contact.firstName, contact.lastName].filter(Boolean);
@@ -36,9 +48,8 @@ function nameMatches(query: string, contact: Contacts.Contact): boolean {
   );
 }
 
-export type ContactsPermissionStatus = "granted" | "denied" | "undetermined";
-
 export async function getContactsPermissionStatus(): Promise<ContactsPermissionStatus> {
+  const Contacts = await loadContactsModule();
   const { status } = await Contacts.getPermissionsAsync();
   if (status === Contacts.PermissionStatus.GRANTED) return "granted";
   if (status === Contacts.PermissionStatus.DENIED) return "denied";
@@ -46,11 +57,13 @@ export async function getContactsPermissionStatus(): Promise<ContactsPermissionS
 }
 
 export async function requestContactsPermission(): Promise<boolean> {
+  const Contacts = await loadContactsModule();
   const { status } = await Contacts.requestPermissionsAsync();
   return status === Contacts.PermissionStatus.GRANTED;
 }
 
 export async function searchContactsByName(name: string): Promise<ContactMatch[]> {
+  const Contacts = await loadContactsModule();
   const { data } = await Contacts.getContactsAsync({
     fields: [
       Contacts.Fields.PhoneNumbers,

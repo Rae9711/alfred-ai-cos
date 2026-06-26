@@ -19,6 +19,7 @@ import { LocaleProvider, useLocale } from "@/context/LocaleContext";
 import { MailboxProvider } from "@/context/MailboxContext";
 import {
   WorkflowProvider,
+  useWorkflow,
   type TabKey,
 } from "@/context/WorkflowContext";
 import { AskScreen } from "@/screens/AskScreen";
@@ -62,6 +63,7 @@ function TabsChrome({
 }) {
   const { meta, state, setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
+  const { openFreeChat } = useWorkflow();
   const atHome = tab === "inbox" || tab === "settings";
 
   useEffect(() => {
@@ -126,7 +128,7 @@ function TabsChrome({
           <Tab
             label={t.tabs.ask}
             active={tab === "ask"}
-            onPress={() => setTab("ask")}
+            onPress={() => openFreeChat()}
             icon={(c) => <Ic.Stack size={22} color={c} stroke={1.5} />}
           />
           <Tab

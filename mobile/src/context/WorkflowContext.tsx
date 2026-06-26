@@ -45,7 +45,9 @@ type WorkflowApi = {
   thread: WorkflowThread | null;
   openChatFromInbox: (messageId: string, mode: "reply" | "delegate") => void;
   openChatFromHome: () => void;
-  openFreeChat: () => void;
+  /** Opens Ask free chat; optional message is sent once the screen mounts. */
+  openFreeChat: (initialMessage?: string) => void;
+  consumePendingFreeChatMessage: () => string | null;
   completeChat: () => void;
   cancelChat: () => void;
   reviseDraft: (instruction: string) => Promise<void>;
@@ -63,6 +65,9 @@ export function WorkflowProvider({
   setTab: (tab: TabKey) => void;
 }) {
   const [thread, setThread] = useState<WorkflowThread | null>(null);
+  const [pendingFreeChatMessage, setPendingFreeChatMessage] = useState<
+    string | null
+  >(null);
   const { locale } = useLocale();
   const { itemById } = useMailbox();
 
@@ -193,10 +198,22 @@ export function WorkflowProvider({
     setTab("ask");
   }, [setTab, locale]);
 
-  const openFreeChat = useCallback(() => {
-    setThread(null);
-    setTab("ask");
-  }, [setTab]);
+  const openFreeChat = useCallback(
+    (initialMessage?: string) => {
+      setThread(null);
+      if (initialMessage?.trim()) {
+        setPendingFreeChatMessage(initialMessage.trim());
+      }
+      setTab("ask");
+    },
+    [setTab],
+  );
+
+  const consumePendingFreeChatMessage = useCallback(() => {
+    const msg = pendingFreeChatMessage;
+    setPendingFreeChatMessage(null);
+    return msg;
+  }, [pendingFreeChatMessage]);
 
   const finish = useCallback(() => {
     setThread(null);
@@ -264,6 +281,7 @@ export function WorkflowProvider({
       openChatFromInbox,
       openChatFromHome,
       openFreeChat,
+      consumePendingFreeChatMessage,
       completeChat,
       cancelChat,
       reviseDraft,
@@ -274,6 +292,7 @@ export function WorkflowProvider({
       openChatFromInbox,
       openChatFromHome,
       openFreeChat,
+      consumePendingFreeChatMessage,
       completeChat,
       cancelChat,
       reviseDraft,

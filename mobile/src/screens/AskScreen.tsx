@@ -55,7 +55,8 @@ export function AskScreen() {
   const { syncAndRefresh, markRead } = useMailbox();
   const { meta, state, setThinking } = useCompanionAvatar();
   const { locale, t } = useLocale();
-  const { thread, completeChat, cancelChat, reviseDraft } = useWorkflow();
+  const { thread, completeChat, cancelChat, reviseDraft, consumePendingFreeChatMessage } =
+    useWorkflow();
 
   const [freeChat, setFreeChat] = useState<FreeMsg[]>([]);
   const [taskChat, setTaskChat] = useState<TaskMessage[]>([]);
@@ -71,6 +72,13 @@ export function AskScreen() {
   useEffect(() => {
     setFreeChat([{ role: "alfred", text: t.freeChat.seed, ts: "now" }]);
   }, [locale, t.freeChat.seed]);
+
+  const sendFreeRef = useRef<(text: string) => void>(() => undefined);
+
+  useEffect(() => {
+    const pending = consumePendingFreeChatMessage();
+    if (pending) sendFreeRef.current(pending);
+  }, [consumePendingFreeChatMessage]);
 
   useEffect(() => {
     if (!thread) return;
@@ -246,6 +254,8 @@ export function AskScreen() {
       t.freeChat.fallback,
     ],
   );
+
+  sendFreeRef.current = sendFree;
 
   const sendRevise = () => {
     const q = input.trim();
@@ -495,6 +505,21 @@ export function AskScreen() {
           <View style={styles.suggest}>
             <Text style={styles.suggestLabel}>{t.ask.tryAsking}</Text>
             {t.suggest.map((q) => (
+              <Pressable
+                key={q}
+                style={styles.suggestItem}
+                onPress={() => sendFree(q)}
+              >
+                <Serif size={14} italic color={colors.ink2}>
+                  "{q}"
+                </Serif>
+                <Ic.Arrow size={14} color={colors.ink4} />
+              </Pressable>
+            ))}
+            <Text style={[styles.suggestLabel, styles.suggestLabelSpaced]}>
+              {t.ask.capabilitiesLabel}
+            </Text>
+            {t.askCapabilities.map((q) => (
               <Pressable
                 key={q}
                 style={styles.suggestItem}
@@ -757,6 +782,7 @@ const styles = StyleSheet.create({
     color: colors.ink4,
     marginBottom: 10,
   },
+  suggestLabelSpaced: { marginTop: 14 },
   suggestItem: {
     flexDirection: "row",
     alignItems: "center",

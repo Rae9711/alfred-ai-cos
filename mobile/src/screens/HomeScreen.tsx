@@ -21,6 +21,7 @@ import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
+import { useWorkflow } from "@/context/WorkflowContext";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
@@ -28,6 +29,7 @@ import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { greetingForLocale } from "@/i18n/locales";
+import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 function formatMeetingTime(iso: string | null): string {
@@ -49,6 +51,7 @@ export function HomeScreen() {
   const { meta, state, setThinking } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
+  const { openFreeChat } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
@@ -135,6 +138,13 @@ export function HomeScreen() {
     const q = composer.trim();
     if (!q || asking) return;
     setComposer("");
+
+    const smsIntent = parseSmsComposeIntent(q);
+    if (smsIntent) {
+      openFreeChat(q);
+      return;
+    }
+
     setAsking(true);
     setThinking(true);
     void (async () => {
