@@ -25,7 +25,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { SmsComposeSheet } from "@/screens/sheets/SmsComposeSheet";
-import { Btn, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
+import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
 import {
   requestContactsPermission,
   searchContactsByName,
@@ -503,34 +503,24 @@ export function AskScreen() {
         ) : null}
         {freeChat.length <= 1 && !thinking ? (
           <View style={styles.suggest}>
-            <Text style={styles.suggestLabel}>{t.ask.tryAsking}</Text>
-            {t.suggest.map((q) => (
-              <Pressable
-                key={q}
-                style={styles.suggestItem}
-                onPress={() => sendFree(q)}
-              >
-                <Serif size={14} italic color={colors.ink2}>
-                  "{q}"
-                </Serif>
-                <Ic.Arrow size={14} color={colors.ink4} />
-              </Pressable>
+            {t.askHintGroups.map((group) => (
+              <View key={group.label} style={styles.hintGroup}>
+                <Eyebrow style={styles.hintEyebrow}>{group.label}</Eyebrow>
+                {group.examples.map((q) => (
+                  <Pressable
+                    key={q}
+                    style={styles.suggestItem}
+                    onPress={() => sendFree(q)}
+                  >
+                    <Serif size={14} italic color={colors.ink2}>
+                      "{q}"
+                    </Serif>
+                    <Ic.Arrow size={14} color={colors.ink4} />
+                  </Pressable>
+                ))}
+              </View>
             ))}
-            <Text style={[styles.suggestLabel, styles.suggestLabelSpaced]}>
-              {t.ask.capabilitiesLabel}
-            </Text>
-            {t.askCapabilities.map((q) => (
-              <Pressable
-                key={q}
-                style={styles.suggestItem}
-                onPress={() => sendFree(q)}
-              >
-                <Serif size={14} italic color={colors.ink2}>
-                  "{q}"
-                </Serif>
-                <Ic.Arrow size={14} color={colors.ink4} />
-              </Pressable>
-            ))}
+            <Text style={styles.inboxHint}>{t.ask.inboxHint}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -773,16 +763,15 @@ const styles = StyleSheet.create({
     borderColor: colors.hair2,
     maxHeight: 100,
   },
-  suggest: { marginTop: 4 },
-  suggestLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
+  suggest: { marginTop: 8, gap: 16 },
+  hintGroup: { gap: 6 },
+  hintEyebrow: { marginBottom: 2 },
+  inboxHint: {
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.ink4,
-    marginBottom: 10,
+    marginTop: 4,
   },
-  suggestLabelSpaced: { marginTop: 14 },
   suggestItem: {
     flexDirection: "row",
     alignItems: "center",

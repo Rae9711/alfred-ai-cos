@@ -88,9 +88,8 @@ export const translations = {
       revisePlaceholder: "Tell Alfred how to adjust…",
       freeTitleEm: "mind?",
       freeTitlePlain: "What's on your",
-      freePlaceholder: "Ask Alfred anything…",
-      tryAsking: "Try asking",
-      capabilitiesLabel: "Or try",
+      freePlaceholder: "Ask about your schedule, book time, or text someone…",
+      inboxHint: "Email & SMS replies — open a thread from Inbox",
       thinking: "Alfred · thinking…",
       taskOpenReply: (sender: string) =>
         `Got it. I'll help you reply to ${sender} — I've read the thread.`,
@@ -172,18 +171,24 @@ export const translations = {
       send: "Send",
       voiceSoon: "Voice input (coming soon)",
     },
-    suggest: [
-      "What am I forgetting?",
-      "Who's waiting on me?",
-    ],
-    askCapabilities: [
-      "text Mom: see you tomorrow",
-      "Book tomorrow 3-4pm",
+    askHintGroups: [
+      {
+        label: "Calendar",
+        examples: [
+          "What's on my calendar tomorrow afternoon?",
+          "Block tomorrow 3–4pm for focus time",
+        ],
+      },
+      {
+        label: "Text someone",
+        examples: ["text Mom: see you tomorrow"],
+      },
     ],
     freeChat: {
       seed:
-        "Ask me anything — book calendar time, text someone by name, or tap a suggestion below.",
-      fallback: "I can book calendar time or help you text someone by name (e.g. “text Mom: see you”). For inbox and email drafts, check Inbox.",
+        "I can check or book your calendar and draft a text by name — you tap Send in Messages. Tap an example below, or open a thread from Inbox to draft a reply.",
+      fallback:
+        "I can book or check calendar time, or draft a text by name (e.g. “text Mom: see you”). Email and SMS replies start from Inbox.",
     },
   },
   zh: {
@@ -268,9 +273,8 @@ export const translations = {
       revisePlaceholder: "告诉管家如何调整…",
       freeTitleEm: "什么？",
       freeTitlePlain: "想聊点",
-      freePlaceholder: "问管家任何问题…",
-      tryAsking: "试试这样问",
-      capabilitiesLabel: "也可以试试",
+      freePlaceholder: "问日程、订时间，或按姓名发短信…",
+      inboxHint: "邮件/短信回复 — 从收件箱进入",
       thinking: "管家 · 思考中…",
       taskOpenReply: (sender: string) =>
         `收到。我来帮您回复${sender}，已读取邮件内容。`,
@@ -348,17 +352,24 @@ export const translations = {
       send: "发送",
       voiceSoon: "语音输入（即将推出）",
     },
-    suggest: [
-      "我忘了什么？",
-      "谁在等我回复？",
-    ],
-    askCapabilities: [
-      "给 Mom 发：明天见",
-      "明天下午3点到4点帮我空出来",
+    askHintGroups: [
+      {
+        label: "日历",
+        examples: [
+          "明天下午有什么安排？",
+          "明天下午3点到4点帮我空出来",
+        ],
+      },
+      {
+        label: "发短信",
+        examples: ["给 Mom 发：明天见"],
+      },
     ],
     freeChat: {
-      seed: "随便问 — 可以订日历、按姓名发短信，或点下面的建议。",
-      fallback: "我可以帮你订日历，或按姓名发短信（例如「给 Mom 发：明天见」）。邮件回复请去收件箱。",
+      seed:
+        "可以查/订日历、按姓名起草短信 — 发送需在「信息」里确认。点下面的例子试试，或从收件箱进入起草回复。",
+      fallback:
+        "我可以查/订日历，或按姓名起草短信（例如「给 Mom 发：明天见」）。邮件和短信回复请从收件箱进入。",
     },
   },
 } as const;
