@@ -123,15 +123,15 @@ export const translations = {
       disconnectMailbox: "Disconnect",
       smsTitle: "SMS forwarding",
       smsHint:
-        "Install Albert's Shortcut, paste your token when prompted, then turn on the automation below.",
+        "Install Albert's Shortcut, paste your token when prompted, then turn on the automation below. If you see Unknown Action after import, delete the shortcut and install again from here.",
       smsTokenLabel: "X-Sms-Token (for import prompt):",
       smsInstallShortcut: "Install Shortcut",
-      smsSyncLastTen: "Sync last 10 texts",
+      smsShareShortcut: "Install Share shortcut",
       smsCopyToken: "Copy Token",
       smsTokenCopied: "Token copied.",
       smsInstallFailed: "Could not open Shortcuts.",
       smsSteps:
-        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. Tap Sync last 10 texts once to import recent messages for reply testing.\n3. Send yourself a test text and check Inbox → SMS.",
+        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → choose Albert SMS Forward.\n2. For older texts: Messages → long-press a message → Share → Albert SMS Share.\n3. Send yourself a test text and check Inbox → SMS.\n\nReply may not pre-fill the recipient until you add Get Details of Messages manually in Shortcuts (see docs).",
     },
     a11y: {
       captureHome: "Alfred companion home — open capture",
@@ -267,15 +267,15 @@ export const translations = {
       connectedMailboxes: "已连接邮箱",
       disconnectMailbox: "断开",
       smsTitle: "短信转发",
-      smsHint: "安装 Albert 快捷指令，按提示粘贴令牌，然后开启下方自动化。",
+      smsHint: "安装 Albert 快捷指令，按提示粘贴令牌，然后开启下方自动化。若导入后出现未知操作，请删除快捷指令后从此处重新安装。",
       smsTokenLabel: "X-Sms-Token（导入时粘贴）：",
       smsInstallShortcut: "安装快捷指令",
-      smsSyncLastTen: "同步最近 10 条短信",
+      smsShareShortcut: "安装分享快捷指令",
       smsCopyToken: "复制令牌",
       smsTokenCopied: "已复制令牌。",
       smsInstallFailed: "无法打开快捷指令。",
       smsSteps:
-        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 点一次「同步最近 10 条短信」导入近期短信，便于测试回复。\n3. 给自己发一条测试短信，在收件箱 → 短信中查看。",
+        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → 选择 Albert SMS Forward。\n2. 导入旧短信：信息 → 长按消息 → 分享 → Albert SMS Share。\n3. 给自己发一条测试短信，在收件箱 → 短信中查看。\n\n若需回复时自动填入收件人，请在快捷指令中手动添加「获取信息详细信息」（见文档）。",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",

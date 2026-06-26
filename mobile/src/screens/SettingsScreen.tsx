@@ -322,7 +322,7 @@ export function SettingsScreen() {
             onPress={() => void installSmsShortcut()}
           />
           <Btn
-            label={t.settings.smsSyncLastTen}
+            label={t.settings.smsShareShortcut}
             kind="ghost"
             tiny
             onPress={() => void openSmsBackfillShortcut()}

@@ -17,11 +17,12 @@ BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from app.services.sms_shortcut import (  # noqa: E402
-    BACKFILL_SHORTCUT_FILENAME,
+    LEGACY_BACKFILL_SHORTCUT_FILENAME,
+    SHARE_SHORTCUT_FILENAME,
     SHORTCUT_FILENAME,
-    build_sms_backfill_shortcut,
     build_sms_forward_shortcut,
-    signed_backfill_shortcut_path,
+    build_sms_share_shortcut,
+    signed_share_shortcut_path,
     signed_shortcut_path,
 )
 
@@ -70,12 +71,16 @@ def main() -> None:
         builder=build_sms_forward_shortcut,
         signed=signed_shortcut_path(),
     )
+    share_signed = signed_share_shortcut_path()
     _build_and_sign(
-        name="SMS Backfill",
-        filename=BACKFILL_SHORTCUT_FILENAME,
-        builder=build_sms_backfill_shortcut,
-        signed=signed_backfill_shortcut_path(),
+        name="SMS Share",
+        filename=SHARE_SHORTCUT_FILENAME,
+        builder=build_sms_share_shortcut,
+        signed=share_signed,
     )
+    legacy = share_signed.parent / LEGACY_BACKFILL_SHORTCUT_FILENAME
+    legacy.write_bytes(share_signed.read_bytes())
+    print(f"✓ legacy alias {LEGACY_BACKFILL_SHORTCUT_FILENAME} → same bytes as Share")
 
 
 if __name__ == "__main__":

@@ -139,7 +139,7 @@ def get_sms_forwarding_backfill(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SmsInstallOut:
-    """One-tap import URL for the one-time SMS backfill shortcut."""
+    """One-tap import URL for the Share-sheet SMS import shortcut."""
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
     settings = get_settings()

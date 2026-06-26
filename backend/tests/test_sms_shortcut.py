@@ -1,81 +1,58 @@
-"""SMS forward and backfill shortcut plist builders."""
+"""SMS forward and share shortcut plist builders."""
 
 from __future__ import annotations
 
 import plistlib
 
 from app.services.sms_shortcut import (
-    BACKFILL_MESSAGE_LIMIT,
-    BACKFILL_SHORTCUT_FILENAME,
-    BACKFILL_SHORTCUT_NAME,
     DEFAULT_WEBHOOK_URL,
-    DETECT_CONTACTS_ACTION,
     DETECT_TEXT_ACTION,
-    FIND_MESSAGES_ACTION,
     HASH_ACTION,
-    PROPERTIES_CONTACTS_ACTION,
-    PROPERTIES_MESSAGES_ACTION,
-    REPEAT_EACH_ACTION,
+    LEGACY_BACKFILL_SHORTCUT_FILENAME,
+    SHARE_SHORTCUT_FILENAME,
+    SHARE_SHORTCUT_NAME,
     SHORTCUT_NAME,
-    backfill_shortcut_download_url,
     build_sms_backfill_install_urls,
-    build_sms_backfill_shortcut,
     build_sms_forward_shortcut,
     build_sms_install_urls,
+    build_sms_share_shortcut,
+    share_shortcut_download_url,
     shortcut_download_url,
 )
 
 
-def test_build_sms_forward_shortcut_extracts_sender_phone_from_message() -> None:
+def _action_ids(data: dict) -> list[str]:
+    return [a["WFWorkflowActionIdentifier"] for a in data["WFWorkflowActions"]]
+
+
+def test_build_sms_forward_shortcut_minimal_body_only_payload() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
-    detect_actions = [
-        a
-        for a in data["WFWorkflowActions"]
-        if a["WFWorkflowActionIdentifier"] == DETECT_TEXT_ACTION
+    assert _action_ids(data) == [
+        DETECT_TEXT_ACTION,
+        "is.workflow.actions.dictionary",
+        "is.workflow.actions.downloadurl",
     ]
-    assert len(detect_actions) == 1
-    wf_input = detect_actions[0]["WFWorkflowActionParameters"]["WFInput"]
-    assert wf_input["WFSerializationType"] == "WFTextTokenAttachment"
+
+    detect = data["WFWorkflowActions"][0]
+    assert detect["WFWorkflowActionParameters"]["CustomOutputName"] == "Message Text"
+    wf_input = detect["WFWorkflowActionParameters"]["WFInput"]
     assert wf_input["Value"]["VariableName"] == "Shortcut Input"
-    assert detect_actions[0]["WFWorkflowActionParameters"]["CustomOutputName"] == "Message Text"
 
-    phone_action = next(
-        a
-        for a in data["WFWorkflowActions"]
-        if a["WFWorkflowActionIdentifier"] == PROPERTIES_MESSAGES_ACTION
-    )
-    assert phone_action["WFWorkflowActionParameters"]["WFContentItemPropertyName"] == "Phone Number"
-    assert phone_action["WFWorkflowActionParameters"]["CustomOutputName"] == "Sender Phone"
-
-    dict_action = next(
-        a for a in data["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.dictionary"
-    )
+    dict_action = data["WFWorkflowActions"][1]
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}
-    assert keys == {"body", "from_number", "from_name"}
-    from_number = next(item for item in items if item["WFKey"]["Value"]["string"] == "from_number")
-    assert from_number["WFValue"]["Value"]["OutputName"] == "Sender Phone"
+    assert keys == {"body"}
 
 
-def test_build_sms_forward_shortcut_includes_contact_name_extraction() -> None:
-    data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
-    assert any(
-        a["WFWorkflowActionIdentifier"] == DETECT_CONTACTS_ACTION for a in data["WFWorkflowActions"]
-    )
-    name_action = next(
-        a
-        for a in data["WFWorkflowActions"]
-        if a["WFWorkflowActionIdentifier"] == PROPERTIES_CONTACTS_ACTION
-    )
-    assert name_action["WFWorkflowActionParameters"]["WFContentItemPropertyName"] == "Name"
-    assert name_action["WFWorkflowActionParameters"]["CustomOutputName"] == "Sender Name"
-
-
-def test_build_sms_forward_shortcut_does_not_use_broken_contentitems_action() -> None:
+def test_build_sms_forward_shortcut_does_not_use_unsupported_message_actions() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
     forbidden = {
+        "is.workflow.actions.properties.messages",
         "is.workflow.actions.properties.contentitems",
         "is.workflow.actions.contentitemproperties",
+        "is.workflow.actions.detect.contacts",
+        "is.workflow.actions.properties.contacts",
+        "is.workflow.actions.filter.messages",
     }
     for action in data["WFWorkflowActions"]:
         assert action["WFWorkflowActionIdentifier"] not in forbidden
@@ -124,41 +101,51 @@ def test_build_sms_install_urls() -> None:
     assert "name=Albert" in import_url and "Forward" in import_url
 
 
-def test_build_sms_backfill_shortcut_finds_and_posts_latest_messages() -> None:
-    data = plistlib.loads(build_sms_backfill_shortcut(sms_token="tok"))
-    assert data["WFWorkflowName"] == BACKFILL_SHORTCUT_NAME
-    identifiers = [a["WFWorkflowActionIdentifier"] for a in data["WFWorkflowActions"]]
-    assert FIND_MESSAGES_ACTION in identifiers
-    assert identifiers.count(REPEAT_EACH_ACTION) == 2
-    find_action = next(
-        a for a in data["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"] == FIND_MESSAGES_ACTION
+def test_build_sms_share_shortcut_posts_shared_message() -> None:
+    data = plistlib.loads(build_sms_share_shortcut(sms_token="tok"))
+    assert data["WFWorkflowName"] == SHARE_SHORTCUT_NAME
+    assert data["WFWorkflowTypes"] == ["ActionExtension"]
+    assert _action_ids(data) == [
+        DETECT_TEXT_ACTION,
+        HASH_ACTION,
+        "is.workflow.actions.dictionary",
+        "is.workflow.actions.downloadurl",
+    ]
+
+    dict_action = next(
+        a for a in data["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.dictionary"
     )
-    assert find_action["WFWorkflowActionParameters"]["WFContentItemLimitNumber"] == BACKFILL_MESSAGE_LIMIT
-    assert any(a["WFWorkflowActionIdentifier"] == HASH_ACTION for a in data["WFWorkflowActions"])
-    post = data["WFWorkflowActions"][-2]
-    assert post["WFWorkflowActionIdentifier"] == "is.workflow.actions.downloadurl"
+    items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
+    keys = {item["WFKey"]["Value"]["string"] for item in items}
+    assert keys == {"body", "message_id", "backfill"}
+
+    post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionParameters"]["WFURL"] == DEFAULT_WEBHOOK_URL
 
 
-def test_build_sms_backfill_shortcut_does_not_use_broken_contentitems_action() -> None:
-    data = plistlib.loads(build_sms_backfill_shortcut(sms_token="tok"))
+def test_build_sms_share_shortcut_does_not_use_unsupported_message_actions() -> None:
+    data = plistlib.loads(build_sms_share_shortcut(sms_token="tok"))
     forbidden = {
-        "is.workflow.actions.properties.contentitems",
-        "is.workflow.actions.contentitemproperties",
+        "is.workflow.actions.properties.messages",
+        "is.workflow.actions.filter.messages",
+        "is.workflow.actions.detect.contacts",
+        "is.workflow.actions.properties.contacts",
+        "is.workflow.actions.repeat.each",
     }
     for action in data["WFWorkflowActions"]:
         assert action["WFWorkflowActionIdentifier"] not in forbidden
 
 
-def test_backfill_shortcut_download_url() -> None:
+def test_share_shortcut_download_url() -> None:
     assert (
-        backfill_shortcut_download_url(app_base_url="https://alfredaitech.com")
-        == "https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Backfill.shortcut"
+        share_shortcut_download_url(app_base_url="https://alfredaitech.com")
+        == f"https://alfredaitech.com/api/v1/integrations/ios/{SHARE_SHORTCUT_FILENAME}"
     )
 
 
-def test_build_sms_backfill_install_urls() -> None:
+def test_build_sms_backfill_install_urls_serves_share_shortcut() -> None:
     import_url, shortcut_url = build_sms_backfill_install_urls(app_base_url="https://alfredaitech.com")
-    assert shortcut_url.endswith(f"/{BACKFILL_SHORTCUT_FILENAME}")
+    assert shortcut_url.endswith(f"/{SHARE_SHORTCUT_FILENAME}")
     assert import_url.startswith("shortcuts://import-shortcut/?")
-    assert "Backfill" in import_url or "Backfill" in shortcut_url
+    assert "Share" in import_url or "Share" in shortcut_url
+    assert LEGACY_BACKFILL_SHORTCUT_FILENAME != SHARE_SHORTCUT_FILENAME
