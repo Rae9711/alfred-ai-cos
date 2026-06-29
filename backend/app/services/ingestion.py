@@ -168,9 +168,7 @@ def _refresh_gmail_labels(
         except Exception:
             continue
         if user is not None:
-            message.sender_classification = sender_class.classify_message(
-                message, user=user
-            ).cls
+            message.sender_classification = sender_class.classify_message(message, user=user).cls
 
 
 def _sync_recent_primary_catchup(
@@ -186,9 +184,7 @@ def _sync_recent_primary_catchup(
     return _ingest_message_ids(db, account, token, recent_ids)
 
 
-def _sync_unread_inbox(
-    db: Session, account: ConnectedAccount, token: dict
-) -> list[Message]:
+def _sync_unread_inbox(db: Session, account: ConnectedAccount, token: dict) -> list[Message]:
     """Ingest unread inbox mail before Gmail assigns CATEGORY_PERSONAL."""
     settings = get_settings()
     unread_ids = gmail.list_unread_inbox_message_ids(
@@ -197,9 +193,7 @@ def _sync_unread_inbox(
     return _ingest_message_ids(db, account, token, unread_ids)
 
 
-def _sync_unread_primary(
-    db: Session, account: ConnectedAccount, token: dict
-) -> list[Message]:
+def _sync_unread_primary(db: Session, account: ConnectedAccount, token: dict) -> list[Message]:
     """Ingest any unread Primary mail missing from the local store."""
     settings = get_settings()
     unread_ids = gmail.list_unread_primary_message_ids(
@@ -213,9 +207,7 @@ def _apply_history_label_changes(
 ) -> None:
     """Refresh labels when the user reads/marks unread in Gmail."""
     try:
-        affected, _latest = gmail.list_history_label_affected_message_ids(
-            token, start_history_id
-        )
+        affected, _latest = gmail.list_history_label_affected_message_ids(token, start_history_id)
     except HistoryExpiredError:
         return
     if not affected:
@@ -280,10 +272,12 @@ def _sync_account(
                 )
                 new_messages = _ingest_message_ids(db, account, token, message_ids)
             else:
+                history_id = account.gmail_history_id
+                assert history_id is not None
                 try:
                     message_ids, _latest = gmail.list_history_added_message_ids(
                         token,
-                        account.gmail_history_id,
+                        history_id,
                     )
                     new_messages = _ingest_message_ids(db, account, token, message_ids)
                 except HistoryExpiredError:
@@ -345,11 +339,33 @@ def messages_pending_extraction(db: Session, user_id: str) -> list[Message]:
 
 
 def messages_to_process(
-    db: Session, user_id: str, new_messages: list[Message]
+    db: Session,
+    user_id: str,
+    new_messages: list[Message],
+    *,
+    reclassify: bool = False,
+    reclassify_limit: int = 25,
 ) -> list[Message]:
     """New ingest rows plus any previously unclassified messages."""
     seen = {m.id for m in new_messages}
     pending = [m for m in messages_pending_extraction(db, user_id) if m.id not in seen]
+    if reclassify:
+        recent = list(
+            db.scalars(
+                select(Message)
+                .where(
+                    Message.user_id == user_id,
+                    Message.classification.is_not(None),
+                    Message.source != "sms",
+                )
+                .order_by(Message.sent_at.desc().nullslast())
+                .limit(reclassify_limit)
+            )
+        )
+        for m in recent:
+            if m.id not in seen and message_in_primary_inbox(m):
+                pending.append(m)
+                seen.add(m.id)
     return new_messages + pending
 
 

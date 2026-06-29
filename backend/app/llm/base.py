@@ -12,12 +12,14 @@ from datetime import date
 from typing import Any, Protocol
 
 from app.schemas.llm import (
+    AssistantChatReply,
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
     DraftResult,
     ExtractedCommitment,
     MeetingContextSummary,
+    ThreadReconciliation,
 )
 
 
@@ -92,4 +94,23 @@ class LLMClient(Protocol):
         now_iso is the user's current local time with offset, and timezone is their IANA
         zone. upcoming_events is a formatted list of ids/titles/times for reschedule/cancel.
         """
+        ...
+
+    def reconcile_thread_commitments(
+        self,
+        *,
+        thread_context: str,
+        open_commitments: list[dict[str, str]],
+    ) -> ThreadReconciliation:
+        """Given a full thread, return open commitment ids now resolved in later messages."""
+        ...
+
+    def answer_contextual_question(
+        self,
+        *,
+        question: str,
+        context: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> AssistantChatReply:
+        """Answer a free-form question using Today/inbox/waiting context (PRD 10.2 chat)."""
         ...

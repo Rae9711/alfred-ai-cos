@@ -19,9 +19,8 @@ from app.services.inbox_view import (
 
 
 def test_category_none_when_unclassified() -> None:
-    from app.services.inbox_view import category_for_message, effective_inbox_category
-    from app.db.enums import MessageClassification
     from app.db.models import Message
+    from app.services.inbox_view import effective_inbox_category
 
     assert category_for_message(None) is None
     m = Message(

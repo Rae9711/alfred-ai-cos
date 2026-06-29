@@ -14,12 +14,12 @@ from app.db.models import User
 from app.notifications import get_notifier
 from app.services import (
     briefing,
+    calendar,
     notifications,
     outbound_tracking,
     snooze,
 )
 from app.services.connected_accounts import list_user_ids_with_google
-from app.services import calendar
 from app.services.mail_sync import (
     classify_pending_messages_sync,
     run_mail_sync,

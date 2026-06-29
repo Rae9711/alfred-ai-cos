@@ -264,7 +264,9 @@ def test_ingest_sms_succeeds_when_auto_draft_fails(
     assert msg.source == "sms"
 
 
-def test_sms_reply_phone_hides_unknown_sender(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sms_reply_phone_hides_unknown_sender(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _patch_llm(monkeypatch, FakeLLM(commitments=[]))
     result = sms_inbox.ingest_sms(
         db,

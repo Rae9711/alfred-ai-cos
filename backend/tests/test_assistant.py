@@ -21,7 +21,9 @@ def user(db: Session) -> User:
     return u
 
 
-def test_check_calendar_uses_llm_reply(db: Session, user: User, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_calendar_uses_llm_reply(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
     fake = FakeLLM(
         interpretation=AssistantInterpretation(
             intent="check_calendar",

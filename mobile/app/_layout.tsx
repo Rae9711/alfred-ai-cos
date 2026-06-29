@@ -25,6 +25,7 @@ import {
 
 import { setToken } from "@/api/auth";
 import { AuthProvider, useAuth } from "@/api/AuthContext";
+import { handleSharedTextUrl } from "@/lib/shareIntent";
 import { colors } from "@/theme/theme";
 import { View } from "react-native";
 
@@ -44,8 +45,14 @@ function DeepLinkHandler() {
       }
     };
 
-    void Linking.getInitialURL().then(handle);
-    const sub = Linking.addEventListener("url", (e) => void handle(e.url));
+    void Linking.getInitialURL().then((url) => {
+      void handle(url);
+      void handleSharedTextUrl(url);
+    });
+    const sub = Linking.addEventListener("url", (e) => {
+      void handle(e.url);
+      void handleSharedTextUrl(e.url);
+    });
     return () => sub.remove();
   }, [refresh]);
 

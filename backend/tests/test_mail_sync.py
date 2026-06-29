@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import MessageClassification, NotificationType
 from app.db.models import Device, Message, User
-from app.services.ingestion import SyncIngestResult
 from app.services import mail_sync
+from app.services.ingestion import SyncIngestResult
 from app.services.mail_sync import (
     classify_pending_messages_sync,
     notify_new_mail,
@@ -22,9 +22,7 @@ class _StubNotifier:
         self.sent: list[dict] = []
 
     def send(self, *, push_token: str, title: str, body: str, data: dict) -> None:
-        self.sent.append(
-            {"push_token": push_token, "title": title, "body": body, "data": data}
-        )
+        self.sent.append({"push_token": push_token, "title": title, "body": body, "data": data})
 
 
 @pytest.fixture
@@ -92,12 +90,14 @@ def test_ingest_only_classifies_pending_messages(
     monkeypatch.setattr(
         mail_sync.ingestion,
         "sync_messages",
-        lambda _db, _uid, incremental=True: SyncIngestResult(new_messages=[], initial_backfill=False),
+        lambda _db, _uid, incremental=True: SyncIngestResult(
+            new_messages=[], initial_backfill=False
+        ),
     )
     monkeypatch.setattr(
         mail_sync.extraction,
         "process_message",
-        lambda _db, message, body=None: (
+        lambda _db, message, body=None, **_: (
             setattr(message, "classification", MessageClassification.needs_reply) or []
         ),
     )
@@ -130,7 +130,7 @@ def test_classify_pending_messages_sync_respects_limit(
 
     calls: list[str] = []
 
-    def track(_db, message, body=None):
+    def track(_db, message, body=None, **_):
         calls.append(message.external_id)
         message.classification = MessageClassification.needs_reply
         return []

@@ -13,31 +13,42 @@ from app.services import extraction, ingestion, notifications
 from app.services.ingestion import SyncIngestResult
 
 
-def classify_pending_messages_sync(
-    db: Session, user_id: str, *, limit: int = 30
-) -> int:
-    """Classify messages ingested without waiting for Celery."""
-    processed = 0
-    pending = ingestion.messages_pending_extraction(db, user_id)[:limit]
-    for message in pending:
-        extraction.process_message(db, message)
-        processed += 1
-    return processed
-
-
 def run_mail_sync(
-    db: Session, user_id: str, *, ingest_only: bool = False, incremental: bool = True
+    db: Session,
+    user_id: str,
+    *,
+    ingest_only: bool = False,
+    incremental: bool = True,
+    reclassify: bool = False,
 ) -> tuple[SyncIngestResult, int, int]:
     """Pull new Gmail; classify unless ingest_only (fast path for mobile refresh)."""
     result = ingestion.sync_messages(db, user_id, incremental=incremental)
     if ingest_only:
-        processed = classify_pending_messages_sync(db, user_id)
+        processed = classify_pending_messages_sync(db, user_id, reclassify=reclassify)
         return result, processed, 0
-    to_process = ingestion.messages_to_process(db, user_id, result.new_messages)
+    to_process = ingestion.messages_to_process(
+        db, user_id, result.new_messages, reclassify=reclassify
+    )
     commitments = 0
     for message in to_process:
-        commitments += len(extraction.process_message(db, message))
+        commitments += len(extraction.process_message(db, message, force_reclassify=reclassify))
     return result, len(to_process), commitments
+
+
+def classify_pending_messages_sync(
+    db: Session, user_id: str, *, limit: int = 30, reclassify: bool = False
+) -> int:
+    """Classify messages ingested without waiting for Celery."""
+    processed = 0
+    pending = ingestion.messages_pending_extraction(db, user_id)[:limit]
+    if reclassify:
+        extra = ingestion.messages_to_process(db, user_id, [], reclassify=True)[:limit]
+        seen = {m.id for m in pending}
+        pending = pending + [m for m in extra if m.id not in seen]
+    for message in pending:
+        extraction.process_message(db, message, force_reclassify=reclassify)
+        processed += 1
+    return processed
 
 
 def notify_new_mail(

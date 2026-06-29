@@ -24,8 +24,6 @@ from app.schemas.api import (
 from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
-from app.services.message_body import fetch_message_body
-from app.services.message_read import account_has_gmail_modify, mark_message_read
 from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
@@ -34,6 +32,8 @@ from app.services.inbox_view import (
     start_of_today_utc,
     user_replied_message_ids,
 )
+from app.services.message_body import fetch_message_body
+from app.services.message_read import mark_message_read
 from app.services.sms_inbox import sms_reply_phone
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -59,7 +59,9 @@ def list_inbox(
     db: Session = Depends(get_db),
 ) -> InboxOut:
     accounts = list_google_accounts(db, user.id)
-    mailbox_emails = sorted({a.provider_account_email for a in accounts if a.provider_account_email})
+    mailbox_emails = sorted(
+        {a.provider_account_email for a in accounts if a.provider_account_email}
+    )
     account_by_id = {a.id: a.provider_account_email or "" for a in accounts}
 
     filter_account_id: str | None = None
@@ -89,10 +91,7 @@ def list_inbox(
     elif scope == "unread":
         stmt = stmt.limit(unread_limit * 2)
     elif scope == "needs_action":
-        stmt = (
-            stmt.where(Message.sent_at >= needs_action_start)
-            .limit(unread_limit)
-        )
+        stmt = stmt.where(Message.sent_at >= needs_action_start).limit(unread_limit)
     else:
         # synced = Email tab: Gmail only, not forwarded texts.
         stmt = stmt.where(Message.source != "sms").limit(synced_limit * 3)
@@ -219,6 +218,32 @@ def mark_read(
     )
 
 
+@router.post("/{message_id}/decide", response_model=MessageReadOut)
+def mark_decided(
+    message_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageReadOut:
+    """User handled a decision-only email without sending a reply."""
+    message = db.get(Message, message_id)
+    if message is None or message.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    message.classification = MessageClassification.informational
+    message.action_required = False
+    if not message.body_summary:
+        message.body_summary = "Marked as decided."
+    db.commit()
+    try:
+        message, gmail_synced = mark_message_read(db, user, message)
+    except (ValueError, Exception):
+        gmail_synced = False
+    return MessageReadOut(
+        id=message.id,
+        is_unread=is_message_unread(message),
+        gmail_synced=gmail_synced,
+    )
+
+
 @router.post("/{message_id}/book", response_model=BookMessageResponse)
 def book_from_message(
     message_id: str,
@@ -226,7 +251,7 @@ def book_from_message(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BookMessageResponse:
-    """"Yes / Add to calendar" on an event-like message. Interprets the message content
+    """ "Yes / Add to calendar" on an event-like message. Interprets the message content
     for a date/time and books it on the user's calendar through the audited spine."""
     message = db.get(Message, message_id)
     if message is None or message.user_id != user.id:

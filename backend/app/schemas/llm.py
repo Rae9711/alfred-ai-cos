@@ -60,18 +60,28 @@ class CaptureResult(BaseModel):
     )
 
 
+class ThreadReconciliation(BaseModel):
+    """Open commitments in an email thread that a later message resolves."""
+
+    resolved_commitment_ids: list[str] = Field(
+        default_factory=list,
+        description="Ids of existing open commitments now satisfied or cancelled in the thread.",
+    )
+
+
+class AssistantChatReply(BaseModel):
+    reply: str = Field(description="A concise, helpful answer grounded in the provided context.")
+
+
 class AssistantInterpretation(BaseModel):
     """How Albert read a free-text request from the Ask screen."""
 
     intent: str = Field(
         description=(
-            "One of: book_calendar, reschedule_calendar, cancel_calendar, "
-            "check_calendar, none."
+            "One of: book_calendar, reschedule_calendar, cancel_calendar, check_calendar, none."
         )
     )
-    reply: str = Field(
-        description="A short, calm one-line reply to show the user."
-    )
+    reply: str = Field(description="A short, calm one-line reply to show the user.")
     title: str | None = Field(default=None, description="Event title when booking.")
     start: str | None = Field(
         default=None, description="Event start, ISO 8601 with the user's UTC offset."
@@ -81,5 +91,5 @@ class AssistantInterpretation(BaseModel):
     )
     event_id: str | None = Field(
         default=None,
-        description="Internal event id from the upcoming-events list when rescheduling or cancelling.",
+        description="Event id from upcoming-events list (reschedule/cancel).",
     )

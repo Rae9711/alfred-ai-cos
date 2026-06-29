@@ -31,5 +31,7 @@ def test_authorization_url_scopes_are_intact(monkeypatch) -> None:
     monkeypatch.setattr(oauth.settings, "google_client_secret", "test-secret")
     url = oauth.build_authorization_url("test-state")
     scope = up.parse_qs(up.urlparse(url).query)["scope"][0]
-    assert "https://www.googleapis.com/auth/gmail.readonly" in scope.split(" ")
-    assert "https://www.googleapis.com/auth/calendar.readonly" in scope.split(" ")
+    scopes = scope.split(" ")
+    assert "https://www.googleapis.com/auth/gmail.modify" in scopes
+    assert "https://www.googleapis.com/auth/gmail.compose" in scopes
+    assert "https://www.googleapis.com/auth/calendar.readonly" in scopes

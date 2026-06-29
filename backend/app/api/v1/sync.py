@@ -34,6 +34,10 @@ def sync_now(
         default=False,
         description="Queue incremental sync in Celery and return immediately (mobile refresh).",
     ),
+    reclassify: bool = Query(
+        default=False,
+        description="Re-run classification on recent already-classified Primary mail.",
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SyncResponse:
@@ -57,7 +61,9 @@ def sync_now(
             initial_backfill=False,
         )
 
-    result, processed, commitments = run_mail_sync(db, user.id, ingest_only=ingest_only)
+    result, processed, commitments = run_mail_sync(
+        db, user.id, ingest_only=ingest_only, reclassify=reclassify
+    )
     if ingest_only:
         classify_pending_messages.delay(user.id)
     events = calendar.sync_calendar(db, user.id) if not ingest_only else []

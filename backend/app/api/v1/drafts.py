@@ -20,6 +20,18 @@ from app.services.message_body import build_draft_context, fetch_message_body
 router = APIRouter(prefix="/drafts", tags=["drafts"])
 
 
+@router.get("/{draft_id}", response_model=DraftOut)
+def get_draft(
+    draft_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DraftReply:
+    draft = db.get(DraftReply, draft_id)
+    if draft is None or draft.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return draft
+
+
 @router.post("", response_model=DraftOut)
 def create_draft(
     payload: DraftCreateRequest,
@@ -47,7 +59,7 @@ def create_draft(
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not load email from Gmail") from exc
 
-    context = build_draft_context(message=message, body=body)
+    context = build_draft_context(message=message, body=body, db=db)
     result = get_llm().draft_reply(
         thread_context=context,
         instruction=payload.instruction,

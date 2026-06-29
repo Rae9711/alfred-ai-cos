@@ -14,8 +14,8 @@ from app.db.enums import Provider
 from app.db.models import CalendarEvent, ConnectedAccount, User
 from app.services import gcal
 from app.services.crypto import decrypt_token, encrypt_token
-from app.services.google_oauth import fresh_credentials
 from app.services.gmail import use_gmail_credentials
+from app.services.google_oauth import fresh_credentials
 
 
 def _local_tz(timezone: str | None):

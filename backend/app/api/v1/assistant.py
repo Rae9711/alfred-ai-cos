@@ -14,8 +14,13 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.models import User
-from app.schemas.api import AssistantAskRequest, AssistantAskResponse
-from app.services.assistant import interpret_and_act, resolve_timezone
+from app.schemas.api import (
+    AssistantAskRequest,
+    AssistantAskResponse,
+    AssistantChatRequest,
+    AssistantChatResponse,
+)
+from app.services.assistant import chat_with_context, interpret_and_act, resolve_timezone
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -33,3 +38,20 @@ def ask(
         action=outcome.action,
         detail=outcome.detail,
     )
+
+
+@router.post("/chat", response_model=AssistantChatResponse)
+def chat(
+    payload: AssistantChatRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AssistantChatResponse:
+    tz = resolve_timezone(db, user, payload.timezone)
+    reply = chat_with_context(
+        db,
+        user,
+        text=payload.text,
+        tz=tz,
+        history=[m.model_dump() for m in payload.history],
+    )
+    return AssistantChatResponse(reply=reply)

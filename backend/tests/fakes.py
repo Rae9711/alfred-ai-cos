@@ -7,6 +7,7 @@ from datetime import date
 
 from app.db.enums import CommitmentOwner, MessageClassification, Priority
 from app.schemas.llm import (
+    AssistantChatReply,
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
@@ -14,6 +15,7 @@ from app.schemas.llm import (
     ExtractedCommitment,
     MeetingContextSummary,
     ParsedTask,
+    ThreadReconciliation,
 )
 
 
@@ -27,6 +29,7 @@ class FakeLLM:
         capture_tasks: list[ParsedTask] | None = None,
         detected_project: str | None = None,
         interpretation: AssistantInterpretation | None = None,
+        chat_reply: str = "You have 2 open loops today.",
     ) -> None:
         self._commitments = commitments or []
         self._capture_tasks = capture_tasks or []
@@ -34,6 +37,8 @@ class FakeLLM:
         self._interpretation = interpretation
         self.briefing_calls: list[dict] = []
         self.interpret_calls: list[dict] = []
+        self.chat_calls: list[dict] = []
+        self.chat_reply = chat_reply
 
     def classify_message(
         self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
@@ -89,15 +94,36 @@ class FakeLLM:
     def interpret_request(
         self, *, text: str, now_iso: str, timezone: str, upcoming_events: str = ""
     ) -> AssistantInterpretation:
-        self.interpret_calls.append({
-            "text": text,
-            "now_iso": now_iso,
-            "timezone": timezone,
-            "upcoming_events": upcoming_events,
-        })
+        self.interpret_calls.append(
+            {
+                "text": text,
+                "now_iso": now_iso,
+                "timezone": timezone,
+                "upcoming_events": upcoming_events,
+            }
+        )
         if self._interpretation is not None:
             return self._interpretation
         return AssistantInterpretation(intent="none", reply="I can book calendar time.")
+
+    def reconcile_thread_commitments(
+        self,
+        *,
+        thread_context: str,
+        open_commitments: list[dict[str, str]],
+    ) -> ThreadReconciliation:
+        del thread_context
+        return ThreadReconciliation()
+
+    def answer_contextual_question(
+        self,
+        *,
+        question: str,
+        context: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> AssistantChatReply:
+        self.chat_calls.append({"question": question, "context": context, "history": history})
+        return AssistantChatReply(reply=self.chat_reply)
 
 
 class FakeNotifier:

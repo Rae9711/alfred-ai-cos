@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.models import CalendarEvent, User
-from app.schemas.api import MeetingPrepOut, UpdateMeetingRequest, UpcomingMeeting
+from app.schemas.api import MeetingPrepOut, UpcomingMeeting, UpdateMeetingRequest
 from app.services import calendar, meeting_prep
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])

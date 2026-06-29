@@ -1,8 +1,10 @@
 // Onboarding calibration (PRD 9.1). Three questions, then writes to preferences.
 // Editorial theme: serif header, mono prompts, accent-tinted selected chips.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -64,9 +66,21 @@ const QUESTIONS: Question[] = [
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [prefs, setPrefs] = useState<OnboardingPrefs>({});
   const [saving, setSaving] = useState(false);
+  const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
+  const [shortcutReady, setShortcutReady] = useState(Platform.OS !== "ios");
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    void api
+      .getSmsForwardingInstall()
+      .then((cfg) => setSmsImportUrl(cfg.import_url ?? cfg.shortcut_url))
+      .catch(() => undefined);
+  }, []);
 
   const allAnswered =
-    Boolean(prefs.name?.trim()) && QUESTIONS.every((q) => prefs[q.key]);
+    Boolean(prefs.name?.trim()) &&
+    QUESTIONS.every((q) => prefs[q.key]) &&
+    shortcutReady;
 
   const submit = async () => {
     setSaving(true);
@@ -125,6 +139,38 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
         </View>
       ))}
 
+      {Platform.OS === "ios" ? (
+        <View style={styles.block}>
+          <Text style={styles.prompt}>Forward texts to Albert</Text>
+          <Text style={styles.hint}>
+            Install the SMS shortcut so Albert can read your text threads. Paste
+            your token when Shortcuts asks.
+          </Text>
+          <View style={styles.options}>
+            <Btn
+              label="Install SMS shortcut"
+              kind="accent"
+              onPress={() => {
+                if (smsImportUrl) void Linking.openURL(smsImportUrl);
+              }}
+            />
+            <Pressable
+              style={[styles.option, shortcutReady && styles.optionSelected]}
+              onPress={() => setShortcutReady(true)}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  shortcutReady && styles.optionTextSelected,
+                ]}
+              >
+                I've installed the shortcut
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.ctaWrap}>
         <Btn
           label={saving ? "Saving…" : "Start using Albert"}
@@ -153,6 +199,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.ink3,
   },
+  hint: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
   options: { gap: spacing.sm },
   option: {
     backgroundColor: colors.card,

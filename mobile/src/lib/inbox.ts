@@ -10,7 +10,7 @@ export type AppInboxItem = {
   mailboxEmail: string;
   replyPhone: string | null;
   tags: { label: string; tone: "warn" | "accent" | "muted" }[];
-  section: "reply" | "fyi";
+  section: "reply" | "decision" | "fyi";
   category: InboxMessage["category"];
   isUnread: boolean;
   userReplied: boolean;
@@ -49,13 +49,21 @@ function needsAttention(message: InboxMessage): boolean {
   return message.category === "Needs Reply" || message.category === "Needs Decision";
 }
 
+export function isNeedsDecision(message: InboxMessage): boolean {
+  return message.category === "Needs Decision";
+}
+
 export function showsReplyActions(message: InboxMessage): boolean {
   if (message.user_replied) return false;
-  return message.category === "Needs Reply" || message.category === "Needs Decision";
+  return message.category === "Needs Reply";
 }
 
 export function mapInboxMessage(message: InboxMessage): AppInboxItem {
-  const section = needsAttention(message) ? "reply" : "fyi";
+  const section: AppInboxItem["section"] = isNeedsDecision(message)
+    ? "decision"
+    : needsAttention(message)
+      ? "reply"
+      : "fyi";
   const isSms = message.source === "sms";
   const tags = isSms
     ? ([

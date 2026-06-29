@@ -13,7 +13,7 @@ from app.capabilities.base import (
     CapabilityError,
     ExecutionResult,
 )
-from app.db.enums import ActionType, Provider, RiskLevel
+from app.db.enums import ActionType, RiskLevel
 from app.db.models import DraftReply, Message, User
 from app.services import gmail
 from app.services.connected_accounts import get_google_account_for_message

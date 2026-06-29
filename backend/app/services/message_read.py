@@ -8,9 +8,9 @@ from app.db.models import ConnectedAccount, Message, User
 from app.services import gmail
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token, encrypt_token
-from app.services.google_oauth import fresh_credentials
 from app.services.gmail import use_gmail_credentials
-from app.services.inbox_view import is_gmail_unread, is_message_unread
+from app.services.google_oauth import fresh_credentials
+from app.services.inbox_view import is_message_unread
 from app.services.sms_inbox import mark_sms_read
 
 GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
@@ -26,7 +26,9 @@ def _mark_read_local(message: Message) -> None:
     message.gmail_labels = [label for label in labels if label != "UNREAD"]
 
 
-def refresh_message_labels(db: Session, message: Message, *, token: dict | None = None) -> list[str]:
+def refresh_message_labels(
+    db: Session, message: Message, *, token: dict | None = None
+) -> list[str]:
     """Fetch current Gmail labels for one stored message."""
     account = get_google_account_for_message(db, message)
     if account is None:

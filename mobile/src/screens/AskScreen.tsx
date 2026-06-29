@@ -1,4 +1,4 @@
-// Ask / Chat — task threads use real LLM drafts + Gmail send; free chat uses /assistant/ask.
+// Ask / Chat — task threads use real LLM drafts + Gmail send; free chat uses /assistant/chat.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -32,12 +32,12 @@ import {
   type ContactMatch,
 } from "@/lib/contacts";
 import {
-  isCalendarOnlyRefusal,
   normalizePhoneInput,
   parseSmsComposeIntent,
   parseSmsComposeStarter,
 } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
+import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type TaskMessage = {
@@ -87,6 +87,11 @@ export function AskScreen() {
   const [awaitingSmsRecipient, setAwaitingSmsRecipient] =
     useState<AwaitingSmsRecipient | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  const voice = useVoiceCapture((r) => {
+    const q = r.tasks.map((t) => t.title).join("; ");
+    if (q.trim()) sendFreeRef.current(q);
+  });
 
   useEffect(() => {
     setFreeChat([{ role: "alfred", text: t.freeChat.seed, ts: "now" }]);
@@ -273,13 +278,17 @@ export function AskScreen() {
       setThinkingBoth(true);
       void (async () => {
         try {
-          const res = await api.ask(q);
-          const reply = isCalendarOnlyRefusal(res.reply)
-            ? t.freeChat.legacyRefusal
-            : res.reply;
+          const history = freeChat
+            .filter((m) => m.ts !== "now" || m.role === "user")
+            .slice(-8)
+            .map((m) => ({
+              role: m.role === "user" ? "user" : "assistant",
+              content: m.text,
+            }));
+          const res = await api.chat(q, history);
           setFreeChat((c) => [
             ...c,
-            { role: "alfred", text: reply, ts: "now" },
+            { role: "alfred", text: res.reply, ts: "now" },
           ]);
         } catch {
           setFreeChat((c) => [
@@ -302,7 +311,6 @@ export function AskScreen() {
       thinking,
       setThinkingBoth,
       t.freeChat.fallback,
-      t.freeChat.legacyRefusal,
       t.smsCompose,
     ],
   );
@@ -610,6 +618,21 @@ export function AskScreen() {
           >
             <Ic.ArrowUp size={16} color="#fff" stroke={2} />
           </Pressable>
+          {Platform.OS === "android" ? (
+            <Pressable
+              style={styles.micBtn}
+              onPress={() =>
+                void (voice.state === "recording" ? voice.stop() : voice.start())
+              }
+              accessibilityLabel="Voice input"
+            >
+              {voice.state !== "idle" ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Ic.Mic size={16} color={colors.accent} stroke={2} />
+              )}
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -909,6 +932,13 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  micBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

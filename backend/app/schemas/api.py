@@ -169,6 +169,21 @@ class AssistantAskResponse(BaseModel):
     detail: str | None = None  # execution detail when an action ran
 
 
+class AssistantChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AssistantChatRequest(BaseModel):
+    text: str
+    history: list[AssistantChatMessage] = []
+    timezone: str | None = None
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
+
+
 class UpdateMeetingRequest(BaseModel):
     title: str | None = None
     start: datetime | None = None
@@ -331,7 +346,7 @@ class MeOut(BaseModel):
     timezone: str
     preferences: dict[str, object]
     onboarded: bool
-    connected_mailboxes: list["ConnectedMailboxOut"] = []
+    connected_mailboxes: list[ConnectedMailboxOut] = []
 
 
 class ConnectedMailboxOut(BaseModel):

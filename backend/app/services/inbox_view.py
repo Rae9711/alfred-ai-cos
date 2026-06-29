@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import MessageClassification
-from app.db.models import Message, OutboundReply, User
+from app.db.models import Message, OutboundReply
 from app.services.classification_adjust import upgrade_human_misclassified_as_fyi
 
 # Backend classification → the Inbox screen's four buckets (+ Processing while classifying).

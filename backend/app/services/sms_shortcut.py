@@ -85,7 +85,9 @@ def _dict_field_text(key: str, text: str) -> dict[str, Any]:
     }
 
 
-def _hash_action(*, input_attachment: dict[str, Any], output_name: str) -> tuple[dict[str, Any], str]:
+def _hash_action(
+    *, input_attachment: dict[str, Any], output_name: str
+) -> tuple[dict[str, Any], str]:
     action_uuid = _uid()
     return {
         "WFWorkflowActionIdentifier": HASH_ACTION,

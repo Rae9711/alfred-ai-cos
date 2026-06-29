@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import Provider
-from app.db.models import ConnectedAccount, Message, User
+from app.db.models import ConnectedAccount, Message
 
 
 def list_google_accounts(db: Session, user_id: str) -> list[ConnectedAccount]:

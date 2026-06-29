@@ -16,11 +16,15 @@ from sqlalchemy.orm import Session
 from app.db.enums import CommitmentStatus, SourceType
 from app.db.models import Commitment, Message, User
 from app.llm import get_llm
-from app.services import gmail
 from app.schemas.llm import ClassificationResult
-from app.services.classification_adjust import automated_fyi_override, upgrade_human_misclassified_as_fyi
+from app.services import gmail
+from app.services.classification_adjust import (
+    automated_fyi_override,
+    upgrade_human_misclassified_as_fyi,
+)
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
+from app.services.message_body import build_thread_summary
 
 # Common filler words that carry no identity for a commitment. Two phrasings of the
 # same task ("retain Premium" vs "maintain Premium") differ only in filler/synonyms,
@@ -78,19 +82,70 @@ def _dedup_key(owner: str, counterparty: str | None, description: str) -> str:
 _EXTRACTION_BLOCKED_CLASSES = {"automated", "bulk", "suspicious", "muted"}
 
 
-def process_message(db: Session, message: Message, *, body: str | None = None) -> list[Commitment]:
-    """Classify one message and extract its commitments. Persists results.
+def _thread_open_commitments(db: Session, user_id: str, thread_id: str) -> list[Commitment]:
+    """Open commitments whose source message belongs to this thread."""
+    thread_msg_ids = set(
+        db.scalars(
+            select(Message.id).where(
+                Message.user_id == user_id,
+                Message.thread_id == thread_id,
+            )
+        )
+    )
+    if not thread_msg_ids:
+        return []
+    return list(
+        db.scalars(
+            select(Commitment).where(
+                Commitment.user_id == user_id,
+                Commitment.status == CommitmentStatus.open,
+                Commitment.source_id.in_(thread_msg_ids),
+            )
+        )
+    )
 
-    The body is fetched from Gmail in-process when not supplied, so it is never
-    stored. Callers that already hold the body (e.g. the dev seed path) pass it
-    in to avoid a Gmail round trip.
 
-    Extraction guard: messages from automated / bulk / suspicious / muted senders
-    skip the LLM extraction entirely. The spam shield would cap any commitments
-    they produced at `low` anyway, and the LLM is prone to extracting fake
-    "Sign by Friday!" commitments from marketing copy. Skipping saves money AND
-    keeps Today free of spam-derived clutter. transactional_critical and the
-    person/role_account/vip classes still extract normally."""
+def _reconcile_thread_commitments(
+    db: Session,
+    user: User,
+    message: Message,
+    *,
+    body: str,
+    thread_summary: str,
+) -> None:
+    """Mark open thread commitments resolved when later messages close the loop."""
+    if not message.thread_id:
+        return
+    open_in_thread = _thread_open_commitments(db, user.id, message.thread_id)
+    if not open_in_thread:
+        return
+
+    latest = (
+        f"Latest message ({message.sent_at.date() if message.sent_at else 'today'}):\n"
+        f"From: {message.sender}\nSubject: {message.subject or '(none)'}\n\n{body}"
+    )
+    thread_context = f"{thread_summary}\n\n{latest}" if thread_summary else latest
+    payload = [{"id": c.id, "description": c.description} for c in open_in_thread]
+    result = get_llm().reconcile_thread_commitments(
+        thread_context=thread_context,
+        open_commitments=payload,
+    )
+    resolved = set(result.resolved_commitment_ids)
+    for commitment in open_in_thread:
+        if commitment.id in resolved:
+            commitment.status = CommitmentStatus.done
+    if resolved:
+        db.commit()
+
+
+def process_message(
+    db: Session,
+    message: Message,
+    *,
+    body: str | None = None,
+    force_reclassify: bool = False,
+) -> list[Commitment]:
+    del force_reclassify  # reserved for sync reclassify batches
     llm = get_llm()
     user = db.get(User, message.user_id)
     if user is None:
@@ -110,20 +165,24 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
         token = decrypt_token(account.token_ciphertext)
         body = gmail.get_message(token, message.external_id)["body"]
 
-    override = automated_fyi_override(
-        subject=message.subject, snippet=message.snippet, body=body
-    )
+    thread_summary = build_thread_summary(db, message, current_body=body)
+    thread_body = body
+    if thread_summary:
+        thread_body = f"{thread_summary}\n\nLatest message:\n{body}"
+
+    override = automated_fyi_override(subject=message.subject, snippet=message.snippet, body=body)
     if override is not None:
         message.classification = override.classification
         message.priority = override.priority
         message.action_required = override.action_required
         message.body_summary = override.reason
         db.commit()
+        _reconcile_thread_commitments(db, user, message, body=body, thread_summary=thread_summary)
         return []
 
     classification = llm.classify_message(
         subject=message.subject,
-        body=body,
+        body=thread_body,
         sender=message.sender,
         user_email=user.email,
     )
@@ -152,11 +211,14 @@ def process_message(db: Session, message: Message, *, body: str | None = None) -
     reference_date = message.sent_at.date() if message.sent_at else datetime.now(UTC).date()
     extracted = llm.extract_commitments(
         subject=message.subject,
-        body=body,
+        body=thread_body,
         sender=message.sender,
         user_email=user.email,
         reference_date=reference_date,
     )
+
+    _reconcile_thread_commitments(db, user, message, body=body, thread_summary=thread_summary)
+
     # Dedup against existing open commitments (and within this batch) so separate
     # emails about the same thing do not pile up multiple near-identical entries.
     existing_open = db.scalars(

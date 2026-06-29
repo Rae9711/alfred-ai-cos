@@ -111,7 +111,10 @@ def test_build_sms_install_urls() -> None:
     import_url, shortcut_url = build_sms_install_urls(app_base_url="https://alfredaitech.com")
     assert shortcut_url.endswith("/Albert-SMS-Forward.shortcut")
     assert import_url.startswith("shortcuts://import-shortcut/?")
-    assert "url=https%3A%2F%2Falfredaitech.com%2Fapi%2Fv1%2Fintegrations%2Fios%2FAlbert-SMS-Forward.shortcut" in import_url
+    assert (
+        "url=https%3A%2F%2Falfredaitech.com%2Fapi%2Fv1%2Fintegrations"
+        "%2Fios%2FAlbert-SMS-Forward.shortcut"
+    ) in import_url
     assert "name=Albert" in import_url and "Forward" in import_url
 
 
@@ -127,7 +130,9 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
     ]
 
     dict_action = next(
-        a for a in data["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.dictionary"
+        a
+        for a in data["WFWorkflowActions"]
+        if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.dictionary"
     )
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}

@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user
 from app.core.config import get_settings
+from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.enums import Provider, SyncStatus
+from app.db.enums import Provider
 from app.db.models import (
     ActionProposal,
     AuditLog,
@@ -38,10 +38,10 @@ from app.schemas.api import (
     SmsInstallOut,
 )
 from app.services import google_oauth, sms_inbox
-from app.services.sms_shortcut import build_sms_backfill_install_urls, build_sms_install_urls
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
+from app.services.sms_shortcut import build_sms_backfill_install_urls, build_sms_install_urls
 
 router = APIRouter(tags=["account"])
 

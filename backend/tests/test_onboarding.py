@@ -16,9 +16,9 @@ def user(db: Session) -> User:
     return u
 
 
-def test_new_user_not_onboarded(user: User) -> None:
+def test_new_user_not_onboarded(db: Session, user: User) -> None:
     assert _is_onboarded(user) is False
-    assert _me(user).onboarded is False
+    assert _me(db, user).onboarded is False
 
 
 def test_onboarding_persists_and_merges(db: Session, user: User) -> None:

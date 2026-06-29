@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
+import { api } from "@/api/client";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -82,6 +83,7 @@ export function InboxScreen() {
 
   const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
+  const decisionItems = filtered.filter((m) => m.section === "decision");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
   const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
@@ -107,6 +109,21 @@ export function InboxScreen() {
           gmailSynced ? t.inbox.markReadDone : t.inbox.markReadReconnect,
           { duration: gmailSynced ? 2200 : 4500 },
         );
+      } catch (e) {
+        showToast(
+          e instanceof Error ? e.message : t.inbox.markReadFailed,
+        );
+      }
+    })();
+  };
+
+  const markAsDecided = (id: string) => {
+    ease();
+    void (async () => {
+      try {
+        await api.markMessageDecided(id);
+        showToast(t.inbox.markDecidedDone);
+        await syncAndRefresh();
       } catch (e) {
         showToast(
           e instanceof Error ? e.message : t.inbox.markReadFailed,
@@ -240,6 +257,33 @@ export function InboxScreen() {
                 later: t.inbox.later,
                 delegate: t.inbox.handToAlfred,
                 markRead: t.inbox.markReadAction,
+                read: t.inbox.readLabel,
+                unread: t.inbox.unreadLabel,
+                replied: t.inbox.replied,
+                albertTake: t.inbox.albertTake,
+              }}
+            />
+          ))}
+        </Section>
+      ) : null}
+
+      {decisionItems.length > 0 ? (
+        <Section title={t.inbox.sectionDecision}>
+          {decisionItems.map((m) => (
+            <DecisionCard
+              key={m.id}
+              item={m}
+              mailboxLabel={
+                showMailboxChip && m.mailboxEmail
+                  ? mailboxTabLabel(m.mailboxEmail)
+                  : null
+              }
+              onDecided={() => markAsDecided(m.id)}
+              onLater={() => defer(m.id)}
+              onOpen={() => openMessage(m.id, "reply")}
+              labels={{
+                decided: t.inbox.markDecided,
+                later: t.inbox.later,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
@@ -428,6 +472,65 @@ function InboxCard({
           ) : null}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function DecisionCard({
+  item,
+  mailboxLabel,
+  onDecided,
+  onLater,
+  onOpen,
+  labels,
+}: {
+  item: AppInboxItem;
+  mailboxLabel: string | null;
+  onDecided: () => void;
+  onLater: () => void;
+  onOpen: () => void;
+  labels: {
+    decided: string;
+    later: string;
+    read: string;
+    unread: string;
+    replied: string;
+    albertTake: string;
+  };
+}) {
+  return (
+    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
+      <Pressable onPress={onOpen}>
+        <View style={styles.cardBody}>
+          <View style={styles.cardTop}>
+            <ReadStatus item={item} labels={labels} />
+            {mailboxLabel ? (
+              <View style={styles.sourceChip}>
+                <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
+              </View>
+            ) : null}
+            <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
+              {item.sender}
+            </Text>
+          </View>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          {item.take ? (
+            <Text style={styles.summaryLabel}>{labels.albertTake}</Text>
+          ) : null}
+          <Text style={styles.summary}>{item.summary}</Text>
+          <View style={styles.tags}>
+            {item.tags.map((tag) => (
+              <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
+            ))}
+          </View>
+        </View>
+      </Pressable>
+      <View style={styles.actions}>
+        <Btn label={labels.decided} onPress={onDecided} style={styles.actionPrimary} />
+        <Pressable style={styles.actionGhost} onPress={onLater}>
+          <Text style={styles.actionGhostText}>{labels.later}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

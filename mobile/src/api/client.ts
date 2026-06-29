@@ -183,6 +183,10 @@ export const api = {
     request<MessageReadResult>(`/messages/${messageId}/read`, {
       method: "POST",
     }),
+  markMessageDecided: (messageId: string) =>
+    request<MessageReadResult>(`/messages/${messageId}/decide`, {
+      method: "POST",
+    }),
   // "Add to calendar" on a message — books it if it describes a timed event.
   bookFromMessage: (messageId: string, timezone: string) =>
     request<BookMessageResponse>(`/messages/${messageId}/book`, {
@@ -196,6 +200,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text, timezone: deviceTimezone() }),
     }),
+  chat: (text: string, history: { role: string; content: string }[] = []) =>
+    request<{ reply: string }>("/assistant/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        history,
+        timezone: deviceTimezone(),
+      }),
+    }),
+  getDraft: (draftId: string) => request<Draft>(`/drafts/${draftId}`),
   listCommitments: () => request<Commitment[]>("/commitments"),
   updateCommitmentStatus: (id: string, status: CommitmentStatus) =>
     request<Commitment>(`/commitments/${id}/status?status=${status}`, {

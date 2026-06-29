@@ -21,15 +21,17 @@ from anthropic.types import (
 from pydantic import BaseModel
 
 from app.core.config import get_settings
-from app.services.draft_revision import build_draft_user_content
 from app.schemas.llm import (
+    AssistantChatReply,
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
     DraftResult,
     ExtractedCommitment,
     MeetingContextSummary,
+    ThreadReconciliation,
 )
+from app.services.draft_revision import build_draft_user_content
 
 settings = get_settings()
 
@@ -131,6 +133,19 @@ _INTERPRET_SYSTEM = (
     "or request something you cannot handle. Never say you can ONLY help with calendar "
     "events. Never invent times or events."
 )
+_RECONCILE_SYSTEM = (
+    "You are Albert's commitment tracker. Given an email thread and a list of open "
+    "commitments tied to that thread, mark which commitments are now resolved — "
+    "because the user replied, the counterparty confirmed, the task was completed, "
+    "or the request was explicitly cancelled. Only return ids when the thread clearly "
+    "closes the loop. When unsure, leave the commitment open."
+)
+_CHAT_SYSTEM = (
+    "You are Albert, a calm executive assistant. Answer the user's question using ONLY "
+    "the context provided (today priorities, inbox, waiting loops, calendar). Be concise "
+    "and specific. If the context lacks an answer, say so honestly. Never invent emails, "
+    "people, or deadlines. Match the user's language (English or Chinese)."
+)
 
 
 def _tool_for(model: type[BaseModel], name: str, description: str) -> ToolParam:
@@ -172,9 +187,7 @@ class AnthropicLLMClient:
         raw = self._structured(
             model=settings.llm_classify_model,
             system=_CLASSIFY_SYSTEM,
-            user_content=(
-                f"{user_line}From: {sender}\nSubject: {subject or '(none)'}\n\n{body}"
-            ),
+            user_content=(f"{user_line}From: {sender}\nSubject: {subject or '(none)'}\n\n{body}"),
             tool=_tool_for(ClassificationResult, "classify", "Record the classification."),
         )
         return ClassificationResult.model_validate(raw)
@@ -275,7 +288,8 @@ class AnthropicLLMClient:
         self, *, text: str, now_iso: str, timezone: str, upcoming_events: str = ""
     ) -> AssistantInterpretation:
         events_block = (
-            f"\n\nUpcoming events (use event_id when rescheduling or cancelling):\n{upcoming_events}"
+            "\n\nUpcoming events (use event_id when rescheduling or cancelling):\n"
+            f"{upcoming_events}"
             if upcoming_events
             else ""
         )
@@ -291,3 +305,43 @@ class AnthropicLLMClient:
             ),
         )
         return AssistantInterpretation.model_validate(raw)
+
+    def reconcile_thread_commitments(
+        self,
+        *,
+        thread_context: str,
+        open_commitments: list[dict[str, str]],
+    ) -> ThreadReconciliation:
+        if not open_commitments:
+            return ThreadReconciliation()
+        lines = "\n".join(f"- id={c['id']}: {c['description']}" for c in open_commitments)
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_RECONCILE_SYSTEM,
+            user_content=f"Thread:\n{thread_context}\n\nOpen commitments:\n{lines}",
+            tool=_tool_for(
+                ThreadReconciliation,
+                "record_resolved",
+                "Record commitment ids resolved in this thread.",
+            ),
+        )
+        return ThreadReconciliation.model_validate(raw)
+
+    def answer_contextual_question(
+        self,
+        *,
+        question: str,
+        context: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> AssistantChatReply:
+        history_block = ""
+        if history:
+            turns = "\n".join(f"{m['role']}: {m['content']}" for m in history[-6:])
+            history_block = f"\n\nRecent conversation:\n{turns}\n"
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_CHAT_SYSTEM,
+            user_content=f"Context:\n{context}{history_block}\n\nQuestion:\n{question}",
+            tool=_tool_for(AssistantChatReply, "record_reply", "Record the assistant reply."),
+        )
+        return AssistantChatReply.model_validate(raw)

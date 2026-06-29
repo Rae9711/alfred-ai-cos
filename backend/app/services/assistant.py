@@ -10,13 +10,18 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import ActionType
-from app.db.models import User
+from app.db.models import Message, User
 from app.llm import get_llm
 from app.services import execution, meeting_prep
 from app.services.actions import propose_action_internal
+from app.services.inbox_filter import message_in_primary_inbox
+from app.services.inbox_view import effective_inbox_category, message_needs_attention
+from app.services.today import build_today
+from app.services.waiting import build_waiting
 
 
 def resolve_timezone(db: Session, user: User, requested: str | None) -> str:
@@ -82,7 +87,6 @@ class AssistantOutcome:
 
 
 def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> AssistantOutcome:
-    """Interpret free text; book, reschedule, or cancel through the capability spine."""
     now = _now_in_tz(tz)
     upcoming = _format_upcoming(db, user.id)
     interp = get_llm().interpret_request(
@@ -156,3 +160,115 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
 # Back-compat alias used by message booking tests.
 def interpret_and_book(db: Session, user: User, *, text: str, tz: str) -> AssistantOutcome:
     return interpret_and_act(db, user, text=text, tz=tz)
+
+
+def _format_today_context(db: Session, user_id: str, *, tz: str) -> str:
+    try:
+        today = datetime.now(ZoneInfo(tz)).date()
+    except (ZoneInfoNotFoundError, ValueError):
+        today = datetime.now(UTC).date()
+    dashboard = build_today(db, user_id, today=today)
+    lines = [dashboard.summary, "", "Top priorities:"]
+    if dashboard.top_priorities:
+        for p in dashboard.top_priorities[:8]:
+            due = f" (due {p.due_date})" if p.due_date else ""
+            who = f" — {p.counterparty}" if p.counterparty else ""
+            lines.append(f"- {p.title}{who}{due}: {p.reason}")
+    else:
+        lines.append("- (none)")
+    return "\n".join(lines)
+
+
+def _format_waiting_context(db: Session, user_id: str) -> str:
+    view = build_waiting(db, user_id)
+    lines = ["Waiting on you:"]
+    for entry in view.waiting_on_you[:8]:
+        lines.append(f"- {entry.commitment.description} ({entry.commitment.counterparty})")
+    if not view.waiting_on_you:
+        lines.append("- (none)")
+    lines.append("")
+    lines.append("You are waiting on:")
+    for entry in view.you_are_waiting_on[:8]:
+        lines.append(f"- {entry.commitment.description} ({entry.commitment.counterparty})")
+    if not view.you_are_waiting_on:
+        lines.append("- (none)")
+    return "\n".join(lines)
+
+
+def _format_inbox_context(db: Session, user_id: str) -> str:
+    rows = list(
+        db.scalars(
+            select(Message)
+            .where(Message.user_id == user_id, Message.sent_at.is_not(None))
+            .order_by(Message.sent_at.desc().nullslast())
+            .limit(40)
+        )
+    )
+    lines = ["Inbox needing attention:"]
+    count = 0
+    for m in rows:
+        if m.source == "sms" or not message_in_primary_inbox(m):
+            continue
+        category = effective_inbox_category(m)
+        if not message_needs_attention(category=category, user_replied=False):
+            continue
+        subj = m.subject or m.snippet or "(no subject)"
+        lines.append(f"- [{category}] {m.sender}: {subj}")
+        count += 1
+        if count >= 10:
+            break
+    if count == 0:
+        lines.append("- (none)")
+    return "\n".join(lines)
+
+
+def build_assistant_context(db: Session, user: User, *, tz: str) -> str:
+    """Structured snapshot for contextual Ask chat."""
+    events = _format_upcoming(db, user.id)
+    parts = [
+        _format_today_context(db, user.id, tz=tz),
+        "",
+        _format_waiting_context(db, user.id),
+        "",
+        _format_inbox_context(db, user.id),
+        "",
+        "Upcoming calendar (next 2 weeks):",
+        events or "(none)",
+    ]
+    return "\n".join(parts)
+
+
+def chat_with_context(
+    db: Session,
+    user: User,
+    *,
+    text: str,
+    tz: str,
+    history: list[dict[str, str]] | None = None,
+) -> str:
+    """Answer a free-form question using Today, waiting, inbox, and calendar context."""
+    # Calendar booking/reschedule still routes through the action spine when detected.
+    calendar_hints = (
+        "book",
+        "schedule",
+        "calendar",
+        "reschedule",
+        "cancel",
+        "订",
+        "日历",
+        "安排",
+    )
+    lower = text.lower()
+    if any(h in lower for h in calendar_hints):
+        outcome = interpret_and_act(db, user, text=text, tz=tz)
+        if outcome.action != "none":
+            return outcome.reply
+
+    context = build_assistant_context(db, user, tz=tz)
+    result = get_llm().answer_contextual_question(
+        question=text,
+        context=context,
+        history=history,
+    )
+    reply = (result.reply or "").strip()
+    return reply or "I'm not sure — try asking about your priorities or inbox."

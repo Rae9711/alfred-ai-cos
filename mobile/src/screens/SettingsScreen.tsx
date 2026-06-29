@@ -9,11 +9,13 @@ import {
   Alert,
   AppState,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import type { Me } from "@albert/shared-types";
@@ -57,6 +59,8 @@ export function SettingsScreen() {
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
     null,
   );
+  const [quietHoursDraft, setQuietHoursDraft] = useState("");
+  const [editingQuietHours, setEditingQuietHours] = useState(false);
 
   useEffect(() => {
     api
@@ -121,7 +125,6 @@ export function SettingsScreen() {
   ]);
 
   const editQuietHours = useCallback(() => {
-    // iOS-only Alert.prompt; on Android fall back to a note. Saves via the real API.
     if (Alert.prompt) {
       Alert.prompt(
         "Quiet hours",
@@ -144,9 +147,14 @@ export function SettingsScreen() {
         "22-08",
       );
     } else {
-      setNote("Quiet hours editing is available on iOS.");
+      const current =
+        typeof me?.preferences?.["quiet_hours"] === "string"
+          ? me.preferences["quiet_hours"]
+          : "22-08";
+      setQuietHoursDraft(current);
+      setEditingQuietHours(true);
     }
-  }, []);
+  }, [me?.preferences]);
 
   const connectIntegration = useCallback((name: string) => {
     Alert.alert(
@@ -477,10 +485,52 @@ export function SettingsScreen() {
         <Row
           label="Quiet hours"
           detail={quietHours ?? "Not set"}
-          isLast
+          isLast={!editingQuietHours}
           onPress={editQuietHours}
         />
       </View>
+      {editingQuietHours ? (
+        <View style={styles.quietEditor}>
+          <Text style={styles.quietHint}>
+            Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08).
+          </Text>
+          <TextInput
+            value={quietHoursDraft}
+            onChangeText={setQuietHoursDraft}
+            placeholder="22-08"
+            style={styles.quietInput}
+            autoCapitalize="none"
+          />
+          <View style={styles.quietActions}>
+            <Btn
+              label="Save"
+              kind="accent"
+              tiny
+              onPress={() => {
+                const v = quietHoursDraft.trim();
+                if (!v) return;
+                void api
+                  .setQuietHours(v)
+                  .then(() => api.getMe())
+                  .then((m) => {
+                    setMe(m);
+                    setEditingQuietHours(false);
+                    setNote(`Quiet hours set to ${v}.`);
+                  })
+                  .catch((e: unknown) =>
+                    setNote(e instanceof Error ? e.message : "Could not save"),
+                  );
+              }}
+            />
+            <Btn
+              label="Cancel"
+              kind="ghost"
+              tiny
+              onPress={() => setEditingQuietHours(false)}
+            />
+          </View>
+        </View>
+      ) : null}
 
       {/* Approvals & safety */}
       <SectionTitle label="Approvals & safety" />
@@ -781,6 +831,28 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
   },
+  quietEditor: {
+    marginBottom: 12,
+    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    gap: 10,
+  },
+  quietHint: { fontSize: 13, color: colors.ink3, lineHeight: 18 },
+  quietInput: {
+    fontFamily: fonts.mono,
+    fontSize: 15,
+    color: colors.ink,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.paper,
+  },
+  quietActions: { flexDirection: "row", gap: 8 },
 
   version: { textAlign: "center", marginTop: 24 },
 });
