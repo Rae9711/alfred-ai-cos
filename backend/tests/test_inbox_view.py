@@ -33,6 +33,21 @@ def test_category_none_when_unclassified() -> None:
     assert effective_inbox_category(m) == "Processing"
 
 
+def test_effective_inbox_category_action_required_before_classified() -> None:
+    from app.db.models import Message
+    from app.services.inbox_view import effective_inbox_category
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="p2",
+        sender="a@b.com",
+        recipients=[],
+        action_required=True,
+    )
+    assert effective_inbox_category(m) == "Needs Reply"
+
+
 def test_is_gmail_unread() -> None:
     assert is_gmail_unread(["INBOX", "UNREAD"]) is True
     assert is_gmail_unread(["INBOX", "CATEGORY_PERSONAL"]) is False

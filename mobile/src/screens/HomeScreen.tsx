@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { type Me, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -28,6 +28,7 @@ import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
+import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
 import { WeekScheduleView } from "@/components/schedule/WeekScheduleView";
 import { firstNameOf, greetingFor } from "@/lib/today";
@@ -61,6 +62,7 @@ export function HomeScreen() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
+  const [todayData, setTodayData] = useState<TodayDashboard | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -77,7 +79,7 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming] = await Promise.all([
+      const [profile, pending, upcoming, today] = await Promise.all([
         api.getMe().catch(() => null),
         api.listPendingActions(),
         api.listUpcomingMeetings(
@@ -87,10 +89,12 @@ export function HomeScreen() {
               ? { week: true }
               : { month: true },
         ),
+        view === "day" ? api.getToday().catch(() => null) : Promise.resolve(null),
       ]);
       setMe(profile);
       setPendingCount(pending.length);
       setMeetings(upcoming);
+      setTodayData(today);
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.home.askFailed);
       setMeetings([]);
@@ -312,6 +316,12 @@ export function HomeScreen() {
           </View>
         </View>
 
+        {scheduleView === "day" ? (
+          <PlanningSuggestionsCard
+            data={todayData}
+            onChanged={() => void load(scheduleView)}
+          />
+        ) : null}
 
         <View style={styles.scheduleHeader}>
           <Text style={styles.sectionLabel}>{scheduleSectionLabel}</Text>

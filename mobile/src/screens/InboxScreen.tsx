@@ -63,14 +63,14 @@ export function InboxScreen() {
 
   const mailboxTabs = useMemo(
     () => [
-      { id: "needs_action", label: t.inbox.filters.needsAction },
       { id: "unread", label: t.inbox.filters.unread },
+      { id: "needs_action", label: t.inbox.filters.needsAction },
       { id: "sms", label: t.inbox.filters.sms },
       { id: "email", label: t.inbox.filters.email },
     ],
     [
-      t.inbox.filters.needsAction,
       t.inbox.filters.unread,
+      t.inbox.filters.needsAction,
       t.inbox.filters.sms,
       t.inbox.filters.email,
     ],
@@ -123,6 +123,21 @@ export function InboxScreen() {
       try {
         await api.markMessageDecided(id);
         showToast(t.inbox.markDecidedDone);
+        await syncAndRefresh();
+      } catch (e) {
+        showToast(
+          e instanceof Error ? e.message : t.inbox.markReadFailed,
+        );
+      }
+    })();
+  };
+
+  const markAsProcessed = (id: string) => {
+    ease();
+    void (async () => {
+      try {
+        await api.markMessageDecided(id);
+        showToast(t.inbox.markProcessedDone);
         await syncAndRefresh();
       } catch (e) {
         showToast(
@@ -250,12 +265,14 @@ export function InboxScreen() {
               onReply={() => openMessage(m.id, "reply")}
               onLater={() => defer(m.id)}
               onDelegate={() => openMessage(m.id, "delegate")}
+              onProcessed={() => markAsProcessed(m.id)}
               onMarkRead={() => markAsRead(m.id)}
               onOpen={() => openMessage(m.id, "reply")}
               labels={{
                 reply: t.inbox.reply,
                 later: t.inbox.later,
                 delegate: t.inbox.handToAlfred,
+                processed: t.inbox.markProcessed,
                 markRead: t.inbox.markReadAction,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
@@ -403,6 +420,7 @@ function InboxCard({
   onReply,
   onLater,
   onDelegate,
+  onProcessed,
   onMarkRead,
   onOpen,
   labels,
@@ -412,12 +430,14 @@ function InboxCard({
   onReply: () => void;
   onLater: () => void;
   onDelegate: () => void;
+  onProcessed: () => void;
   onMarkRead: () => void;
   onOpen: () => void;
   labels: {
     reply: string;
     later: string;
     delegate: string;
+    processed: string;
     markRead: string;
     read: string;
     unread: string;
@@ -457,6 +477,9 @@ function InboxCard({
           {item.showReplyActions ? (
             <>
               <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
+              <Pressable style={styles.actionGhost} onPress={onProcessed}>
+                <Text style={styles.actionGhostText}>{labels.processed}</Text>
+              </Pressable>
               <Pressable style={styles.actionGhost} onPress={onLater}>
                 <Text style={styles.actionGhostText}>{labels.later}</Text>
               </Pressable>

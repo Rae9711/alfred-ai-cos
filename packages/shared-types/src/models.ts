@@ -31,12 +31,34 @@ export interface MeetingToPrepare {
   start_time: string | null;
 }
 
+export type PlanningItemType = "commitment" | "task";
+
+export interface TimeBlockSuggestion {
+  gap_start: string;
+  gap_end: string;
+  duration_minutes: number;
+  item_id: string;
+  item_type: PlanningItemType;
+  title: string;
+  estimated_minutes: number;
+  reason: string;
+}
+
+export interface QuickWin {
+  id: string;
+  title: string;
+  item_type: PlanningItemType;
+  estimated_minutes: number;
+}
+
 export interface TodayDashboard {
   summary: string;
   top_priorities: TodayPriority[];
   people_waiting_on_you: WaitingItem[];
   you_are_waiting_on: WaitingItem[];
   meetings_to_prepare: MeetingToPrepare[];
+  suggestions: TimeBlockSuggestion[];
+  quick_wins: QuickWin[];
 }
 
 export interface UpcomingMeeting {

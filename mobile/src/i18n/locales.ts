@@ -44,6 +44,16 @@ export const translations = {
       pendingApprovals: (n: number) =>
         `${n} action${n === 1 ? "" : "s"} await your approval`,
     },
+    planning: {
+      sectionLabel: "Planning",
+      timeBlock: (freeMin: number, start: string, end: string, taskMin: number) =>
+        `${freeMin} min free (${start}–${end}) — ~${taskMin} min`,
+      quickWinsLabel: (n: number) =>
+        n === 1 ? "1 quick win" : `${n} quick wins`,
+      minutes: (n: number) => `~${n} min`,
+      markedDone: "Marked done.",
+      updateFailed: "Couldn't update — try again.",
+    },
     inbox: {
       titleEm: "attention",
       titlePlain: "Needs your",
@@ -55,6 +65,8 @@ export const translations = {
       later: "Later",
       markDecided: "Mark decided",
       markDecidedDone: "Marked as decided",
+      markProcessed: "Mark processed",
+      markProcessedDone: "Marked as processed",
       handToAlfred: "Hand to Alfred",
       view: "View",
       dismiss: "Dismiss",
@@ -253,6 +265,15 @@ export const translations = {
       askFailed: "无法连接管家 — 请重试。",
       pendingApprovals: (n: number) => `${n} 项操作等待您批准`,
     },
+    planning: {
+      sectionLabel: "时间块建议",
+      timeBlock: (freeMin: number, start: string, end: string, taskMin: number) =>
+        `空闲 ${freeMin} 分钟（${start}–${end}）— 约 ${taskMin} 分钟`,
+      quickWinsLabel: (n: number) => `${n} 个速赢事项`,
+      minutes: (n: number) => `约 ${n} 分钟`,
+      markedDone: "已标记完成。",
+      updateFailed: "无法更新 — 请重试。",
+    },
     inbox: {
       titleEm: "处理",
       titlePlain: "需要您",
@@ -261,6 +282,8 @@ export const translations = {
       sectionDecision: "需要决定",
       markDecided: "已决定",
       markDecidedDone: "已标记为已决定",
+      markProcessed: "已经处理",
+      markProcessedDone: "已标记为已处理",
       sectionFyi: "知晓即可",
       reply: "回复",
       later: "稍后",

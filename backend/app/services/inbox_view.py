@@ -80,6 +80,10 @@ def category_for_message(classification: MessageClassification | None) -> str | 
 def effective_inbox_category(message: Message) -> str:
     """UI category after correcting common LLM FYI mistakes on human mail."""
     if message.classification is None:
+        # Synced mail awaiting LLM classification — but action_required means
+        # the user should treat it as needs-reply, not a vague "Processing" tag.
+        if message.action_required:
+            return "Needs Reply"
         return "Processing"
     stored = upgrade_human_misclassified_as_fyi(
         classification=message.classification,

@@ -15,6 +15,7 @@ from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
 from app.db.models import Commitment, User
 from app.schemas.today import MeetingToPrepare, TodayDashboard, TodayPriority, WaitingItem
 from app.services.meeting_prep import upcoming_events
+from app.services.planning import build_planning_suggestions
 from app.services.priority import build_context, score_commitment
 
 
@@ -87,6 +88,10 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
         if event.prep_required
     ]
 
+    suggestions, quick_wins = build_planning_suggestions(
+        db, user_id, today=today, scored=scored
+    )
+
     summary = (
         f"You have {len(open_commitments)} open loop(s). "
         f"{len(top)} matter today. {len(waiting_on_user)} people are waiting on you. "
@@ -98,4 +103,6 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
         people_waiting_on_you=waiting_on_user,
         you_are_waiting_on=user_waiting_on,
         meetings_to_prepare=meetings,
+        suggestions=suggestions,
+        quick_wins=quick_wins,
     )

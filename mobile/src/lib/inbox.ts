@@ -43,19 +43,28 @@ function tagForCategory(
   }
 }
 
+/** Resolve category for display/sectioning (backend may still say Processing). */
+function resolvedCategory(message: InboxMessage): InboxMessage["category"] {
+  if (message.category === "Processing" && message.action_required) {
+    return "Needs Reply";
+  }
+  return message.category;
+}
+
 function needsAttention(message: InboxMessage): boolean {
   if (message.user_replied) return false;
-  if (message.category === "Processing") return false;
-  return message.category === "Needs Reply" || message.category === "Needs Decision";
+  const category = resolvedCategory(message);
+  if (category === "Processing") return false;
+  return category === "Needs Reply" || category === "Needs Decision";
 }
 
 export function isNeedsDecision(message: InboxMessage): boolean {
-  return message.category === "Needs Decision";
+  return resolvedCategory(message) === "Needs Decision";
 }
 
 export function showsReplyActions(message: InboxMessage): boolean {
   if (message.user_replied) return false;
-  return message.category === "Needs Reply";
+  return resolvedCategory(message) === "Needs Reply";
 }
 
 export function mapInboxMessage(message: InboxMessage): AppInboxItem {
@@ -65,12 +74,13 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
       ? "reply"
       : "fyi";
   const isSms = message.source === "sms";
+  const category = resolvedCategory(message);
   const tags = isSms
     ? ([
         { label: "SMS", tone: "accent" as const },
-        tagForCategory(message.category),
+        tagForCategory(category),
       ] as AppInboxItem["tags"])
-    : ([tagForCategory(message.category)] as AppInboxItem["tags"]);
+    : ([tagForCategory(category)] as AppInboxItem["tags"]);
   return {
     id: message.id,
     source: isSms ? "sms" : "email",
@@ -84,7 +94,7 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     replyPhone: message.reply_phone?.trim() || null,
     tags,
     section,
-    category: message.category,
+    category,
     isUnread: message.is_unread ?? true,
     userReplied: message.user_replied ?? false,
     showReplyActions: showsReplyActions(message),

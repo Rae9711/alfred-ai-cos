@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel
 
 from app.db.enums import Priority
+
+PlanningItemType = Literal["commitment", "task"]
 
 
 class TodayPriority(BaseModel):
@@ -31,9 +34,29 @@ class MeetingToPrepare(BaseModel):
     start_time: str | None
 
 
+class TimeBlockSuggestion(BaseModel):
+    gap_start: str
+    gap_end: str
+    duration_minutes: int
+    item_id: str
+    item_type: PlanningItemType
+    title: str
+    estimated_minutes: int
+    reason: str
+
+
+class QuickWin(BaseModel):
+    id: str
+    title: str
+    item_type: PlanningItemType
+    estimated_minutes: int
+
+
 class TodayDashboard(BaseModel):
     summary: str
     top_priorities: list[TodayPriority]
     people_waiting_on_you: list[WaitingItem]
     you_are_waiting_on: list[WaitingItem]
     meetings_to_prepare: list[MeetingToPrepare]
+    suggestions: list[TimeBlockSuggestion] = []
+    quick_wins: list[QuickWin] = []

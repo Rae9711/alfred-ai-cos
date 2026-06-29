@@ -83,6 +83,26 @@ describe("mapInboxMessage", () => {
     expect(item.summary).toBe("snip");
   });
 
+  it("maps action-required Processing to needs reply", () => {
+    const item = mapInboxMessage({
+      id: "5",
+      sender: "a@b.com",
+      subject: "Hi",
+      snippet: "snip",
+      take: null,
+      category: "Processing",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: true,
+      user_replied: false,
+    });
+    expect(item.section).toBe("reply");
+    expect(item.category).toBe("Needs Reply");
+    expect(item.tags.map((t) => t.label)).toEqual(["Needs Reply"]);
+    expect(item.showReplyActions).toBe(true);
+  });
+
   it("tags SMS and preserves unknown sender label", () => {
     const item = mapInboxMessage({
       id: "sms-1",
