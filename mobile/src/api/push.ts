@@ -13,7 +13,7 @@ Notifications.setNotificationHandler({
     return {
       shouldShowBanner: allowed,
       shouldShowList: allowed,
-      shouldPlaySound: false,
+      shouldPlaySound: type === "reminder",
       shouldSetBadge: allowed,
     };
   },

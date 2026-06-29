@@ -37,6 +37,7 @@ import {
   parseSmsComposeStarter,
 } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
+import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -286,6 +287,7 @@ export function AskScreen() {
               content: m.text,
             }));
           const res = await api.chat(q, history);
+          await scheduleFromAssistantResponse(res);
           setFreeChat((c) => [
             ...c,
             { role: "alfred", text: res.reply, ts: "now" },

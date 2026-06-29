@@ -187,6 +187,9 @@ class AssistantAskResponse(BaseModel):
     reply: str  # one-line message to show the user
     action: str  # "booked" | "updated" | "cancelled" | "created" | "none"
     detail: str | None = None  # execution detail when an action ran
+    task_id: str | None = None
+    task_title: str | None = None
+    remind_at: datetime | None = None
 
 
 class AssistantChatMessage(BaseModel):
@@ -202,6 +205,11 @@ class AssistantChatRequest(BaseModel):
 
 class AssistantChatResponse(BaseModel):
     reply: str
+    action: str = "none"
+    detail: str | None = None
+    task_id: str | None = None
+    task_title: str | None = None
+    remind_at: datetime | None = None
 
 
 class UpdateMeetingRequest(BaseModel):

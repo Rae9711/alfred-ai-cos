@@ -252,7 +252,12 @@ export interface AssistantAskResponse {
   reply: string;
   action: "booked" | "updated" | "cancelled" | "created" | "none";
   detail: string | null;
+  task_id?: string | null;
+  task_title?: string | null;
+  remind_at?: string | null;
 }
+
+export type AssistantChatResponse = AssistantAskResponse;
 
 export interface DraftCreateRequest {
   message_id: string;

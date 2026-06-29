@@ -8,6 +8,8 @@ Other intents return an honest reply rather than pretending."""
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -20,9 +22,31 @@ from app.schemas.api import (
     AssistantChatRequest,
     AssistantChatResponse,
 )
-from app.services.assistant import chat_with_context, interpret_and_act, resolve_timezone
+from app.services.assistant import (
+    AssistantOutcome,
+    chat_with_context,
+    interpret_and_act,
+    resolve_timezone,
+)
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+
+def _assistant_response(outcome: AssistantOutcome) -> AssistantAskResponse:
+    remind = None
+    if outcome.remind_at:
+        try:
+            remind = datetime.fromisoformat(outcome.remind_at)
+        except ValueError:
+            remind = None
+    return AssistantAskResponse(
+        reply=outcome.reply,
+        action=outcome.action,
+        detail=outcome.detail,
+        task_id=outcome.task_id,
+        task_title=outcome.task_title,
+        remind_at=remind,
+    )
 
 
 @router.post("/ask", response_model=AssistantAskResponse)
@@ -33,11 +57,7 @@ def ask(
 ) -> AssistantAskResponse:
     tz = resolve_timezone(db, user, payload.timezone)
     outcome = interpret_and_act(db, user, text=payload.text, tz=tz)
-    return AssistantAskResponse(
-        reply=outcome.reply,
-        action=outcome.action,
-        detail=outcome.detail,
-    )
+    return _assistant_response(outcome)
 
 
 @router.post("/chat", response_model=AssistantChatResponse)
@@ -47,11 +67,12 @@ def chat(
     db: Session = Depends(get_db),
 ) -> AssistantChatResponse:
     tz = resolve_timezone(db, user, payload.timezone)
-    reply = chat_with_context(
+    outcome = chat_with_context(
         db,
         user,
         text=payload.text,
         tz=tz,
         history=[m.model_dump() for m in payload.history],
     )
-    return AssistantChatResponse(reply=reply)
+    base = _assistant_response(outcome)
+    return AssistantChatResponse(**base.model_dump())

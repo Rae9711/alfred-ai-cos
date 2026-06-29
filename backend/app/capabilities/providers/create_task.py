@@ -69,4 +69,13 @@ class CreateTaskCapability:
             detail += f" (due {task.due_date.isoformat()})"
         if task.remind_at:
             detail += f" (reminder {task.remind_at.isoformat()})"
-        return ExecutionResult(detail=detail, reversible=True)
+        return ExecutionResult(
+            detail=detail,
+            reversible=True,
+            data={
+                "task_id": task.id,
+                "title": task.title,
+                "remind_at": task.remind_at.isoformat() if task.remind_at else None,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+            },
+        )

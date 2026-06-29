@@ -130,3 +130,24 @@ def test_create_task_fallback_when_llm_misses_intent(
     task = db.query(Task).filter(Task.user_id == user.id).one()
     assert "房租" in task.title
     assert task.due_date == date.today() + timedelta(days=1)
+
+
+def test_create_task_when_llm_mislabels_check_calendar(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: check_calendar must not block reminder creation."""
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="check_calendar",
+            reply="明天提醒我",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    out = interpret_and_act(
+        db, user, text="明天提醒我交房租", tz="America/New_York"
+    )
+    assert out.action == "created"
+    assert "房租" in (out.task_title or "")
+    task = db.query(Task).filter(Task.user_id == user.id).one()
+    assert "房租" in task.title
+    assert task.remind_at is not None

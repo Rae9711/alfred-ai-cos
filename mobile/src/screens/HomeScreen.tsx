@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { type Me, type Task, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -37,6 +37,11 @@ import {
 } from "@/lib/schedule";
 import { greetingForLocale } from "@/i18n/locales";
 import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
+import {
+  cancelLocalTaskReminder,
+  scheduleFromAssistantResponse,
+  syncLocalRemindersForTasks,
+} from "@/lib/taskReminders";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 function formatReminderWhen(task: Task): string {
@@ -116,6 +121,9 @@ export function HomeScreen() {
       setMeetings(upcoming);
       setTodayData(today);
       setReminders(upcomingReminders);
+      if (upcomingReminders.length > 0) {
+        void syncLocalRemindersForTasks(upcomingReminders);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.home.askFailed);
       setMeetings([]);
@@ -230,6 +238,7 @@ export function HomeScreen() {
     void (async () => {
       try {
         const res = await api.ask(q);
+        await scheduleFromAssistantResponse(res);
         showToast(res.reply, { duration: 6000 });
         if (res.action !== "none") {
           await api.sync({ calendarOnly: true }).catch(() => undefined);
@@ -258,6 +267,22 @@ export function HomeScreen() {
       <MeetingDetailSheet eventId={nextMeeting.id} onChanged={() => void load(scheduleView)} />,
     );
   };
+
+  const completeReminder = useCallback(
+    (task: Task) => {
+      void (async () => {
+        try {
+          await api.updateTaskStatus(task.id, TaskStatus.Done);
+          await cancelLocalTaskReminder(task.id);
+          setReminders((rows) => rows.filter((r) => r.id !== task.id));
+          showToast(`Done: ${task.title}`);
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : t.home.askFailed);
+        }
+      })();
+    },
+    [showToast, t.home.askFailed],
+  );
 
   const displayName =
     firstNameOf(me?.name) ?? me?.email.split("@")[0] ?? "there";
@@ -342,7 +367,12 @@ export function HomeScreen() {
               <View style={styles.remindersBlock}>
                 <Text style={styles.remindersLabel}>{t.home.upcomingReminders}</Text>
                 {reminders.slice(0, 5).map((task) => (
-                  <View key={task.id} style={styles.reminderRow}>
+                  <Pressable
+                    key={task.id}
+                    style={styles.reminderRow}
+                    onPress={() => completeReminder(task)}
+                    accessibilityLabel={`${task.title}, tap to mark done`}
+                  >
                     <Text style={styles.reminderTitle} numberOfLines={1}>
                       {task.title}
                     </Text>
@@ -351,7 +381,7 @@ export function HomeScreen() {
                         ? t.home.reminderAt(formatReminderWhen(task))
                         : t.home.reminderDue(formatReminderWhen(task))}
                     </Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : null}

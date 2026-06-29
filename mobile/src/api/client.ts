@@ -7,6 +7,7 @@ import type {
   ActionProposal,
   AppNotification,
   AssistantAskResponse,
+  AssistantChatResponse,
   AuthStartResponse,
   BookMessageResponse,
   Briefing,
@@ -206,7 +207,7 @@ export const api = {
       body: JSON.stringify({ text, timezone: deviceTimezone() }),
     }),
   chat: (text: string, history: { role: string; content: string }[] = []) =>
-    request<{ reply: string }>("/assistant/chat", {
+    request<AssistantChatResponse>("/assistant/chat", {
       method: "POST",
       body: JSON.stringify({
         text,

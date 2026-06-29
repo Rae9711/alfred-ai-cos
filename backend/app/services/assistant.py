@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capabilities.base import ExecutionResult
 from app.db.enums import ActionType, SourceType
 from app.db.models import Message, User
 from app.llm import get_llm
@@ -195,6 +196,55 @@ class AssistantOutcome:
     action: str  # booked | updated | cancelled | created | none
     reply: str
     detail: str | None = None
+    task_id: str | None = None
+    task_title: str | None = None
+    remind_at: str | None = None
+
+
+def _outcome_from_task_execution(
+    *,
+    result: ExecutionResult,
+    reply: str,
+) -> AssistantOutcome:
+    data = result.data or {}
+    return AssistantOutcome(
+        action="created",
+        reply=reply,
+        detail=result.detail,
+        task_id=data.get("task_id"),
+        task_title=data.get("title"),
+        remind_at=data.get("remind_at"),
+    )
+
+
+def _execute_create_reminder(
+    db: Session,
+    user: User,
+    *,
+    title: str,
+    due: date | None,
+    tz: str,
+    llm_reply: str = "",
+) -> AssistantOutcome:
+    target: dict[str, str] = {
+        "title": title,
+        "source_type": SourceType.manual.value,
+    }
+    if due is not None:
+        target["due_date"] = due.isoformat()
+        target["remind_at"] = _default_remind_at(due, tz).isoformat()
+    proposal = propose_action_internal(
+        db,
+        user,
+        action_type=ActionType.create_task,
+        target=target,
+        reason="Reminder from an assistant request",
+    )
+    result = execution.execute_proposal(db, user, proposal)
+    reply = (llm_reply or "").strip() or result.detail
+    if not llm_reply and due is not None:
+        reply = f"Got it — I'll remind you {_format_due_date(due, tz)}: {title}."
+    return _outcome_from_task_execution(result=result, reply=reply)
 
 
 def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> AssistantOutcome:
@@ -253,54 +303,32 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
             action="cancelled", reply=interp.reply or result.detail, detail=result.detail
         )
 
-    if interp.intent == "check_calendar":
-        reply = (interp.reply or "").strip() or _calendar_check_reply(db, user.id, tz)
-        return AssistantOutcome(action="none", reply=reply)
-
+    # Reminders before check_calendar — the LLM often mislabels "明天提醒我…" as a
+    # calendar read when it should create a task; check_calendar must not short-circuit.
     if interp.intent == "create_task" and interp.title:
-        target: dict[str, str] = {
-            "title": interp.title,
-            "source_type": SourceType.manual.value,
-        }
-        if interp.due_date:
-            target["due_date"] = interp.due_date.isoformat()
-            remind = _default_remind_at(interp.due_date, tz)
-            target["remind_at"] = remind.isoformat()
-        proposal = propose_action_internal(
+        due = interp.due_date
+        if due is None:
+            fallback_due = _fallback_reminder_from_text(text, now=now)
+            if fallback_due is not None:
+                due = fallback_due[1]
+        return _execute_create_reminder(
             db,
             user,
-            action_type=ActionType.create_task,
-            target=target,
-            reason="Reminder from an assistant request",
-        )
-        result = execution.execute_proposal(db, user, proposal)
-        reply = (interp.reply or "").strip() or result.detail
-        if not interp.reply and interp.due_date:
-            reply = f"Got it — I'll remind you {_format_due_date(interp.due_date, tz)}: {interp.title}."
-        return AssistantOutcome(
-            action="created", reply=reply, detail=result.detail
+            title=interp.title,
+            due=due,
+            tz=tz,
+            llm_reply=interp.reply or "",
         )
 
     if _text_requests_action(text):
         fallback = _fallback_reminder_from_text(text, now=now)
         if fallback is not None:
             title, due = fallback
-            target = {
-                "title": title,
-                "source_type": SourceType.manual.value,
-                "due_date": due.isoformat(),
-                "remind_at": _default_remind_at(due, tz).isoformat(),
-            }
-            proposal = propose_action_internal(
-                db,
-                user,
-                action_type=ActionType.create_task,
-                target=target,
-                reason="Reminder from an assistant request",
-            )
-            result = execution.execute_proposal(db, user, proposal)
-            reply = f"Got it — I'll remind you {_format_due_date(due, tz)}: {title}."
-            return AssistantOutcome(action="created", reply=reply, detail=result.detail)
+            return _execute_create_reminder(db, user, title=title, due=due, tz=tz)
+
+    if interp.intent == "check_calendar":
+        reply = (interp.reply or "").strip() or _calendar_check_reply(db, user.id, tz)
+        return AssistantOutcome(action="none", reply=reply)
 
     reply = (interp.reply or "").strip()
     if not reply:
@@ -401,17 +429,17 @@ def chat_with_context(
     text: str,
     tz: str,
     history: list[dict[str, str]] | None = None,
-) -> str:
+) -> AssistantOutcome:
     """Answer a free-form question using Today, waiting, inbox, and calendar context."""
     if _text_requests_action(text):
         outcome = interpret_and_act(db, user, text=text, tz=tz)
         if outcome.action != "none":
-            return outcome.reply
+            return outcome
         # check_calendar and other none-action intents still have a useful reply.
         if outcome.reply and outcome.reply != (
             "I'm not sure how to help with that — try asking about your calendar."
         ):
-            return outcome.reply
+            return outcome
 
     context = build_assistant_context(db, user, tz=tz)
     result = get_llm().answer_contextual_question(
@@ -420,4 +448,7 @@ def chat_with_context(
         history=history,
     )
     reply = (result.reply or "").strip()
-    return reply or "I'm not sure — try asking about your priorities or inbox."
+    return AssistantOutcome(
+        action="none",
+        reply=reply or "I'm not sure — try asking about your priorities or inbox.",
+    )
