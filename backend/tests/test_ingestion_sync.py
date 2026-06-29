@@ -107,9 +107,7 @@ def test_incremental_uses_history_and_filters_primary(
         gmail,
         "get_message_label_ids",
         lambda _t, mid: (
-            ["INBOX", "CATEGORY_PERSONAL"]
-            if mid == "m-new"
-            else ["INBOX", "CATEGORY_PROMOTIONS"]
+            ["INBOX", "CATEGORY_PERSONAL"] if mid == "m-new" else ["INBOX", "CATEGORY_PROMOTIONS"]
         ),
     )
     monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
@@ -150,9 +148,7 @@ def test_incremental_history_expired_falls_back_to_recent_primary(
     assert result.new_messages[0].external_id == "m-fallback"
 
 
-def test_messages_to_process_includes_pending_unclassified(
-    db: Session, user: User
-) -> None:
+def test_messages_to_process_includes_pending_unclassified(db: Session, user: User) -> None:
     pending = Message(
         user_id=user.id,
         source="gmail",
@@ -276,9 +272,7 @@ def test_sync_skips_duplicate_ids_in_same_batch(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _connect(db, user, history_id=None)
-    monkeypatch.setattr(
-        gmail, "list_recent_message_ids", lambda *_a, **_k: ["m1", "m1", "m2"]
-    )
+    monkeypatch.setattr(gmail, "list_recent_message_ids", lambda *_a, **_k: ["m1", "m1", "m2"])
     monkeypatch.setattr(
         gmail,
         "get_message_label_ids",

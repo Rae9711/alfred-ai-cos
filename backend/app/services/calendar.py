@@ -80,9 +80,7 @@ def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[Ca
     seen_external: set[str] = set()
     window_start, window_end = _sync_window_utc(user.timezone if user else None)
 
-    for raw in gcal.list_upcoming_events(
-        token, time_min=window_start, time_max=window_end
-    ):
+    for raw in gcal.list_upcoming_events(token, time_min=window_start, time_max=window_end):
         seen_external.add(raw["external_id"])
         touched.append(_upsert_event(db, user_id, raw, user_email))
 
@@ -190,9 +188,7 @@ def delete_event(db: Session, user_id: str, event_id: str) -> None:
     db.commit()
 
 
-def upsert_seed_event(
-    db: Session, user_id: str, raw: dict, user_email: str
-) -> CalendarEvent:
+def upsert_seed_event(db: Session, user_id: str, raw: dict, user_email: str) -> CalendarEvent:
     """Upsert a single normalized event. Used by the dev seed path (no Google call)."""
     event = _upsert_event(db, user_id, raw, user_email)
     db.commit()

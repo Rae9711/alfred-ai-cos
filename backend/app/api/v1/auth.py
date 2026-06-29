@@ -47,9 +47,7 @@ def _validate_redirect(redirect: str | None) -> str:
         return redirect
     # Expo Go dev links: exp://<something>.exp.direct/... (the tunnel host) or a LAN
     # exp://<ip>:<port>/... Both are first-party Expo dev clients, not arbitrary hosts.
-    if redirect.startswith("exp://") and (
-        ".exp.direct/" in redirect or "/--/" in redirect
-    ):
+    if redirect.startswith("exp://") and (".exp.direct/" in redirect or "/--/" in redirect):
         return redirect
     raise HTTPException(status_code=400, detail="Disallowed redirect target")
 
@@ -174,9 +172,7 @@ def google_callback(
         db.add(user)
         db.flush()
 
-    _upsert_google_account(
-        db, user=user, profile_email=profile_email, token_payload=token_payload
-    )
+    _upsert_google_account(db, user=user, profile_email=profile_email, token_payload=token_payload)
     db.commit()
 
     session = create_session_token(user.id)

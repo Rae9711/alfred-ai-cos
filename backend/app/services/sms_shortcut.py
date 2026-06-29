@@ -81,7 +81,10 @@ def _dict_field_text(key: str, text: str) -> dict[str, Any]:
     return {
         "WFKey": {"Value": {"string": key, "attachmentsByRange": {}}},
         "WFItemType": 0,
-        "WFValue": {"Value": {"string": text, "attachmentsByRange": {}}, "WFSerializationType": "WFTextTokenString"},
+        "WFValue": {
+            "Value": {"string": text, "attachmentsByRange": {}},
+            "WFSerializationType": "WFTextTokenString",
+        },
     }
 
 
@@ -109,34 +112,34 @@ def _post_sms_webhook_action(
 ) -> dict[str, Any]:
     post_uuid = _uid()
     params: dict[str, Any] = {
-            "UUID": post_uuid,
-            "WFURL": webhook_url,
-            "WFHTTPMethod": "POST",
-            "WFHTTPBodyType": "Json" if json_values else "File",
-            "WFHTTPHeaders": {
-                "Value": {
-                    "WFDictionaryFieldValueItems": [
-                        {
-                            "WFKey": {
-                                "Value": {"string": "Content-Type", "attachmentsByRange": {}},
-                            },
-                            "WFItemType": 0,
-                            "WFValue": {
-                                "Value": {"string": "application/json", "attachmentsByRange": {}},
-                                "WFSerializationType": "WFTextTokenString",
-                            },
+        "UUID": post_uuid,
+        "WFURL": webhook_url,
+        "WFHTTPMethod": "POST",
+        "WFHTTPBodyType": "Json" if json_values else "File",
+        "WFHTTPHeaders": {
+            "Value": {
+                "WFDictionaryFieldValueItems": [
+                    {
+                        "WFKey": {
+                            "Value": {"string": "Content-Type", "attachmentsByRange": {}},
                         },
-                        {
-                            "WFKey": {
-                                "Value": {"string": "X-Sms-Token", "attachmentsByRange": {}},
-                            },
-                            "WFItemType": 0,
-                            "WFValue": token_header_value,
+                        "WFItemType": 0,
+                        "WFValue": {
+                            "Value": {"string": "application/json", "attachmentsByRange": {}},
+                            "WFSerializationType": "WFTextTokenString",
                         },
-                    ]
-                },
-                "WFSerializationType": "WFDictionaryFieldValue",
+                    },
+                    {
+                        "WFKey": {
+                            "Value": {"string": "X-Sms-Token", "attachmentsByRange": {}},
+                        },
+                        "WFItemType": 0,
+                        "WFValue": token_header_value,
+                    },
+                ]
             },
+            "WFSerializationType": "WFDictionaryFieldValue",
+        },
     }
     if json_values:
         params["WFJSONValues"] = json_values
@@ -199,13 +202,13 @@ def build_sms_forward_shortcut(
 ) -> bytes:
     """Return binary plist bytes for the SMS forward shortcut.
 
-    When ``sms_token`` is set (personalized download), it is embedded in the header.
-    Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
+      When ``sms_token`` is set (personalized download), it is embedded in the header.
+      Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
 
-    Message Received passes the incoming message as Shortcut Input. Map Shortcut Input
-    directly into the JSON body (body/text/shortcut_input). ``detect.text`` output refs
-    in Dictionary/WFJSONValues are stripped on import for automation shortcuts — the
-  Dictionary block shows empty and POST sends ``{}``.
+      Message Received passes the incoming message as Shortcut Input. Map Shortcut Input
+      directly into the JSON body (body/text/shortcut_input). ``detect.text`` output refs
+      in Dictionary/WFJSONValues are stripped on import for automation shortcuts — the
+    Dictionary block shows empty and POST sends ``{}``.
     """
     dict_uuid = _uid()
     input_ref = _shortcut_input_attachment()

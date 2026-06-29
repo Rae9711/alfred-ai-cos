@@ -33,7 +33,8 @@ def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     ]
 
     dict_action = data["WFWorkflowActions"][0]
-    items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
+    wf_items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]
+    items = wf_items["WFDictionaryFieldValueItems"]
     assert len(items) == 3
     keys = {item["WFKey"]["Value"]["string"] for item in items}
     assert keys == {"body", "shortcut_input", "text"}
@@ -134,7 +135,8 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
         for a in data["WFWorkflowActions"]
         if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.dictionary"
     )
-    items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
+    wf_items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]
+    items = wf_items["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}
     assert keys == {"body", "text", "shortcut_input", "message_id", "backfill"}
 
@@ -163,7 +165,9 @@ def test_share_shortcut_download_url() -> None:
 
 
 def test_build_sms_backfill_install_urls_serves_share_shortcut() -> None:
-    import_url, shortcut_url = build_sms_backfill_install_urls(app_base_url="https://alfredaitech.com")
+    import_url, shortcut_url = build_sms_backfill_install_urls(
+        app_base_url="https://alfredaitech.com"
+    )
     assert shortcut_url.endswith(f"/{SHARE_SHORTCUT_FILENAME}")
     assert import_url.startswith("shortcuts://import-shortcut/?")
     assert "Share" in import_url or "Share" in shortcut_url

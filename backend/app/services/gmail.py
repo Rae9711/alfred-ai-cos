@@ -46,9 +46,7 @@ InboxTab = Literal["all", "primary"]
 
 _PRIMARY_LABEL = "CATEGORY_PERSONAL"
 # Promotions/Social/Forums stay out of Albert; Updates (school, receipts) are included.
-_SKIPPED_INGEST_TABS = frozenset(
-    {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"}
-)
+_SKIPPED_INGEST_TABS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"})
 _NON_PRIMARY_TABS = frozenset(
     {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS"}
 )
@@ -354,9 +352,7 @@ def _decode_part_body(payload: dict[str, Any]) -> str:
     return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
 
 
-def _collect_body_parts(
-    payload: dict[str, Any], *, mime_type: str, found: list[str]
-) -> None:
+def _collect_body_parts(payload: dict[str, Any], *, mime_type: str, found: list[str]) -> None:
     if payload.get("mimeType") == mime_type:
         body = _decode_part_body(payload)
         if body.strip():

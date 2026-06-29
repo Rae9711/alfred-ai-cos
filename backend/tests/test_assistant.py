@@ -52,9 +52,7 @@ def test_check_calendar_falls_back_to_events(
         )
     )
     db.commit()
-    fake = FakeLLM(
-        interpretation=AssistantInterpretation(intent="check_calendar", reply="")
-    )
+    fake = FakeLLM(interpretation=AssistantInterpretation(intent="check_calendar", reply=""))
     monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
     out = interpret_and_act(db, user, text="What's coming up?", tz="America/New_York")
     assert out.action == "none"

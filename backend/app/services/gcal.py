@@ -129,9 +129,7 @@ def update_event(
     if end is not None:
         existing.setdefault("end", {})["dateTime"] = end.isoformat()
     updated = (
-        svc.events()
-        .update(calendarId="primary", eventId=external_id, body=existing)
-        .execute()
+        svc.events().update(calendarId="primary", eventId=external_id, body=existing).execute()
     )
     return _normalize(updated)
 

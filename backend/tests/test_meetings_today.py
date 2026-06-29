@@ -31,9 +31,7 @@ def _event(user_id: str, start: datetime, title: str) -> CalendarEvent:
     )
 
 
-def test_today_events_includes_past_and_future_on_local_day(
-    db: Session, user: User
-) -> None:
+def test_today_events_includes_past_and_future_on_local_day(db: Session, user: User) -> None:
     now = datetime.now(UTC)
     past_today = _event(user.id, now - timedelta(hours=2), "Morning standup")
     later_today = _event(user.id, now + timedelta(hours=2), "Afternoon sync")

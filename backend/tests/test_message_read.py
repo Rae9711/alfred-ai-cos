@@ -45,9 +45,7 @@ def _message(db: Session, user: User) -> Message:
     return message
 
 
-def test_mark_message_read_updates_gmail_and_db(
-    db: Session, user: User, monkeypatch
-) -> None:
+def test_mark_message_read_updates_gmail_and_db(db: Session, user: User, monkeypatch) -> None:
     message = _message(db, user)
     monkeypatch.setattr(
         gmail,

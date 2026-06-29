@@ -71,4 +71,3 @@ def test_upgrade_human_fyi_with_question() -> None:
         snippet="Can you send the signed letter today?",
     )
     assert result == MessageClassification.needs_reply
-

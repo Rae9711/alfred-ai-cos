@@ -51,17 +51,13 @@ def _events_between(
     return list(db.scalars(stmt))
 
 
-def today_events(
-    db: Session, user_id: str, *, timezone: str | None
-) -> list[CalendarEvent]:
+def today_events(db: Session, user_id: str, *, timezone: str | None) -> list[CalendarEvent]:
     """All events on the user's local calendar day, including ones that already started."""
     start_utc = start_of_today_utc(timezone)
     return _events_between(db, user_id, start_utc=start_utc, end_utc=start_utc + timedelta(days=1))
 
 
-def week_events(
-    db: Session, user_id: str, *, timezone: str | None
-) -> list[CalendarEvent]:
+def week_events(db: Session, user_id: str, *, timezone: str | None) -> list[CalendarEvent]:
     """Events in the user's current local calendar week (Monday–Sunday)."""
     tz = _local_tz(timezone)
     local_now = datetime.now(tz)
@@ -77,9 +73,7 @@ def week_events(
     )
 
 
-def month_events(
-    db: Session, user_id: str, *, timezone: str | None
-) -> list[CalendarEvent]:
+def month_events(db: Session, user_id: str, *, timezone: str | None) -> list[CalendarEvent]:
     """Events in the user's current local calendar month."""
     tz = _local_tz(timezone)
     local_now = datetime.now(tz)

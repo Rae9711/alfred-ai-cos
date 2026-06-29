@@ -218,12 +218,15 @@ def ingest_sms(
     had_draft = False
     try:
         _auto_draft_reply(db, user, message)
-        had_draft = db.scalar(
-            select(DraftReply.id).where(
-                DraftReply.user_id == user.id,
-                DraftReply.message_id == message.id,
+        had_draft = (
+            db.scalar(
+                select(DraftReply.id).where(
+                    DraftReply.user_id == user.id,
+                    DraftReply.message_id == message.id,
+                )
             )
-        ) is not None
+            is not None
+        )
     except Exception:
         logger.exception("SMS auto-draft failed for message %s", message.id)
     db.commit()

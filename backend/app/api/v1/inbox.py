@@ -237,12 +237,8 @@ class SmsIn(BaseModel):
         if not body:
             body = _fallback_body(data, phone)
         backfill_raw = data.get("backfill")
-        backfill = (
-            backfill_raw is True
-            or (
-                isinstance(backfill_raw, str)
-                and backfill_raw.strip().lower() in {"1", "true", "yes"}
-            )
+        backfill = backfill_raw is True or (
+            isinstance(backfill_raw, str) and backfill_raw.strip().lower() in {"1", "true", "yes"}
         )
         return {
             "from_number": resolve_sms_sender_phone(phone) if phone else UNKNOWN_SMS_SENDER,
