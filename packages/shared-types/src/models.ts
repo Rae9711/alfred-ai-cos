@@ -145,6 +145,8 @@ export interface MessageReadResult {
   id: string;
   is_unread: boolean;
   gmail_synced: boolean;
+  user_decided?: boolean;
+  category?: InboxMessage["category"] | string | null;
 }
 
 export interface Me {
@@ -214,6 +216,7 @@ export interface InboxMessage {
   mailbox_email: string;
   is_unread: boolean;
   user_replied: boolean;
+  user_decided?: boolean;
   source?: "gmail" | "sms" | string;
   reply_phone?: string | null;
 }

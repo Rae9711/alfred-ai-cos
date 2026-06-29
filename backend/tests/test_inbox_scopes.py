@@ -201,3 +201,29 @@ def test_mark_decided_excludes_from_needs_action(db: Session, user: User) -> Non
 
     out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
     assert out.messages == []
+
+    synced = messages_mod.list_inbox(scope="synced", user=user, db=db)
+    assert len(synced.messages) == 1
+    assert synced.messages[0].user_decided is True
+
+
+def test_mark_undecided_restores_needs_action(db: Session, user: User) -> None:
+    now = datetime.now(UTC)
+    msg = _gmail_message(
+        user_id=user.id,
+        external_id="gmail:undecide-me",
+        sent_at=now - timedelta(hours=1),
+        classification=MessageClassification.needs_reply,
+    )
+    msg.action_required = True
+    db.add(msg)
+    db.commit()
+
+    messages_mod.mark_decided(msg.id, user=user, db=db)
+    messages_mod.mark_undecided(msg.id, user=user, db=db)
+
+    out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert len(out.messages) == 1
+    assert out.messages[0].id == msg.id
+    assert out.messages[0].user_decided is False
+    assert out.messages[0].category == "Needs Reply"

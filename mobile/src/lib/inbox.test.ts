@@ -159,4 +159,24 @@ describe("mapInboxMessage", () => {
     expect(item.tags.map((t) => t.label)).toEqual(["SMS", "Needs Reply"]);
     expect(item.title).toBe("Hey are you free?");
   });
+
+  it("maps user-decided mail to fyi section", () => {
+    const item = mapInboxMessage({
+      id: "7",
+      sender: "a@b.com",
+      subject: "Hi",
+      snippet: "snip",
+      take: "Handled",
+      category: "FYI",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: false,
+      is_unread: false,
+      user_replied: false,
+      user_decided: true,
+    });
+    expect(item.section).toBe("fyi");
+    expect(item.userDecided).toBe(true);
+    expect(item.showReplyActions).toBe(false);
+  });
 });

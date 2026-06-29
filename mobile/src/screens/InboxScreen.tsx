@@ -56,6 +56,7 @@ export function InboxScreen() {
     refresh,
     markRead,
     markDecided,
+    markUndecided,
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
@@ -143,9 +144,19 @@ export function InboxScreen() {
         await markDecided(id);
         showToast(t.inbox.markProcessedDone);
       } catch (e) {
-        showToast(
-          e instanceof Error ? e.message : t.inbox.markReadFailed,
-        );
+        showToast(e instanceof Error ? e.message : t.inbox.markReadFailed);
+      }
+    })();
+  };
+
+  const markAsUnprocessed = (id: string) => {
+    ease();
+    void (async () => {
+      try {
+        await markUndecided(id);
+        showToast(t.inbox.markProcessedUndo);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : t.inbox.markReadFailed);
       }
     })();
   };
@@ -273,11 +284,12 @@ export function InboxScreen() {
               labels={{
                 handToAlfredReply: t.inbox.handToAlfredReply,
                 later: t.inbox.later,
-                processed: t.inbox.markProcessed,
+                processedAction: t.inbox.markProcessed,
                 markRead: t.inbox.markReadAction,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
+                processed: t.inbox.processed,
                 albertTake: t.inbox.albertTake,
               }}
             />
@@ -305,6 +317,7 @@ export function InboxScreen() {
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
+                processed: t.inbox.processed,
                 albertTake: t.inbox.albertTake,
               }}
             />
@@ -325,11 +338,15 @@ export function InboxScreen() {
               }
               onDismiss={() => markAsRead(m.id)}
               onMarkRead={() => markAsRead(m.id)}
+              onUnprocess={
+                m.userDecided ? () => markAsUnprocessed(m.id) : undefined
+              }
               onView={() => openMessage(m.id, "reply")}
               labels={{
                 view: t.inbox.view,
                 dismiss: t.inbox.dismiss,
                 markRead: t.inbox.markReadAction,
+                processed: t.inbox.markProcessed,
                 read: t.inbox.readLabel,
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
@@ -387,8 +404,17 @@ function ReadStatus({
   labels,
 }: {
   item: AppInboxItem;
-  labels: { read: string; unread: string; replied: string };
+  labels: { read: string; unread: string; replied: string; processed: string };
 }) {
+  if (item.userDecided) {
+    return (
+      <View style={[styles.statusChip, styles.statusProcessed]}>
+        <Text style={[styles.statusChipText, styles.statusProcessedText]}>
+          {labels.processed}
+        </Text>
+      </View>
+    );
+  }
   if (item.userReplied) {
     return (
       <View style={[styles.statusChip, styles.statusReplied]}>
@@ -435,11 +461,12 @@ function InboxCard({
   labels: {
     handToAlfredReply: string;
     later: string;
-    processed: string;
+    processedAction: string;
     markRead: string;
     read: string;
     unread: string;
     replied: string;
+    processed: string;
     albertTake: string;
   };
 }) {
@@ -480,7 +507,7 @@ function InboxCard({
                 style={styles.actionPrimary}
               />
               <Pressable style={styles.actionGhost} onPress={onProcessed}>
-                <Text style={styles.actionGhostText}>{labels.processed}</Text>
+                <Text style={styles.actionGhostText}>{labels.processedAction}</Text>
               </Pressable>
               <Pressable style={styles.actionGhost} onPress={onLater}>
                 <Text style={styles.actionGhostText}>{labels.later}</Text>
@@ -517,6 +544,7 @@ function DecisionCard({
     read: string;
     unread: string;
     replied: string;
+    processed: string;
     albertTake: string;
   };
 }) {
@@ -562,6 +590,7 @@ function FyiCard({
   mailboxLabel,
   onDismiss,
   onMarkRead,
+  onUnprocess,
   onView,
   labels,
 }: {
@@ -569,11 +598,13 @@ function FyiCard({
   mailboxLabel: string | null;
   onDismiss: () => void;
   onMarkRead: () => void;
+  onUnprocess?: () => void;
   onView: () => void;
   labels: {
     view: string;
     dismiss: string;
     markRead: string;
+    processed: string;
     read: string;
     unread: string;
     replied: string;
@@ -584,7 +615,15 @@ function FyiCard({
       <Pressable onPress={onView}>
         <View style={styles.cardBody}>
           <View style={styles.cardTop}>
-            <ReadStatus item={item} labels={labels} />
+            <ReadStatus
+              item={item}
+              labels={{
+                read: labels.read,
+                unread: labels.unread,
+                replied: labels.replied,
+                processed: labels.processed,
+              }}
+            />
             {mailboxLabel ? (
               <View style={styles.sourceChip}>
                 <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
@@ -604,6 +643,11 @@ function FyiCard({
         </View>
       </Pressable>
       <View style={styles.actions}>
+        {onUnprocess ? (
+          <Pressable style={styles.actionGhost} onPress={onUnprocess}>
+            <Text style={styles.actionGhostText}>{labels.processed}</Text>
+          </Pressable>
+        ) : null}
         <Pressable style={styles.actionGhost} onPress={onView}>
           <Text style={styles.actionGhostText}>{labels.view}</Text>
         </Pressable>
@@ -612,9 +656,11 @@ function FyiCard({
             <Text style={styles.actionGhostText}>{labels.markRead}</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.actionGhost} onPress={onDismiss}>
-          <Text style={styles.actionGhostText}>{labels.dismiss}</Text>
-        </Pressable>
+        {!onUnprocess ? (
+          <Pressable style={styles.actionGhost} onPress={onDismiss}>
+            <Text style={styles.actionGhostText}>{labels.dismiss}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -735,6 +781,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paper2,
     borderColor: colors.hair2,
   },
+  statusProcessed: {
+    backgroundColor: colors.paper2,
+    borderColor: colors.hair2,
+  },
   statusChipText: {
     fontFamily: fonts.mono,
     fontSize: 10,
@@ -744,6 +794,7 @@ const styles = StyleSheet.create({
   },
   statusUnreadText: { color: colors.accent },
   statusRepliedText: { color: colors.ink3 },
+  statusProcessedText: { color: colors.ink3 },
   unreadDot: {
     width: 6,
     height: 6,

@@ -95,6 +95,7 @@ class InboxMessageOut(BaseModel):
     mailbox_email: str = ""
     is_unread: bool = True
     user_replied: bool = False
+    user_decided: bool = False
     source: str = "gmail"
     reply_phone: str | None = None
 
@@ -143,6 +144,8 @@ class MessageReadOut(BaseModel):
     id: str
     is_unread: bool
     gmail_synced: bool = True
+    user_decided: bool = False
+    category: str | None = None
 
 
 class BookMessageRequest(BaseModel):

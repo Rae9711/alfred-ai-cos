@@ -89,8 +89,28 @@ def message_user_decided(message: Message) -> bool:
 
 def mark_message_user_decided(message: Message) -> None:
     headers = dict(message.headers or {})
+    if not headers.get("user_decided"):
+        if message.classification is not None:
+            headers["pre_decide_classification"] = message.classification.value
+        headers["pre_decide_action_required"] = bool(message.action_required)
     headers["user_decided"] = True
     message.headers = headers
+
+
+def clear_message_user_decided(message: Message) -> None:
+    """Restore a message the user previously marked handled."""
+    headers = dict(message.headers or {})
+    headers.pop("user_decided", None)
+    pre_cls = headers.pop("pre_decide_classification", None)
+    pre_action = headers.pop("pre_decide_action_required", None)
+    message.headers = headers
+    if pre_cls is not None:
+        try:
+            message.classification = MessageClassification(pre_cls)
+        except ValueError:
+            pass
+    if pre_action is not None:
+        message.action_required = bool(pre_action)
 
 
 def effective_inbox_category(message: Message) -> str:

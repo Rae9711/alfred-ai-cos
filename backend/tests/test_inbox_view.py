@@ -68,9 +68,11 @@ def test_effective_inbox_category_past_due_subject_before_classified() -> None:
 def test_message_user_decided_excluded_from_needs_action() -> None:
     from app.db.models import Message
     from app.services.inbox_view import (
+        clear_message_user_decided,
         effective_inbox_category,
         mark_message_user_decided,
         message_needs_attention,
+        message_user_decided,
     )
 
     m = Message(
@@ -80,6 +82,7 @@ def test_message_user_decided_excluded_from_needs_action() -> None:
         sender="a@b.com",
         recipients=[],
         classification=MessageClassification.needs_reply,
+        action_required=True,
     )
     mark_message_user_decided(m)
     category = effective_inbox_category(m)
@@ -92,6 +95,12 @@ def test_message_user_decided_excluded_from_needs_action() -> None:
         )
         is False
     )
+
+    clear_message_user_decided(m)
+    assert message_user_decided(m) is False
+    assert m.classification == MessageClassification.needs_reply
+    assert m.action_required is True
+    assert effective_inbox_category(m) == "Needs Reply"
 
 
 def test_is_gmail_unread() -> None:

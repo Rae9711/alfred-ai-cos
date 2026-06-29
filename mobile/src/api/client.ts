@@ -188,6 +188,10 @@ export const api = {
     request<MessageReadResult>(`/messages/${messageId}/decide`, {
       method: "POST",
     }),
+  markMessageUndecided: (messageId: string) =>
+    request<MessageReadResult>(`/messages/${messageId}/undecide`, {
+      method: "POST",
+    }),
   remindMessageLater: (messageId: string) =>
     request<{ task_id: string; remind_at: string; title: string }>(
       `/messages/${messageId}/remind-later`,

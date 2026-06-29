@@ -29,6 +29,7 @@ from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_view import (
+    clear_message_user_decided,
     effective_inbox_category,
     is_message_unread,
     mark_message_user_decided,
@@ -151,6 +152,7 @@ def list_inbox(
                 mailbox_email=account_by_id.get(m.connected_account_id or "", ""),
                 is_unread=is_unread,
                 user_replied=user_replied,
+                user_decided=message_user_decided(m),
                 source=m.source or "gmail",
                 reply_phone=sms_reply_phone(m),
             )
@@ -249,6 +251,31 @@ def mark_decided(
         id=message.id,
         is_unread=is_message_unread(message),
         gmail_synced=gmail_synced,
+        user_decided=True,
+        category=effective_inbox_category(message),
+    )
+
+
+@router.post("/{message_id}/undecide", response_model=MessageReadOut)
+def mark_undecided(
+    message_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageReadOut:
+    """Restore a message the user previously marked handled back to needs-action."""
+    message = db.get(Message, message_id)
+    if message is None or message.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if not message_user_decided(message):
+        raise HTTPException(status_code=400, detail="Message is not marked as handled")
+    clear_message_user_decided(message)
+    db.commit()
+    return MessageReadOut(
+        id=message.id,
+        is_unread=is_message_unread(message),
+        gmail_synced=False,
+        user_decided=False,
+        category=effective_inbox_category(message),
     )
 
 

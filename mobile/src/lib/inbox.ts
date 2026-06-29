@@ -14,6 +14,7 @@ export type AppInboxItem = {
   category: InboxMessage["category"];
   isUnread: boolean;
   userReplied: boolean;
+  userDecided: boolean;
   showReplyActions: boolean;
 };
 
@@ -68,6 +69,7 @@ function resolvedCategory(message: InboxMessage): InboxMessage["category"] {
 }
 
 function needsAttention(message: InboxMessage): boolean {
+  if (message.user_decided) return false;
   if (message.user_replied) return false;
   const category = resolvedCategory(message);
   if (category === "Processing") return false;
@@ -75,10 +77,12 @@ function needsAttention(message: InboxMessage): boolean {
 }
 
 export function isNeedsDecision(message: InboxMessage): boolean {
+  if (message.user_decided) return false;
   return resolvedCategory(message) === "Needs Decision";
 }
 
 export function showsReplyActions(message: InboxMessage): boolean {
+  if (message.user_decided) return false;
   if (message.user_replied) return false;
   return resolvedCategory(message) === "Needs Reply";
 }
@@ -113,6 +117,7 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     category,
     isUnread: message.is_unread ?? true,
     userReplied: message.user_replied ?? false,
+    userDecided: message.user_decided ?? false,
     showReplyActions: showsReplyActions(message),
   };
 }
