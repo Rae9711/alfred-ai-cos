@@ -3,7 +3,7 @@ a task via the task service, so AI-suggested tasks share the manual creation pat
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -16,6 +16,20 @@ from app.capabilities.base import (
 from app.db.enums import ActionType, RiskLevel, SourceType
 from app.db.models import User
 from app.services import tasks as task_service
+
+
+def _parse_remind_at(raw: object) -> datetime | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise CapabilityError("remind_at must be an ISO datetime string")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise CapabilityError(f"remind_at is not a valid datetime: {raw}") from exc
+    if dt.tzinfo is None:
+        raise CapabilityError("remind_at must include a timezone offset")
+    return dt
 
 
 class CreateTaskCapability:
@@ -45,6 +59,7 @@ class CreateTaskCapability:
             title=str(payload["title"]),
             description=payload.get("description"),
             due_date=due_date,
+            remind_at=_parse_remind_at(payload.get("remind_at")),
             source_type=source_type,
             source_id=payload.get("source_id"),
             confidence=payload.get("confidence"),
@@ -52,4 +67,6 @@ class CreateTaskCapability:
         detail = f"Created task: {task.title}"
         if task.due_date:
             detail += f" (due {task.due_date.isoformat()})"
+        if task.remind_at:
+            detail += f" (reminder {task.remind_at.isoformat()})"
         return ExecutionResult(detail=detail, reversible=True)

@@ -16,8 +16,6 @@ from app.services import (
     briefing,
     calendar,
     notifications,
-    outbound_tracking,
-    snooze,
 )
 from app.services.connected_accounts import list_user_ids_with_google
 from app.services.mail_sync import (
@@ -150,18 +148,9 @@ def scan_notifications() -> dict[str, int]:
         users = list(db.scalars(select(User)))
         now_dt = datetime.now(UTC)
         now_t = now_dt.time()
-        today = now_dt.date()
         for user in users:
-            enqueued += notifications.scan_for_risks(db, user.id, today=today)
-            enqueued += notifications.scan_pending_approvals(db, user.id, now=now_dt)
             enqueued += notifications.scan_upcoming_meetings(db, user.id, now=now_dt)
-            enqueued += notifications.scan_waiting_aging(db, user.id, now=now_dt)
-            enqueued += notifications.scan_schedule_conflicts(db, user.id, now=now_dt)
-            enqueued += outbound_tracking.scan_silent_threads(db, user, now=now_dt)
-            # Re-open snoozed commitments whose wake condition has fired BEFORE
-            # we run the priority scanner so newly-awake items can be re-ranked.
-            snooze.scan_wakes(db, user.id, today=today)
-            enqueued += notifications.scan_top_priorities(db, user, today=today)
+            enqueued += notifications.scan_task_reminders(db, user.id, now=now_dt)
             result = notifications.dispatch_pending(db, user, now=now_t, provider=notifier)
             sent += result["sent"]
             held += result["held"]

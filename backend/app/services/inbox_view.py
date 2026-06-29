@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import MessageClassification
 from app.db.models import Message, OutboundReply
 from app.services.classification_adjust import (
+    apply_action_subject_classification,
     subject_implies_action_required,
     upgrade_human_misclassified_as_fyi,
 )
@@ -113,7 +114,23 @@ def effective_inbox_category(message: Message) -> str:
         snippet=message.snippet,
         body=message.body_summary,
     )
-    return CATEGORY_LABEL.get(stored, "FYI")
+    stored = apply_action_subject_classification(
+        stored,
+        action_required=message.action_required,
+        subject=message.subject,
+        snippet=message.snippet,
+        body=message.body_summary,
+    )
+    category = CATEGORY_LABEL.get(stored, "FYI")
+    if category in ("FYI", "Waiting") and (
+        message.action_required
+        or subject_implies_action_required(
+            subject=message.subject,
+            snippet=message.snippet,
+        )
+    ):
+        return "Needs Reply"
+    return category
 
 
 def message_needs_attention(

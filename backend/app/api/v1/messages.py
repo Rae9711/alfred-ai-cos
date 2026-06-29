@@ -4,6 +4,8 @@ categories and filtering spam/noise (surfaced only as a count)."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.enums import MessageClassification
+from app.db.enums import MessageClassification, SourceType
 from app.db.models import Message, User
 from app.schemas.api import (
     BookMessageRequest,
@@ -20,7 +22,9 @@ from app.schemas.api import (
     InboxOut,
     MessageDetailOut,
     MessageReadOut,
+    MessageRemindLaterOut,
 )
+from app.services import tasks as task_service
 from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
@@ -270,4 +274,34 @@ def book_from_message(
     outcome = interpret_and_book(db, user, text=text, tz=tz)
     return BookMessageResponse(
         booked=outcome.action == "booked", reply=outcome.reply, detail=outcome.detail
+    )
+
+
+@router.post("/{message_id}/remind-later", response_model=MessageRemindLaterOut)
+def remind_later(
+    message_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageRemindLaterOut:
+    """Snooze an inbox item: create a 30-minute reminder without removing it from needs-action."""
+    message = db.get(Message, message_id)
+    if message is None or message.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    remind_at = datetime.now(UTC) + timedelta(minutes=30)
+    subject = message.subject or message.snippet or "Inbox item"
+    sender = (message.sender or "").split("<")[0].strip() or "contact"
+    title = f"Reply to {sender}: {subject[:60]}"
+    source = SourceType.sms if message.source == "sms" else SourceType.gmail
+    task = task_service.create_task(
+        db,
+        user.id,
+        title=title,
+        remind_at=remind_at,
+        source_type=source,
+        source_id=message.id,
+    )
+    return MessageRemindLaterOut(
+        task_id=task.id,
+        remind_at=remind_at,
+        title=task.title,
     )

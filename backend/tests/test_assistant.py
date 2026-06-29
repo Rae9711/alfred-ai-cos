@@ -110,3 +110,23 @@ def test_create_task_from_reminder(
     task = db.query(Task).filter(Task.user_id == user.id).one()
     assert task.title == "Pay rent"
     assert task.due_date == due
+    assert task.remind_at is not None
+
+
+def test_create_task_fallback_when_llm_misses_intent(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="none",
+            reply="好的，明天我会提醒你交房租。",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    out = interpret_and_act(
+        db, user, text="明天提醒我交房租", tz="America/New_York"
+    )
+    assert out.action == "created"
+    task = db.query(Task).filter(Task.user_id == user.id).one()
+    assert "房租" in task.title
+    assert task.due_date == date.today() + timedelta(days=1)

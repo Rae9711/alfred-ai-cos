@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { type Me, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type Task, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -38,6 +38,24 @@ import {
 import { greetingForLocale } from "@/i18n/locales";
 import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+
+function formatReminderWhen(task: Task): string {
+  if (task.remind_at) {
+    return new Date(task.remind_at).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  if (task.due_date) {
+    return new Date(`${task.due_date}T12:00:00`).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  }
+  return "—";
+}
 
 function formatMeetingTime(iso: string | null): string {
   if (!iso) return "—";
@@ -63,6 +81,7 @@ export function HomeScreen() {
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
   const [todayData, setTodayData] = useState<TodayDashboard | null>(null);
+  const [reminders, setReminders] = useState<Task[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -79,7 +98,7 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming, today] = await Promise.all([
+      const [profile, pending, upcoming, today, upcomingReminders] = await Promise.all([
         api.getMe().catch(() => null),
         api.listPendingActions(),
         api.listUpcomingMeetings(
@@ -90,11 +109,13 @@ export function HomeScreen() {
               : { month: true },
         ),
         view === "day" ? api.getToday().catch(() => null) : Promise.resolve(null),
+        view === "day" ? api.listTasks({ upcoming: true }).catch(() => [] as Task[]) : Promise.resolve([] as Task[]),
       ]);
       setMe(profile);
       setPendingCount(pending.length);
       setMeetings(upcoming);
       setTodayData(today);
+      setReminders(upcomingReminders);
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.home.askFailed);
       setMeetings([]);
@@ -214,6 +235,10 @@ export function HomeScreen() {
           await api.sync({ calendarOnly: true }).catch(() => undefined);
           await load(scheduleView);
         }
+        if (res.action === "created") {
+          const upcoming = await api.listTasks({ upcoming: true }).catch(() => [] as Task[]);
+          setReminders(upcoming);
+        }
       } catch (e) {
         showToast(e instanceof Error ? e.message : t.home.askFailed);
       } finally {
@@ -312,6 +337,23 @@ export function HomeScreen() {
                 onPress={onButlerPress}
                 style={styles.proactiveBtn}
               />
+            ) : null}
+            {reminders.length > 0 ? (
+              <View style={styles.remindersBlock}>
+                <Text style={styles.remindersLabel}>{t.home.upcomingReminders}</Text>
+                {reminders.slice(0, 5).map((task) => (
+                  <View key={task.id} style={styles.reminderRow}>
+                    <Text style={styles.reminderTitle} numberOfLines={1}>
+                      {task.title}
+                    </Text>
+                    <Text style={styles.reminderWhen}>
+                      {task.remind_at
+                        ? t.home.reminderAt(formatReminderWhen(task))
+                        : t.home.reminderDue(formatReminderWhen(task))}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             ) : null}
           </View>
         </View>
@@ -441,6 +483,22 @@ const styles = StyleSheet.create({
   },
   proactiveText: { color: colors.ink2, lineHeight: 24 },
   proactiveBtn: { alignSelf: "flex-start" },
+  remindersBlock: { gap: 8, marginTop: 4 },
+  remindersLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  reminderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  reminderTitle: { flex: 1, fontSize: 14, color: colors.ink2 },
+  reminderWhen: { fontSize: 12, color: colors.ink4 },
   approvalsBanner: {
     flexDirection: "row",
     alignItems: "center",

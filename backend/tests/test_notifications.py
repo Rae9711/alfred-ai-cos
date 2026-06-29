@@ -180,12 +180,20 @@ def test_enqueue_dedup_returns_none(db: Session, user: User) -> None:
 # --- dispatch end to end with a fake provider + a registered device ---
 
 
-def test_dispatch_sends_high_and_holds_low(db: Session, user: User) -> None:
+def test_dispatch_sends_calendar_and_suppresses_other_types(db: Session, user: User) -> None:
     from app.db.models import Device, Notification
     from tests.fakes import FakeNotifier
 
     db.add(Device(user_id=user.id, push_token="ExpoTok", platform="ios"))
-    user.preferences = {"proactiveness": "quiet"}  # only high importance sends
+    user.preferences = {"proactiveness": "balanced"}
+    db.add(
+        Notification(
+            user_id=user.id,
+            type=NotificationType.reminder,
+            title="Pay rent",
+            body="Due tomorrow",
+        )
+    )
     db.add(
         Notification(
             user_id=user.id,
@@ -206,9 +214,9 @@ def test_dispatch_sends_high_and_holds_low(db: Session, user: User) -> None:
 
     notifier = FakeNotifier()
     result = n.dispatch_pending(db, user, now=time(12, 0), provider=notifier)
-    assert result == {"sent": 1, "held": 1}
+    assert result == {"sent": 1, "held": 2}
     assert len(notifier.sent) == 1
-    assert notifier.sent[0]["title"] == "urgent"
+    assert notifier.sent[0]["title"] == "Pay rent"
 
 
 # --- approval push: only fires once the grace window has passed ---

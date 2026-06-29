@@ -89,8 +89,8 @@ def notify_new_mail(
     )
     if created is None:
         return False
-    result = notifications.dispatch_pending(db, user, now=now_dt.time(), provider=provider)
-    return result["sent"] > 0
+    # New-mail notifications are in-app only; do not push to mobile.
+    return False
 
 
 def sync_user_and_notify(

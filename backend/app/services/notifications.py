@@ -30,7 +30,17 @@ from app.db.models import (
     User,
 )
 
-# A proposal must sit pending for at least this long before we push for it. Filters out
+# Notification types that may reach the user's device. Everything else is
+# still enqueued for in-app history but never pushed (user preference: calendar + reminders only).
+_PUSH_ALLOWED: frozenset[NotificationType] = frozenset(
+    {
+        NotificationType.meeting_prep,
+        NotificationType.reminder,
+    }
+)
+
+# How far ahead of remind_at we enqueue the push (beat runs every 30 min).
+REMINDER_LEAD = timedelta(minutes=35)
 # the synchronous propose-then-approve flows (Ask screen booking, Today Act send) where
 # the user is already looking and a push would be noise.
 PENDING_APPROVAL_GRACE = timedelta(minutes=2)
@@ -280,6 +290,10 @@ def dispatch_pending(
     targets = devices_for(db, user.id)
     sent = held = 0
     for n in pending:
+        if n.type not in _PUSH_ALLOWED:
+            n.status = NotificationStatus.suppressed
+            held += 1
+            continue
         decision = decide_delivery(
             ntype=n.type,
             now=now,
@@ -301,6 +315,47 @@ def dispatch_pending(
         sent += 1
     db.commit()
     return {"sent": sent, "held": held}
+
+
+def scan_task_reminders(db: Session, user_id: str, *, now: datetime) -> int:
+    """Enqueue reminder notifications for tasks whose remind_at is approaching."""
+    from app.db.enums import TaskStatus
+    from app.db.models import Task
+
+    horizon = now + REMINDER_LEAD
+    tasks = list(
+        db.scalars(
+            select(Task).where(
+                Task.user_id == user_id,
+                Task.status == TaskStatus.open,
+                Task.remind_at.is_not(None),
+                Task.remind_at >= now,
+                Task.remind_at <= horizon,
+            )
+        )
+    )
+    enqueued = 0
+    for task in tasks:
+        assert task.remind_at is not None
+        at = task.remind_at if task.remind_at.tzinfo else task.remind_at.replace(tzinfo=UTC)
+        minutes = max(1, int((at - now).total_seconds() // 60))
+        body = (
+            f"In {minutes} min"
+            if minutes < 60
+            else (f"Due {task.due_date}" if task.due_date else "Reminder")
+        )
+        created = enqueue(
+            db,
+            user_id,
+            ntype=NotificationType.reminder,
+            title=task.title[:80],
+            body=body[:160],
+            payload={"task_id": task.id, "deep_link": "/today"},
+            dedup_key=f"reminder:{task.id}:{at.date().isoformat()}",
+        )
+        if created is not None:
+            enqueued += 1
+    return enqueued
 
 
 def scan_for_risks(db: Session, user_id: str, *, today: date_type) -> int:

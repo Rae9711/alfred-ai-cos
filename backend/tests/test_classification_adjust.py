@@ -1,12 +1,14 @@
 """Verification / OTP / security alerts classify as FYI, not Needs Reply."""
 
 from app.services.classification_adjust import (
+    apply_action_subject_classification,
     automated_fyi_override,
     looks_like_automated_fyi,
     looks_like_security_fyi,
     looks_like_verification_code,
     subject_implies_action_required,
 )
+from app.db.enums import MessageClassification
 
 
 def test_verification_subject_matches() -> None:
@@ -41,6 +43,17 @@ def test_human_reply_does_not_match() -> None:
 def test_past_due_subject_implies_action() -> None:
     assert subject_implies_action_required(
         subject="Action needed, your balance is now past due",
+    )
+
+
+def test_action_needed_upgrades_informational() -> None:
+    assert (
+        apply_action_subject_classification(
+            MessageClassification.informational,
+            action_required=False,
+            subject="Action needed: update your payment method",
+        )
+        == MessageClassification.needs_reply
     )
 
 

@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -18,6 +18,7 @@ class Task(Base):
     title: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     due_date: Mapped[date | None] = mapped_column(Date)
+    remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     priority: Mapped[Priority] = mapped_column(String(16), default=Priority.medium)
     status: Mapped[TaskStatus] = mapped_column(String(16), default=TaskStatus.open)
 

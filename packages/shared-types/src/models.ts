@@ -92,6 +92,7 @@ export interface Task {
   title: string;
   description: string | null;
   due_date: string | null;
+  remind_at: string | null;
   priority: Priority;
   status: TaskStatus;
   source_type: SourceType;

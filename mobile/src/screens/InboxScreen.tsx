@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { api } from "@/api/client";
 import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
@@ -59,7 +60,6 @@ export function InboxScreen() {
   } = useMailbox();
   useSmsShareTip(items);
   const [filter, setFilter] = useState("needs_action");
-  const [deferred, setDeferred] = useState<Set<string>>(new Set());
 
   const mailboxTabs = useMemo(
     () => [
@@ -76,10 +76,7 @@ export function InboxScreen() {
     ],
   );
 
-  const live = useMemo(
-    () => items.filter((m) => !deferred.has(m.id)),
-    [items, deferred],
-  );
+  const live = items;
 
   const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
@@ -94,10 +91,18 @@ export function InboxScreen() {
     void setInboxFilter(id);
   };
 
-  const defer = (id: string) => {
+  const snoozeReminder = (id: string) => {
     ease();
-    setDeferred((s) => new Set(s).add(id));
-    void markRead(id).catch(() => undefined);
+    void (async () => {
+      try {
+        await api.remindMessageLater(id);
+        showToast(t.inbox.laterDone);
+      } catch (e) {
+        showToast(
+          e instanceof Error ? e.message : t.inbox.laterFailed,
+        );
+      }
+    })();
   };
 
   const markAsRead = (id: string) => {
@@ -260,16 +265,14 @@ export function InboxScreen() {
                   ? mailboxTabLabel(m.mailboxEmail)
                   : null
               }
-              onReply={() => openMessage(m.id, "reply")}
-              onLater={() => defer(m.id)}
-              onDelegate={() => openMessage(m.id, "delegate")}
+              onHandToAlfredReply={() => openMessage(m.id, "delegate")}
+              onLater={() => snoozeReminder(m.id)}
               onProcessed={() => markAsProcessed(m.id)}
               onMarkRead={() => markAsRead(m.id)}
-              onOpen={() => openMessage(m.id, "reply")}
+              onOpen={() => openMessage(m.id, "delegate")}
               labels={{
-                reply: t.inbox.reply,
+                handToAlfredReply: t.inbox.handToAlfredReply,
                 later: t.inbox.later,
-                delegate: t.inbox.handToAlfred,
                 processed: t.inbox.markProcessed,
                 markRead: t.inbox.markReadAction,
                 read: t.inbox.readLabel,
@@ -294,7 +297,7 @@ export function InboxScreen() {
                   : null
               }
               onDecided={() => markAsDecided(m.id)}
-              onLater={() => defer(m.id)}
+              onLater={() => snoozeReminder(m.id)}
               onOpen={() => openMessage(m.id, "reply")}
               labels={{
                 decided: t.inbox.markDecided,
@@ -320,7 +323,7 @@ export function InboxScreen() {
                   ? mailboxTabLabel(m.mailboxEmail)
                   : null
               }
-              onDismiss={() => defer(m.id)}
+              onDismiss={() => markAsRead(m.id)}
               onMarkRead={() => markAsRead(m.id)}
               onView={() => openMessage(m.id, "reply")}
               labels={{
@@ -415,9 +418,8 @@ function ReadStatus({
 function InboxCard({
   item,
   mailboxLabel,
-  onReply,
+  onHandToAlfredReply,
   onLater,
-  onDelegate,
   onProcessed,
   onMarkRead,
   onOpen,
@@ -425,16 +427,14 @@ function InboxCard({
 }: {
   item: AppInboxItem;
   mailboxLabel: string | null;
-  onReply: () => void;
+  onHandToAlfredReply: () => void;
   onLater: () => void;
-  onDelegate: () => void;
   onProcessed: () => void;
   onMarkRead: () => void;
   onOpen: () => void;
   labels: {
-    reply: string;
+    handToAlfredReply: string;
     later: string;
-    delegate: string;
     processed: string;
     markRead: string;
     read: string;
@@ -474,15 +474,16 @@ function InboxCard({
         <View style={styles.actions}>
           {item.showReplyActions ? (
             <>
-              <Btn label={labels.reply} onPress={onReply} style={styles.actionPrimary} />
+              <Btn
+                label={labels.handToAlfredReply}
+                onPress={onHandToAlfredReply}
+                style={styles.actionPrimary}
+              />
               <Pressable style={styles.actionGhost} onPress={onProcessed}>
                 <Text style={styles.actionGhostText}>{labels.processed}</Text>
               </Pressable>
               <Pressable style={styles.actionGhost} onPress={onLater}>
                 <Text style={styles.actionGhostText}>{labels.later}</Text>
-              </Pressable>
-              <Pressable style={styles.actionGhost} onPress={onDelegate}>
-                <Text style={styles.actionGhostText}>{labels.delegate}</Text>
               </Pressable>
             </>
           ) : null}

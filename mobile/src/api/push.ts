@@ -7,12 +7,16 @@ import * as Notifications from "expo-notifications";
 import { api } from "@/api/client";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    const type = (notification.request.content.data as { type?: string })?.type;
+    const allowed = type === "meeting_prep" || type === "reminder";
+    return {
+      shouldShowBanner: allowed,
+      shouldShowList: allowed,
+      shouldPlaySound: false,
+      shouldSetBadge: allowed,
+    };
+  },
 });
 
 export async function registerForPush(): Promise<boolean> {

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -116,6 +116,80 @@ def _format_due_date(d: date, tz: str) -> str:
     return local.strftime("%a %b %-d")
 
 
+_REMINDER_FALLBACK_RE = re.compile(
+    r"(?:"
+    r"remind(?:\s+me|\s+us)?(?:\s+(?:on|at|by|before))?\s+"
+    r"(?P<when>today|tomorrow|tonight|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}-\d{2}-\d{2})"
+    r"(?:\s+to|\s+about|\s+that)?\s+(?P<title>.+)|"
+    r"(?:明天|后天|今日|今天).{0,6}提醒(?:我|一下)?(?P<zh_title>.+)|"
+    r"提醒(?:我|一下)?(?:明天|后天|今天|今日)(?P<zh_title2>.+)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _parse_reminder_when(when: str, *, now: datetime) -> date:
+    lower = when.lower().strip()
+    today = now.date()
+    if lower in {"today", "tonight", "今天", "今日"}:
+        return today
+    if lower == "tomorrow" or lower == "明天":
+        return today + timedelta(days=1)
+    if lower == "后天":
+        return today + timedelta(days=2)
+    if lower == "next week":
+        return today + timedelta(days=7)
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    if lower in weekdays:
+        target = weekdays[lower]
+        days_ahead = (target - today.weekday()) % 7
+        if days_ahead == 0:
+            days_ahead = 7
+        return today + timedelta(days=days_ahead)
+    return date.fromisoformat(lower)
+
+
+def _fallback_reminder_from_text(text: str, *, now: datetime) -> tuple[str, date] | None:
+    """Deterministic reminder parse when the LLM misses create_task intent."""
+    stripped = text.strip()
+    if not stripped:
+        return None
+    m = _REMINDER_FALLBACK_RE.search(stripped)
+    if m:
+        title = (m.group("title") or m.group("zh_title") or m.group("zh_title2") or "").strip()
+        when = m.group("when") or "tomorrow"
+        if title:
+            try:
+                due = _parse_reminder_when(when, now=now)
+            except ValueError:
+                due = now.date() + timedelta(days=1)
+            return (title.rstrip("。．.!"), due)
+    if "提醒" in stripped and ("明天" in stripped or "后天" in stripped or "今天" in stripped):
+        due = now.date() + timedelta(days=1 if "明天" in stripped else 0 if "今天" in stripped else 2)
+        title = re.sub(r"^.*提醒(?:我|一下)?", "", stripped)
+        title = re.sub(r"^(明天|后天|今天|今日)", "", title).strip(" ：:，,")
+        if title:
+            return (title.rstrip("。．.!"), due)
+    return None
+
+
+def _default_remind_at(due: date, tz: str) -> datetime:
+    """Morning-of reminder in the user's timezone."""
+    try:
+        local = datetime(due.year, due.month, due.day, 9, 0, tzinfo=ZoneInfo(tz))
+    except (ZoneInfoNotFoundError, ValueError):
+        local = datetime(due.year, due.month, due.day, 9, 0, tzinfo=UTC)
+    return local.astimezone(UTC)
+
+
 @dataclass
 class AssistantOutcome:
     action: str  # booked | updated | cancelled | created | none
@@ -190,6 +264,8 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         }
         if interp.due_date:
             target["due_date"] = interp.due_date.isoformat()
+            remind = _default_remind_at(interp.due_date, tz)
+            target["remind_at"] = remind.isoformat()
         proposal = propose_action_internal(
             db,
             user,
@@ -204,6 +280,27 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         return AssistantOutcome(
             action="created", reply=reply, detail=result.detail
         )
+
+    if _text_requests_action(text):
+        fallback = _fallback_reminder_from_text(text, now=now)
+        if fallback is not None:
+            title, due = fallback
+            target = {
+                "title": title,
+                "source_type": SourceType.manual.value,
+                "due_date": due.isoformat(),
+                "remind_at": _default_remind_at(due, tz).isoformat(),
+            }
+            proposal = propose_action_internal(
+                db,
+                user,
+                action_type=ActionType.create_task,
+                target=target,
+                reason="Reminder from an assistant request",
+            )
+            result = execution.execute_proposal(db, user, proposal)
+            reply = f"Got it — I'll remind you {_format_due_date(due, tz)}: {title}."
+            return AssistantOutcome(action="created", reply=reply, detail=result.detail)
 
     reply = (interp.reply or "").strip()
     if not reply:

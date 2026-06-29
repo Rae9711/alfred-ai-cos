@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -27,6 +27,7 @@ def create(
         title=payload.title,
         description=payload.description,
         due_date=payload.due_date,
+        remind_at=payload.remind_at,
         priority=payload.priority,
     )
 
@@ -34,9 +35,12 @@ def create(
 @router.get("", response_model=list[TaskOut])
 def list_all(
     status: TaskStatus | None = None,
+    upcoming: bool = Query(default=False),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Task]:
+    if upcoming:
+        return task_service.list_upcoming_reminders(db, user.id)
     return task_service.list_tasks(db, user.id, status=status)
 
 

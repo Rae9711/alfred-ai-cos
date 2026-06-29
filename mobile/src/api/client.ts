@@ -187,6 +187,11 @@ export const api = {
     request<MessageReadResult>(`/messages/${messageId}/decide`, {
       method: "POST",
     }),
+  remindMessageLater: (messageId: string) =>
+    request<{ task_id: string; remind_at: string; title: string }>(
+      `/messages/${messageId}/remind-later`,
+      { method: "POST" },
+    ),
   // "Add to calendar" on a message — books it if it describes a timed event.
   bookFromMessage: (messageId: string, timezone: string) =>
     request<BookMessageResponse>(`/messages/${messageId}/book`, {
@@ -305,7 +310,15 @@ export const api = {
     }),
   createTask: (body: TaskCreateRequest) =>
     request<Task>("/tasks", { method: "POST", body: JSON.stringify(body) }),
-  listTasks: () => request<Task[]>("/tasks"),
+  listTasks: (opts?: { upcoming?: boolean }) => {
+    const q = opts?.upcoming ? "?upcoming=true" : "";
+    return request<Task[]>(`/tasks${q}`);
+  },
+  schedulePlanningBlock: (body: { title: string; start: string; end: string }) =>
+    request<{ booked: boolean; reply: string; event_id?: string | null }>(
+      "/today/schedule-block",
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   updateTaskStatus: (id: string, status: TaskStatus) =>
     request<Task>(`/tasks/${id}/status?status=${status}`, { method: "POST" }),
   captureText: (text: string) =>

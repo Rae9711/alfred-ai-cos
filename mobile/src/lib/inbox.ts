@@ -58,6 +58,12 @@ function resolvedCategory(message: InboxMessage): InboxMessage["category"] {
       return "Needs Reply";
     }
   }
+  if (
+    (message.category === "FYI" || message.category === "Waiting") &&
+    (message.action_required || subjectImpliesActionRequired(message))
+  ) {
+    return "Needs Reply";
+  }
   return message.category;
 }
 

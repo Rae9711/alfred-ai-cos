@@ -73,17 +73,21 @@ function TabsChrome({
   }, [tab, setPlacement]);
 
   useEffect(() => {
-    const openInbox = (data: unknown) => {
+    const openFromPush = (data: unknown) => {
       const payload = data as { type?: string; deep_link?: string };
+      if (payload?.type === "reminder" || payload?.type === "meeting_prep") {
+        setTab("today");
+        return;
+      }
       if (payload?.type === "new_mail" || payload?.deep_link === "/inbox") {
         setTab("inbox");
       }
     };
     void Notifications.getLastNotificationResponseAsync().then((r) => {
-      if (r) openInbox(r.notification.request.content.data);
+      if (r) openFromPush(r.notification.request.content.data);
     });
     const sub = Notifications.addNotificationResponseReceivedListener((r) =>
-      openInbox(r.notification.request.content.data),
+      openFromPush(r.notification.request.content.data),
     );
     return () => sub.remove();
   }, [setTab]);

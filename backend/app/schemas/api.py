@@ -156,6 +156,26 @@ class BookMessageResponse(BaseModel):
     detail: str | None = None
 
 
+class MessageRemindLaterOut(BaseModel):
+    task_id: str
+    remind_at: datetime
+    title: str
+
+
+class ScheduleBlockRequest(BaseModel):
+    title: str
+    start: str  # ISO 8601 with timezone
+    end: str
+    timezone: str | None = None
+
+
+class ScheduleBlockResponse(BaseModel):
+    booked: bool
+    reply: str
+    detail: str | None = None
+    event_id: str | None = None
+
+
 class AssistantAskRequest(BaseModel):
     text: str
     # The device's IANA timezone (e.g. "Europe/Paris"). Sent so "5pm" resolves to the
@@ -287,6 +307,7 @@ class TaskCreateRequest(BaseModel):
     title: str
     description: str | None = None
     due_date: date | None = None
+    remind_at: datetime | None = None
     priority: Priority = Priority.medium
 
 
@@ -295,6 +316,7 @@ class TaskOut(BaseModel):
     title: str
     description: str | None
     due_date: date | None
+    remind_at: datetime | None
     priority: Priority
     status: TaskStatus
     source_type: SourceType

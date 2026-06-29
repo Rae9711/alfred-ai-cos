@@ -74,9 +74,10 @@ def subject_implies_action_required(
     *,
     subject: str | None,
     snippet: str | None = None,
+    body: str | None = None,
 ) -> bool:
     """True when subject/snippet clearly signals the user must act."""
-    text = _message_text(subject=subject, snippet=snippet)
+    text = _message_text(subject=subject, snippet=snippet, body=body)
     return bool(text and _ACTION_SUBJECT_RE.search(text))
 
 
@@ -150,6 +151,27 @@ def automated_fyi_override(
             reason="Security notification; review only if you did not take this action.",
         )
     return None
+
+
+def apply_action_subject_classification(
+    classification: MessageClassification,
+    *,
+    action_required: bool,
+    subject: str | None,
+    snippet: str | None = None,
+    body: str | None = None,
+) -> MessageClassification:
+    """Action-needed subjects must never stay informational/FYI."""
+    if classification in (
+        MessageClassification.informational,
+        MessageClassification.low_priority,
+        MessageClassification.waiting_for_response,
+    ):
+        if action_required or subject_implies_action_required(
+            subject=subject, snippet=snippet, body=body
+        ):
+            return MessageClassification.needs_reply
+    return classification
 
 
 def upgrade_human_misclassified_as_fyi(

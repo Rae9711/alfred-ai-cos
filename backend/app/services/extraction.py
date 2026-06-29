@@ -19,7 +19,9 @@ from app.llm import get_llm
 from app.schemas.llm import ClassificationResult
 from app.services import gmail
 from app.services.classification_adjust import (
+    apply_action_subject_classification,
     automated_fyi_override,
+    subject_implies_action_required,
     upgrade_human_misclassified_as_fyi,
 )
 from app.services.connected_accounts import get_google_account_for_message
@@ -175,7 +177,14 @@ def process_message(
         thread_body = f"{thread_summary}\n\nLatest message:\n{body}"
 
     override = automated_fyi_override(subject=message.subject, snippet=message.snippet, body=body)
-    if override is not None:
+    if override is not None and not (
+        message.action_required
+        or subject_implies_action_required(
+            subject=message.subject,
+            snippet=message.snippet,
+            body=body,
+        )
+    ):
         message.classification = override.classification
         message.priority = override.priority
         message.action_required = override.action_required
@@ -194,6 +203,13 @@ def process_message(
         classification=classification.classification,
         action_required=classification.action_required,
         sender_classification=message.sender_classification,
+        subject=message.subject,
+        snippet=message.snippet,
+        body=body,
+    )
+    adjusted = apply_action_subject_classification(
+        adjusted,
+        action_required=classification.action_required or message.action_required,
         subject=message.subject,
         snippet=message.snippet,
         body=body,

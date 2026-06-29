@@ -121,6 +121,24 @@ describe("mapInboxMessage", () => {
     expect(item.showReplyActions).toBe(true);
   });
 
+  it("upgrades FYI when subject implies action", () => {
+    const item = mapInboxMessage({
+      id: "6b",
+      sender: "billing@stripe.com",
+      subject: "Action needed: payment failed",
+      snippet: "Update your card",
+      take: null,
+      category: "FYI",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: false,
+      is_unread: true,
+      user_replied: false,
+    });
+    expect(item.section).toBe("reply");
+    expect(item.category).toBe("Needs Reply");
+  });
+
   it("tags SMS and preserves unknown sender label", () => {
     const item = mapInboxMessage({
       id: "sms-1",
