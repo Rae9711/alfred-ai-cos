@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -26,6 +26,13 @@ CATEGORY_LABEL = {
 }
 
 _ACTION_CATEGORIES = frozenset({"Needs Reply", "Needs Decision"})
+NEEDS_ACTION_WINDOW_DAYS = 14
+
+
+def needs_action_cutoff_utc(*, now: datetime | None = None) -> datetime:
+    """Oldest sent_at included in the needs-action inbox tab."""
+    anchor = now or datetime.now(UTC)
+    return anchor - timedelta(days=NEEDS_ACTION_WINDOW_DAYS)
 
 
 def start_of_today_utc(timezone: str | None) -> datetime:
@@ -88,17 +95,9 @@ def effective_inbox_category(message: Message) -> str:
 def message_needs_attention(
     *,
     category: str,
-    action_required: bool,
-    is_unread: bool,
     user_replied: bool,
 ) -> bool:
-    """True when the message belongs in the Reply section (unread + needs action)."""
-    if not is_unread or user_replied:
+    """True when the message belongs in the needs-action tab."""
+    if user_replied or category == "Processing":
         return False
-    if category in _ACTION_CATEGORIES:
-        return True
-    if action_required and category not in ("Waiting", "FYI", "Processing"):
-        return True
-    if category == "Waiting":
-        return True
-    return False
+    return category in _ACTION_CATEGORIES

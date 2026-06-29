@@ -19,8 +19,12 @@ from app.services import (
     snooze,
 )
 from app.services.connected_accounts import list_user_ids_with_google
-from app.services import calendar, extraction, ingestion
-from app.services.mail_sync import run_mail_sync, sync_user_and_notify
+from app.services import calendar
+from app.services.mail_sync import (
+    classify_pending_messages_sync,
+    run_mail_sync,
+    sync_user_and_notify,
+)
 from app.workers.celery_app import celery_app
 
 
@@ -28,15 +32,10 @@ from app.workers.celery_app import celery_app
 def classify_pending_messages(user_id: str, *, limit: int = 30) -> int:
     """Classify messages ingested by the fast sync path."""
     db = SessionLocal()
-    processed = 0
     try:
-        pending = ingestion.messages_pending_extraction(db, user_id)[:limit]
-        for message in pending:
-            extraction.process_message(db, message)
-            processed += 1
+        return classify_pending_messages_sync(db, user_id, limit=limit)
     finally:
         db.close()
-    return processed
 
 
 @celery_app.task(name="albert.sync_user")  # type: ignore[untyped-decorator]

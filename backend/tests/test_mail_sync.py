@@ -9,7 +9,12 @@ from app.db.enums import MessageClassification, NotificationType
 from app.db.models import Device, Message, User
 from app.services.ingestion import SyncIngestResult
 from app.services import mail_sync
-from app.services.mail_sync import notify_new_mail, sync_user_and_notify
+from app.services.mail_sync import (
+    classify_pending_messages_sync,
+    notify_new_mail,
+    run_mail_sync,
+    sync_user_and_notify,
+)
 
 
 class _StubNotifier:
@@ -64,3 +69,73 @@ def test_sync_user_and_notify_skips_initial_backfill(db: Session, user: User, mo
     stats = sync_user_and_notify(db, user, provider=notifier, notify=True)
     assert stats["pushed"] == 0
     assert notifier.sent == []
+
+
+def test_ingest_only_classifies_pending_messages(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pending = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="pending-1",
+        sender="friend@example.com",
+        recipients=[],
+        subject="Please reply",
+        snippet="Need your answer",
+        classification=None,
+        sender_classification="person",
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+    )
+    db.add(pending)
+    db.commit()
+
+    monkeypatch.setattr(
+        mail_sync.ingestion,
+        "sync_messages",
+        lambda _db, _uid, incremental=True: SyncIngestResult(new_messages=[], initial_backfill=False),
+    )
+    monkeypatch.setattr(
+        mail_sync.extraction,
+        "process_message",
+        lambda _db, message, body=None: (
+            setattr(message, "classification", MessageClassification.needs_reply) or []
+        ),
+    )
+
+    result, processed, commitments = run_mail_sync(db, user.id, ingest_only=True)
+    assert result.new_messages == []
+    assert processed == 1
+    assert commitments == 0
+    assert pending.classification == MessageClassification.needs_reply
+
+
+def test_classify_pending_messages_sync_respects_limit(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for i in range(3):
+        db.add(
+            Message(
+                user_id=user.id,
+                source="gmail",
+                external_id=f"pending-{i}",
+                sender="friend@example.com",
+                recipients=[],
+                subject=f"Mail {i}",
+                classification=None,
+                sender_classification="person",
+                gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+            )
+        )
+    db.commit()
+
+    calls: list[str] = []
+
+    def track(_db, message, body=None):
+        calls.append(message.external_id)
+        message.classification = MessageClassification.needs_reply
+        return []
+
+    monkeypatch.setattr(mail_sync.extraction, "process_message", track)
+    processed = classify_pending_messages_sync(db, user.id, limit=2)
+    assert processed == 2
+    assert len(calls) == 2

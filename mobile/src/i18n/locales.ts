@@ -76,7 +76,7 @@ export const translations = {
         sms: "SMS",
         email: "Email",
       },
-      needsActionEmpty: "Nothing needs your attention right now.",
+      needsActionEmpty: "No Needs Reply or Needs Decision mail in the last 14 days.",
       needsActionEmptySub: "Pull down to sync for new messages.",
       smsEmpty: "No texts here yet.",
       smsEmptySub:
@@ -280,7 +280,7 @@ export const translations = {
         sms: "短信",
         email: "邮箱",
       },
-      needsActionEmpty: "目前没有需要您处理的消息。",
+      needsActionEmpty: "近 14 天内没有需要回复或决策的邮件。",
       needsActionEmptySub: "下拉同步以获取新消息。",
       smsEmpty: "暂无短信。",
       smsEmptySub:

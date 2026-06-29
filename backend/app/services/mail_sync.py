@@ -13,13 +13,26 @@ from app.services import extraction, ingestion, notifications
 from app.services.ingestion import SyncIngestResult
 
 
+def classify_pending_messages_sync(
+    db: Session, user_id: str, *, limit: int = 30
+) -> int:
+    """Classify messages ingested without waiting for Celery."""
+    processed = 0
+    pending = ingestion.messages_pending_extraction(db, user_id)[:limit]
+    for message in pending:
+        extraction.process_message(db, message)
+        processed += 1
+    return processed
+
+
 def run_mail_sync(
     db: Session, user_id: str, *, ingest_only: bool = False, incremental: bool = True
 ) -> tuple[SyncIngestResult, int, int]:
     """Pull new Gmail; classify unless ingest_only (fast path for mobile refresh)."""
     result = ingestion.sync_messages(db, user_id, incremental=incremental)
     if ingest_only:
-        return result, 0, 0
+        processed = classify_pending_messages_sync(db, user_id)
+        return result, processed, 0
     to_process = ingestion.messages_to_process(db, user_id, result.new_messages)
     commitments = 0
     for message in to_process:

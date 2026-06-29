@@ -345,14 +345,15 @@ def test_list_inbox_sms_scope_returns_only_texts(
     assert "Text me back" in (out.messages[0].snippet or "")
 
 
-def test_list_inbox_needs_action_scope_returns_actionable_unread(
+def test_list_inbox_needs_action_scope_returns_reply_and_decision_in_window(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from datetime import UTC, datetime
+    from datetime import UTC, datetime, timedelta
 
     from app.api.v1 import messages as messages_mod
     from app.db.enums import MessageClassification
 
+    now = datetime.now(UTC)
     db.add(
         Message(
             user_id=user.id,
@@ -361,9 +362,22 @@ def test_list_inbox_needs_action_scope_returns_actionable_unread(
             sender="boss@corp.com",
             subject="Please reply",
             snippet="Need your answer",
-            sent_at=datetime.now(UTC),
+            sent_at=now - timedelta(days=3),
             classification=MessageClassification.needs_reply,
             gmail_labels=["INBOX", "UNREAD"],
+        )
+    )
+    db.add(
+        Message(
+            user_id=user.id,
+            source="gmail",
+            external_id="gmail:needs-decision-read",
+            sender="ops@corp.com",
+            subject="Approve budget",
+            snippet="Need a decision",
+            sent_at=now - timedelta(days=10),
+            classification=MessageClassification.needs_decision,
+            gmail_labels=["INBOX"],
         )
     )
     db.add(
@@ -374,13 +388,27 @@ def test_list_inbox_needs_action_scope_returns_actionable_unread(
             sender="news@corp.com",
             subject="Newsletter",
             snippet="FYI",
-            sent_at=datetime.now(UTC),
+            sent_at=now - timedelta(days=2),
             classification=MessageClassification.informational,
             gmail_labels=["INBOX"],
+        )
+    )
+    db.add(
+        Message(
+            user_id=user.id,
+            source="gmail",
+            external_id="gmail:old-reply",
+            sender="old@corp.com",
+            subject="Old thread",
+            snippet="Still open",
+            sent_at=now - timedelta(days=20),
+            classification=MessageClassification.needs_reply,
+            gmail_labels=["INBOX", "UNREAD"],
         )
     )
     db.commit()
 
     out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
-    assert len(out.messages) == 1
-    assert out.messages[0].category == "Needs Reply"
+    assert len(out.messages) == 2
+    categories = {m.category for m in out.messages}
+    assert categories == {"Needs Reply", "Needs Decision"}

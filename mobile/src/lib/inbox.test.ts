@@ -47,7 +47,7 @@ describe("mapInboxMessage", () => {
     expect(item.showReplyActions).toBe(false);
   });
 
-  it("moves read needs-reply to fyi without reply actions", () => {
+  it("keeps read needs-reply in reply section", () => {
     const item = mapInboxMessage({
       id: "4",
       sender: "a@b.com",
@@ -61,8 +61,8 @@ describe("mapInboxMessage", () => {
       is_unread: false,
       user_replied: false,
     });
-    expect(item.section).toBe("fyi");
-    expect(item.showReplyActions).toBe(false);
+    expect(item.section).toBe("reply");
+    expect(item.showReplyActions).toBe(true);
   });
 
   it("maps FYI to fyi section", () => {

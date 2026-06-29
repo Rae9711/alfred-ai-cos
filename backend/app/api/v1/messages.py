@@ -30,6 +30,7 @@ from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
     message_needs_attention,
+    needs_action_cutoff_utc,
     start_of_today_utc,
     user_replied_message_ids,
 )
@@ -46,7 +47,7 @@ def list_inbox(
     scope: str = Query(
         default="synced",
         description="'synced' = latest synced Primary mail (default); "
-        "'needs_action' = unread messages needing reply or follow-up; "
+        "'needs_action' = last 14 days of Needs Reply / Needs Decision mail; "
         "'unread' = unread Primary only; 'today' = since local midnight; "
         "'sms' = forwarded text messages only",
     ),
@@ -70,6 +71,7 @@ def list_inbox(
 
     settings = get_settings()
     today_start = start_of_today_utc(user.timezone)
+    needs_action_start = needs_action_cutoff_utc()
     replied_ids = user_replied_message_ids(db, user.id)
     synced_limit = settings.sync_initial_max_results
     unread_limit = settings.sync_unread_max_results
@@ -87,7 +89,7 @@ def list_inbox(
     elif scope == "unread":
         stmt = stmt.limit(unread_limit * 2)
     elif scope == "needs_action":
-        stmt = stmt.limit(synced_limit * 3)
+        stmt = stmt.where(Message.sent_at >= needs_action_start)
     else:
         stmt = stmt.limit(synced_limit * 3)
 
@@ -96,7 +98,7 @@ def list_inbox(
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
-        if scope in ("synced", "needs_action") and len(messages) >= synced_limit:
+        if scope == "synced" and len(messages) >= synced_limit:
             break
         if scope == "unread" and len(messages) >= unread_limit:
             break
@@ -119,8 +121,6 @@ def list_inbox(
         user_replied = m.id in replied_ids
         if scope == "needs_action" and not message_needs_attention(
             category=category,
-            action_required=m.action_required,
-            is_unread=is_unread,
             user_replied=user_replied,
         ):
             continue

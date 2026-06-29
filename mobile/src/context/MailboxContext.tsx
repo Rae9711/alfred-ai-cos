@@ -133,10 +133,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const markRead = useCallback(async (id: string) => {
     const result = await api.markMessageRead(id);
     setItems((prev) => {
-      if (
-        filterRef.current.scope === "unread" ||
-        filterRef.current.scope === "needs_action"
-      ) {
+      if (filterRef.current.scope === "unread") {
         return prev.filter((m) => m.id !== id);
       }
       return prev.map((m) => (m.id === id ? { ...m, isUnread: false } : m));

@@ -45,8 +45,6 @@ def test_message_needs_attention_respects_reply_state() -> None:
     assert (
         message_needs_attention(
             category="Needs Reply",
-            action_required=True,
-            is_unread=True,
             user_replied=False,
         )
         is True
@@ -54,8 +52,27 @@ def test_message_needs_attention_respects_reply_state() -> None:
     assert (
         message_needs_attention(
             category="Needs Reply",
-            action_required=True,
-            is_unread=False,
+            user_replied=True,
+        )
+        is False
+    )
+    assert (
+        message_needs_attention(
+            category="Needs Decision",
+            user_replied=False,
+        )
+        is True
+    )
+    assert (
+        message_needs_attention(
+            category="Waiting",
+            user_replied=False,
+        )
+        is False
+    )
+    assert (
+        message_needs_attention(
+            category="Processing",
             user_replied=False,
         )
         is False

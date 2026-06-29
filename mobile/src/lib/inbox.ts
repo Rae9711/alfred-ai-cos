@@ -44,20 +44,13 @@ function tagForCategory(
 }
 
 function needsAttention(message: InboxMessage): boolean {
-  if (!message.is_unread || message.user_replied) return false;
+  if (message.user_replied) return false;
   if (message.category === "Processing") return false;
-  if (message.category === "Needs Reply" || message.category === "Needs Decision") {
-    return true;
-  }
-  if (message.action_required && message.category !== "Waiting" && message.category !== "FYI") {
-    return true;
-  }
-  if (message.category === "Waiting") return true;
-  return false;
+  return message.category === "Needs Reply" || message.category === "Needs Decision";
 }
 
 export function showsReplyActions(message: InboxMessage): boolean {
-  if (!message.is_unread || message.user_replied) return false;
+  if (message.user_replied) return false;
   return message.category === "Needs Reply" || message.category === "Needs Decision";
 }
 
