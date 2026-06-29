@@ -14,12 +14,10 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { type Me, type Task, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
-import { BriefingCard } from "@/components/BriefingCard";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
-import { TodayPrioritiesSection } from "@/components/TodayPrioritiesSection";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -63,8 +61,6 @@ export function HomeScreen() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
-  const [todayData, setTodayData] = useState<TodayDashboard | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -81,7 +77,7 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming, dashboard, taskList] = await Promise.all([
+      const [profile, pending, upcoming] = await Promise.all([
         api.getMe().catch(() => null),
         api.listPendingActions(),
         api.listUpcomingMeetings(
@@ -91,14 +87,10 @@ export function HomeScreen() {
               ? { week: true }
               : { month: true },
         ),
-        api.getToday().catch(() => null),
-        api.listTasks().catch(() => [] as Task[]),
       ]);
       setMe(profile);
       setPendingCount(pending.length);
       setMeetings(upcoming);
-      setTodayData(dashboard);
-      setTasks(taskList);
     } catch (e) {
       showToast(e instanceof Error ? e.message : t.home.askFailed);
       setMeetings([]);
@@ -303,14 +295,6 @@ export function HomeScreen() {
             <Ic.Arrow size={16} color={colors.warn} />
           </Pressable>
         ) : null}
-
-        <BriefingCard />
-
-        <TodayPrioritiesSection
-          data={todayData}
-          tasks={tasks}
-          onRefresh={() => void load(scheduleView)}
-        />
 
         <View style={styles.butlerBlock}>
           <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
