@@ -74,20 +74,30 @@ body) and Albert dedupes via `external_id`.
 ### Forward shortcut actions
 
 
-| Step       | Action ID                                 | Purpose                          |
-| ---------- | ----------------------------------------- | -------------------------------- |
-| 1 (import) | `is.workflow.actions.gettext`             | Prompt for X-Sms-Token           |
-| 2          | `is.workflow.actions.detect.text`         | Message body from Shortcut Input |
-| 3          | `is.workflow.actions.properties.messages` | Sender phone (`Phone Number`)    |
-| 4          | `is.workflow.actions.detect.contacts`     | Contact from message             |
-| 5          | `is.workflow.actions.properties.contacts` | Sender name                      |
-| 6          | `is.workflow.actions.dictionary`          | JSON payload                     |
-| 7          | `is.workflow.actions.downloadurl`         | POST to Albert webhook           |
+| Step       | Action ID                                 | Purpose                                      |
+| ---------- | ----------------------------------------- | -------------------------------------------- |
+| 1 (import) | `is.workflow.actions.gettext`             | Prompt for X-Sms-Token                       |
+| 2          | `is.workflow.actions.detect.text`         | Message body text from Shortcut Input        |
+| 3          | `is.workflow.actions.dictionary`          | JSON payload (`body`, `text`, `shortcut_input`) |
+| 4          | `is.workflow.actions.downloadurl`         | POST to Albert webhook                       |
 
 
-If step 3 shows *Unknown Action* on your iOS version, messages still import with
-body text; **Open in Messages** may not pre-fill the recipient until you add
-**Get Details of Messages** manually (see below).
+The forward shortcut sends **both** extracted text and the raw Shortcut Input so Albert
+can parse whichever shape your iOS version provides. Sender phone is not included
+(Message Received does not expose it reliably on all iOS versions) — **Open in Messages**
+may show a toast instead of pre-filling the recipient unless you add **Get Details of
+Messages** manually (advanced).
+
+### iOS automation: empty Shortcut Input
+
+On some iOS versions the **Message Received** trigger passes an empty Shortcut Input.
+If Albert returns **400 SMS body is required**, try:
+
+1. Delete the old shortcut and automation; re-import from **You → SMS forwarding**.
+2. Automation: **When I receive a message** → **Run Immediately** (no confirmation).
+3. Ensure the automation runs **Albert SMS Forward** (not a duplicate/old name).
+4. Send yourself a test text; confirm curl works first (see below).
+5. As a fallback, use **Albert SMS Share** from the message Share sheet for one-off imports.
 
 ### Backfill shortcut actions
 

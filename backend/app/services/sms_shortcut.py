@@ -200,14 +200,26 @@ def build_sms_forward_shortcut(
     When ``sms_token`` is set (personalized download), it is embedded in the header.
     Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
 
-    Message Received passes the incoming message as Shortcut Input. We map Shortcut Input
-    directly into the JSON body (body/text/shortcut_input) — ``detect.text`` alone often
-    returns empty in automations on recent iOS builds.
+    Message Received passes the incoming message as Shortcut Input. We send both
+    ``detect.text`` output (body/text) and the raw Shortcut Input (shortcut_input) so
+    Albert can parse whichever shape iOS provides — some builds return empty text from
+    detect.text but still pass a message object, others do the opposite.
     """
     dict_uuid = _uid()
     input_ref = _shortcut_input_attachment()
+    get_body, body_uuid = _detect_text_from_shortcut_input(output_name="Message Text")
+    body_ref = _attachment(body_uuid, "Message Text")
 
-    json_values = _payload_dict_items(body_attachment=input_ref)
+    json_values = {
+        "Value": {
+            "WFDictionaryFieldValueItems": [
+                _dict_field("body", body_ref),
+                _dict_field("text", body_ref),
+                _dict_field("shortcut_input", input_ref),
+            ],
+        },
+        "WFSerializationType": "WFDictionaryFieldValue",
+    }
     payload_dict = {
         "WFWorkflowActionIdentifier": "is.workflow.actions.dictionary",
         "WFWorkflowActionParameters": {
@@ -223,10 +235,10 @@ def build_sms_forward_shortcut(
             "WFSerializationType": "WFTextTokenString",
         }
         import_questions: list[dict[str, Any]] = []
-        actions: list[dict[str, Any]] = [payload_dict]
+        actions: list[dict[str, Any]] = [get_body, payload_dict]
     else:
         token_action, token_header_value, import_questions = _token_prompt_action()
-        actions = [token_action, payload_dict]
+        actions = [token_action, get_body, payload_dict]
 
     actions.append(
         _post_sms_webhook_action(

@@ -28,17 +28,19 @@ def _action_ids(data: dict) -> list[str]:
 def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
     assert _action_ids(data) == [
+        DETECT_TEXT_ACTION,
         "is.workflow.actions.dictionary",
         "is.workflow.actions.downloadurl",
     ]
 
-    dict_action = data["WFWorkflowActions"][0]
+    dict_action = data["WFWorkflowActions"][1]
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
     keys = {item["WFKey"]["Value"]["string"] for item in items}
     assert keys == {"body", "shortcut_input", "text"}
-    for item in items:
-        wf_input = item["WFValue"]["Value"]
-        assert wf_input["VariableName"] == "Shortcut Input"
+    by_key = {item["WFKey"]["Value"]["string"]: item for item in items}
+    assert by_key["body"]["WFValue"]["Value"]["OutputName"] == "Message Text"
+    assert by_key["text"]["WFValue"]["Value"]["OutputName"] == "Message Text"
+    assert by_key["shortcut_input"]["WFValue"]["Value"]["VariableName"] == "Shortcut Input"
 
     post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
@@ -77,7 +79,7 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
         build_sms_forward_shortcut(webhook_url="https://example.test/sms", sms_token="tok")
     )
     assert data["WFWorkflowImportQuestions"] == []
-    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
+    assert data["WFWorkflowActions"][1]["WFWorkflowActionIdentifier"] == (
         "is.workflow.actions.dictionary"
     )
     post = data["WFWorkflowActions"][-1]
