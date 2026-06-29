@@ -273,6 +273,10 @@ export const translations = {
         label: "Text someone",
         examples: ["text Mom: see you tomorrow"],
       },
+      {
+        label: "Reminder",
+        examples: ["Remind me tomorrow to pay rent"],
+      },
     ],
     freeChat: {
       seed:
@@ -540,6 +544,10 @@ export const translations = {
       {
         label: "发短信",
         examples: ["给 Mom 发：明天见"],
+      },
+      {
+        label: "提醒",
+        examples: ["明天提醒我交房租"],
       },
     ],
     freeChat: {
