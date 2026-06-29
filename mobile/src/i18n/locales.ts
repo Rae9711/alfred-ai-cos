@@ -78,6 +78,8 @@ export const translations = {
       },
       needsActionEmpty: "No Needs Reply or Needs Decision mail in the last 14 days.",
       needsActionEmptySub: "Pull down to sync for new messages.",
+      unreadEmpty: "No unread messages.",
+      unreadEmptySub: "You're caught up — pull down to sync for new mail and texts.",
       smsEmpty: "No texts here yet.",
       smsEmptySub:
         "Set up SMS forwarding in You → Settings, then send yourself a test text.",
@@ -282,6 +284,8 @@ export const translations = {
       },
       needsActionEmpty: "近 14 天内没有需要回复或决策的邮件。",
       needsActionEmptySub: "下拉同步以获取新消息。",
+      unreadEmpty: "没有未读消息。",
+      unreadEmptySub: "已全部读完 — 下拉同步获取新邮件和短信。",
       smsEmpty: "暂无短信。",
       smsEmptySub: "请在「我的」配置短信转发，然后给自己发一条测试短信。",
       unreadLabel: "未读",

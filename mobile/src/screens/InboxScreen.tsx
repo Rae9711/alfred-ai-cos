@@ -83,7 +83,7 @@ export function InboxScreen() {
   const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
-  const unread = live.filter((m) => m.section === "reply").length;
+  const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
     filter === "email" && inboxScope === "synced" && mailboxes.length > 1;
 
@@ -188,9 +188,9 @@ export function InboxScreen() {
         <Serif size={28}>
           {t.inbox.titlePlain} <SerifEm>{t.inbox.titleEm}</SerifEm>
         </Serif>
-        {unread > 0 ? (
+        {unreadCount > 0 ? (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{t.inbox.unread(unread)}</Text>
+            <Text style={styles.badgeText}>{t.inbox.unread(unreadCount)}</Text>
           </View>
         ) : null}
       </View>
@@ -284,14 +284,18 @@ export function InboxScreen() {
               ? t.inbox.smsEmpty
               : filter === "needs_action"
                 ? t.inbox.needsActionEmpty
-                : t.inbox.inboxZero}
+                : filter === "unread"
+                  ? t.inbox.unreadEmpty
+                  : t.inbox.inboxZero}
           </Serif>
           <Text style={styles.pullHint}>
             {filter === "sms"
               ? t.inbox.smsEmptySub
               : filter === "needs_action"
                 ? t.inbox.needsActionEmptySub
-                : t.inbox.pullToSync}
+                : filter === "unread"
+                  ? t.inbox.unreadEmptySub
+                  : t.inbox.pullToSync}
           </Text>
         </View>
       ) : null}

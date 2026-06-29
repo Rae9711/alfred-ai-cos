@@ -89,9 +89,13 @@ def list_inbox(
     elif scope == "unread":
         stmt = stmt.limit(unread_limit * 2)
     elif scope == "needs_action":
-        stmt = stmt.where(Message.sent_at >= needs_action_start)
+        stmt = (
+            stmt.where(Message.sent_at >= needs_action_start)
+            .limit(unread_limit)
+        )
     else:
-        stmt = stmt.limit(synced_limit * 3)
+        # synced = Email tab: Gmail only, not forwarded texts.
+        stmt = stmt.where(Message.source != "sms").limit(synced_limit * 3)
 
     rows = list(db.scalars(stmt))
 
@@ -104,7 +108,11 @@ def list_inbox(
             break
         if scope == "sms" and len(messages) >= synced_limit:
             break
+        if scope == "needs_action" and len(messages) >= synced_limit:
+            break
         if filter_account_id and scope != "sms" and m.connected_account_id != filter_account_id:
+            continue
+        if scope == "synced" and m.source == "sms":
             continue
         if scope != "sms" and m.source != "sms":
             if not message_in_primary_inbox(m):

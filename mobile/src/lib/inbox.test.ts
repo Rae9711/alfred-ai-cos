@@ -82,4 +82,25 @@ describe("mapInboxMessage", () => {
     expect(item.section).toBe("fyi");
     expect(item.summary).toBe("snip");
   });
+
+  it("tags SMS and preserves unknown sender label", () => {
+    const item = mapInboxMessage({
+      id: "sms-1",
+      sender: "Unknown sender",
+      subject: "SMS",
+      snippet: "Hey are you free?",
+      take: "They asked if you're free.",
+      category: "Needs Reply",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: true,
+      user_replied: false,
+      source: "sms",
+    });
+    expect(item.source).toBe("sms");
+    expect(item.sender).toBe("Unknown sender");
+    expect(item.tags.map((t) => t.label)).toEqual(["SMS", "Needs Reply"]);
+    expect(item.title).toBe("Hey are you free?");
+  });
 });
