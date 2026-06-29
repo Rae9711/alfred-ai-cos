@@ -34,6 +34,14 @@
           "action": "SEND",
           "category": ["DEFAULT"],
           "data": [{ "mimeType": "text/plain" }]
+        },
+        {
+          "action": "VIEW",
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": {
+            "scheme": "albert",
+            "host": "share"
+          }
         }
       ]
     },

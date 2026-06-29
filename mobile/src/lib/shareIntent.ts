@@ -1,48 +1,39 @@
 // Android share-target helper: forward shared plain text to the SMS inbox webhook.
 
-import * as Linking from "expo-linking";
-
 import { api } from "@/api/client";
+import { buildSmsForwardPayload } from "@/lib/smsForwardPayload";
+import { extractShareTextFromUrl } from "@/lib/smsShareUrl";
 
 let handled = false;
 
+export async function postSmsForward(
+  text: string,
+  opts?: { backfill?: boolean },
+): Promise<void> {
+  const cfg = await api.getSmsForwarding();
+  const res = await fetch(cfg.webhook_url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Sms-Token": cfg.token,
+    },
+    body: JSON.stringify(buildSmsForwardPayload(text, { backfill: opts?.backfill })),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function handleSharedTextUrl(url: string | null): Promise<boolean> {
   if (!url || handled) return false;
-  const parsed = Linking.parse(url);
-  const path = parsed.path ?? "";
-  if (path !== "share" && !path.endsWith("/share")) return false;
-
-  const text =
-    (typeof parsed.queryParams?.text === "string" && parsed.queryParams.text) ||
-    (typeof parsed.queryParams?.body === "string" && parsed.queryParams.body) ||
-    "";
-  if (!text.trim()) return false;
+  const text = extractShareTextFromUrl(url);
+  if (!text) return false;
 
   handled = true;
   try {
-    const cfg = await api.getSmsForwarding();
-    const res = await fetch(`${cfg.webhook_url}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Sms-Token": cfg.token,
-      },
-      body: JSON.stringify({ body: text.trim(), backfill: true }),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    await postSmsForward(text, { backfill: true });
     return true;
   } finally {
     handled = false;
   }
 }
 
-export function extractShareTextFromUrl(url: string): string | null {
-  const parsed = Linking.parse(url);
-  const path = parsed.path ?? "";
-  if (path !== "share" && !path.endsWith("/share")) return null;
-  const text =
-    (typeof parsed.queryParams?.text === "string" && parsed.queryParams.text) ||
-    (typeof parsed.queryParams?.body === "string" && parsed.queryParams.body) ||
-    "";
-  return text.trim() || null;
-}
+export { extractShareTextFromUrl } from "@/lib/smsShareUrl";

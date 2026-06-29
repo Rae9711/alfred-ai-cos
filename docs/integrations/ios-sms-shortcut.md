@@ -12,9 +12,10 @@ messages already on your phone are not synced automatically.
 ## Setup in Albert
 
 1. Open **You** (settings).
-2. Under **SMS forwarding**, copy:
-   - **Webhook URL** — `https://alfredaitech.com/api/v1/inbox/sms`
-   - **X-Sms-Token** — your personal secret (never share publicly).
+2. Under **SMS forwarding**, tap **Setup guide** for step-by-step instructions
+   (includes a reference screenshot of the shortcut actions).
+3. Copy **X-Sms-Token** when the shortcut import prompts — never use a token
+   from a screenshot or docs.
 
 ## User flow (new messages only)
 

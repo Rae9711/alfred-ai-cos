@@ -26,6 +26,7 @@ import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
 import { Ic } from "@/components/icons";
+import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import {
@@ -45,15 +46,18 @@ import {
   requestContactsPermission,
   type ContactsPermissionStatus,
 } from "@/lib/contacts";
+import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
 export function SettingsScreen() {
   const { signOut } = useAuth();
+  const { openSheet, closeSheet } = useShell();
   const { locale, setLocale, t } = useLocale();
   const s = t.settings ?? translations.en.settings;
   const { syncAndRefresh } = useMailbox();
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [smsToken, setSmsToken] = useState<string | null>(null);
+  const [smsWebhookUrl, setSmsWebhookUrl] = useState<string | null>(null);
   const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
@@ -79,6 +83,13 @@ export function SettingsScreen() {
         setSmsShortcutUrl(null);
         setSmsImportUrl(null);
       });
+    api
+      .getSmsForwarding()
+      .then((cfg) => {
+        setSmsWebhookUrl(cfg.webhook_url);
+        setSmsToken((prev) => prev ?? cfg.token);
+      })
+      .catch(() => setSmsWebhookUrl(null));
   }, []);
 
   const refreshContactsStatus = useCallback(async () => {
@@ -192,17 +203,17 @@ export function SettingsScreen() {
     }
   }, [smsShortcutUrl, smsImportUrl, s.smsInstallFailed]);
 
-  const SMS_SETUP_GUIDE_URL =
-    "https://github.com/Rae9711/alfred-ai-cos/blob/master/docs/integrations/ios-sms-shortcut.md";
-
-  const openSmsSetupGuide = useCallback(async () => {
+  const openSmsSetupGuide = useCallback(() => {
     setNote(null);
-    try {
-      await Linking.openURL(SMS_SETUP_GUIDE_URL);
-    } catch {
-      setNote(s.smsInstallFailed);
-    }
-  }, [s.smsInstallFailed]);
+    openSheet(
+      <SmsSetupGuideSheet
+        token={smsToken}
+        webhookUrl={smsWebhookUrl}
+        onClose={closeSheet}
+        onCopied={(message) => setNote(message)}
+      />,
+    );
+  }, [closeSheet, openSheet, smsToken, smsWebhookUrl]);
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;
@@ -332,6 +343,8 @@ export function SettingsScreen() {
   const contactsActionLabel =
     contactsStatus === "denied" ? s.contactsOpenSettings : s.contactsAllow;
   const contactsNativeReady = isContactsNativeAvailable();
+  const smsHint =
+    Platform.OS === "ios" ? s.smsHintIos : s.smsHintAndroid;
 
   return (
     <ScrollView
@@ -368,18 +381,20 @@ export function SettingsScreen() {
 
       <SectionTitle label={s.smsTitle} />
       <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{s.smsHint}</Text>
+        <Text style={styles.smsHint}>{smsHint}</Text>
         <View style={styles.smsActions}>
-          <Btn
-            label={s.smsInstallShortcut}
-            kind="accent"
-            tiny
-            onPress={() => void installSmsShortcut()}
-          />
+          {Platform.OS === "ios" ? (
+            <Btn
+              label={s.smsInstallShortcut}
+              kind="accent"
+              tiny
+              onPress={() => void installSmsShortcut()}
+            />
+          ) : null}
           {smsToken ? (
             <Btn
               label={s.smsCopyToken}
-              kind="ghost"
+              kind={Platform.OS === "ios" ? "ghost" : "accent"}
               tiny
               onPress={() => void copySmsToken()}
             />
@@ -388,7 +403,7 @@ export function SettingsScreen() {
             label={s.smsSetupGuide}
             kind="ghost"
             tiny
-            onPress={() => void openSmsSetupGuide()}
+            onPress={openSmsSetupGuide}
           />
         </View>
         {smsToken ? (
@@ -401,7 +416,6 @@ export function SettingsScreen() {
         ) : (
           <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
         )}
-        <Text style={styles.smsSteps}>{s.smsSteps}</Text>
       </View>
 
       <SectionTitle label={s.contactsTitle} />
@@ -799,7 +813,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     lineHeight: 16,
   },
-  smsSteps: { fontSize: 12, color: colors.ink3, lineHeight: 18 },
   contactsStatusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   contactsDot: {
     width: 8,
