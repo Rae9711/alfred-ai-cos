@@ -23,9 +23,17 @@ def _service(token_payload: dict[str, Any]) -> Any:
 
 
 def list_upcoming_events(
-    token_payload: dict[str, Any], *, days_ahead: int = 14, max_results: int = 50
+    token_payload: dict[str, Any],
+    *,
+    days_ahead: int = 14,
+    time_min: datetime | None = None,
+    time_max: datetime | None = None,
+    max_results: int = 250,
 ) -> list[dict[str, Any]]:
-    """Return normalized upcoming events from now to now + days_ahead.
+    """Return normalized events in [time_min, time_max].
+
+    Defaults to now through now + days_ahead. Pass explicit bounds for month/week
+    backfill (includes events that already started today or earlier this month).
 
     Each dict: external_id, title, start_time (datetime|None), end_time, location,
     description, attendees (list[str] of emails). All-day events have date-only
@@ -34,15 +42,17 @@ def list_upcoming_events(
     """
     svc = _service(token_payload)
     now = datetime.now(UTC)
-    time_min = now.isoformat()
-    time_max = (now + timedelta(days=days_ahead)).isoformat()
+    min_dt = time_min if time_min is not None else now
+    max_dt = time_max if time_max is not None else now + timedelta(days=days_ahead)
+    time_min_iso = min_dt.isoformat()
+    time_max_iso = max_dt.isoformat()
 
     resp = (
         svc.events()
         .list(
             calendarId="primary",
-            timeMin=time_min,
-            timeMax=time_max,
+            timeMin=time_min_iso,
+            timeMax=time_max_iso,
             singleEvents=True,
             orderBy="startTime",
             maxResults=max_results,

@@ -5,6 +5,7 @@ which is the signal meeting-prep (A3) keys off."""
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -15,6 +16,26 @@ from app.services import gcal
 from app.services.crypto import decrypt_token, encrypt_token
 from app.services.google_oauth import fresh_credentials
 from app.services.gmail import use_gmail_credentials
+
+
+def _local_tz(timezone: str | None):
+    try:
+        return ZoneInfo(timezone or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def _sync_window_utc(timezone: str | None) -> tuple[datetime, datetime]:
+    """Local calendar month start through end of month + one week (for home month view)."""
+    tz = _local_tz(timezone)
+    local_now = datetime.now(tz)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+    window_end = month_end + timedelta(days=7)
+    return month_start.astimezone(UTC), window_end.astimezone(UTC)
 
 
 def _account(db: Session, user_id: str) -> ConnectedAccount:
@@ -49,7 +70,7 @@ def get_event(db: Session, user_id: str, event_id: str) -> CalendarEvent:
 
 
 def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[CalendarEvent]:
-    """Fetch upcoming events, upsert them, and remove local rows deleted in Google."""
+    """Fetch events for the user's local month window, upsert, and prune stale rows."""
     account = _account(db, user_id)
     user = db.get(User, user_id)
     user_email = user.email if user else ""
@@ -57,10 +78,11 @@ def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[Ca
 
     touched: list[CalendarEvent] = []
     seen_external: set[str] = set()
-    now = datetime.now(UTC)
-    window_end = now + timedelta(days=days_ahead)
+    window_start, window_end = _sync_window_utc(user.timezone if user else None)
 
-    for raw in gcal.list_upcoming_events(token, days_ahead=days_ahead):
+    for raw in gcal.list_upcoming_events(
+        token, time_min=window_start, time_max=window_end
+    ):
         seen_external.add(raw["external_id"])
         touched.append(_upsert_event(db, user_id, raw, user_email))
 
@@ -70,8 +92,8 @@ def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[Ca
             select(CalendarEvent).where(
                 CalendarEvent.user_id == user_id,
                 CalendarEvent.start_time.is_not(None),
-                CalendarEvent.start_time >= now,
-                CalendarEvent.start_time <= window_end,
+                CalendarEvent.start_time >= window_start,
+                CalendarEvent.start_time < window_end,
             )
         )
     )

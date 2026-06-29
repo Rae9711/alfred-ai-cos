@@ -4,6 +4,10 @@ import {
   buildMonthGrid,
   groupMeetingsByDate,
   localDateKeyFromDate,
+  meetingsForDay,
+  minutesFromMidnight,
+  timelineHours,
+  weekDaysMondayFirst,
 } from "./schedule";
 
 describe("schedule helpers", () => {
@@ -41,5 +45,56 @@ describe("schedule helpers", () => {
   it("formats local date keys", () => {
     const key = localDateKeyFromDate(new Date(2026, 5, 29));
     expect(key).toBe("2026-06-29");
+  });
+
+  it("filters meetings for a day", () => {
+    const day = new Date(2026, 5, 29);
+    const items = meetingsForDay(
+      [
+        {
+          id: "1",
+          title: "A",
+          start_time: "2026-06-29T14:00:00.000Z",
+          end_time: "2026-06-29T15:00:00.000Z",
+          location: null,
+          attendees: [],
+          prep_required: false,
+        },
+        {
+          id: "2",
+          title: "B",
+          start_time: "2026-06-30T14:00:00.000Z",
+          end_time: null,
+          location: null,
+          attendees: [],
+          prep_required: false,
+        },
+      ],
+      day,
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]!.title).toBe("A");
+  });
+
+  it("builds monday-first week strip", () => {
+    const days = weekDaysMondayFirst(new Date(2026, 5, 29)); // Sunday Jun 29
+    expect(days).toHaveLength(7);
+    expect(days[0]!.getDay()).toBe(1); // Monday
+  });
+
+  it("computes timeline hours from events", () => {
+    const range = timelineHours([
+      {
+        id: "1",
+        title: "Mid",
+        start_time: "2026-06-29T15:00:00.000Z",
+        end_time: "2026-06-29T16:00:00.000Z",
+        location: null,
+        attendees: [],
+        prep_required: false,
+      },
+    ]);
+    expect(range.endHour).toBeGreaterThan(range.startHour);
+    expect(minutesFromMidnight("2026-06-29T15:30:00.000Z")).toBeGreaterThan(0);
   });
 });

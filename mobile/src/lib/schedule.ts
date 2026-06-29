@@ -78,3 +78,72 @@ export function isSameDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate()
   );
 }
+
+/** Monday-first dates for the week containing `anchor`. */
+export function weekDaysMondayFirst(anchor: Date = new Date()): Date[] {
+  const d = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  const mondayOffset = (d.getDay() + 6) % 7;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - mondayOffset);
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    return day;
+  });
+}
+
+export function meetingsForDay(
+  meetings: UpcomingMeeting[],
+  day: Date,
+): UpcomingMeeting[] {
+  const key = localDateKeyFromDate(day);
+  return meetings
+    .filter((m) => dateKey(m.start_time) === key)
+    .sort(
+      (a, b) =>
+        new Date(a.start_time ?? 0).getTime() -
+        new Date(b.start_time ?? 0).getTime(),
+    );
+}
+
+export function minutesFromMidnight(iso: string | null): number {
+  if (!iso) return 0;
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+export function eventDurationMinutes(
+  startIso: string | null,
+  endIso: string | null,
+): number {
+  if (!startIso) return 30;
+  if (!endIso) return 30;
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+  return Math.max(15, Math.round(ms / 60_000));
+}
+
+/** Timeline hour range that fits all events (clamped 6–22). */
+export function timelineHours(
+  meetings: UpcomingMeeting[],
+): { startHour: number; endHour: number } {
+  if (!meetings.length) return { startHour: 7, endHour: 21 };
+  let minM = 24 * 60;
+  let maxM = 0;
+  for (const m of meetings) {
+    const start = minutesFromMidnight(m.start_time);
+    const end = start + eventDurationMinutes(m.start_time, m.end_time);
+    minM = Math.min(minM, start);
+    maxM = Math.max(maxM, end);
+  }
+  const startHour = Math.max(6, Math.floor(minM / 60) - 1);
+  const endHour = Math.min(23, Math.ceil(maxM / 60) + 1);
+  return { startHour, endHour: Math.max(startHour + 1, endHour) };
+}
+
+export function formatWeekdayShort(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: "short" });
+}
+
+export function formatMonthDay(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
