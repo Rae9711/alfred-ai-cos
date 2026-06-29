@@ -153,6 +153,8 @@ export const translations = {
       smsCopyToken: "Copy Token",
       smsTokenCopied: "Token copied.",
       smsInstallFailed: "Could not open Shortcuts.",
+      smsTokenPending:
+        "Open this screen again if the token does not appear — it is created on first visit.",
       smsFirstForwardTip:
         "Text forwarded! For older messages: Messages → long-press → Share → Albert SMS Share.",
       smsSteps:
@@ -163,6 +165,9 @@ export const translations = {
       contactsStatusGranted: "Access granted",
       contactsStatusDenied: "Denied",
       contactsStatusUndetermined: "Not set",
+      contactsStatusUnavailable: "Requires app update",
+      contactsUnavailableHint:
+        "Contacts lookup needs the latest Albert build from TestFlight — OTA alone is not enough. Reinstall, then return here to allow access.",
       contactsAllow: "Allow access",
       contactsOpenSettings: "Open Settings",
       contactsGrantedToast: "Contacts access enabled.",
@@ -339,6 +344,7 @@ export const translations = {
       smsCopyToken: "复制令牌",
       smsTokenCopied: "已复制令牌。",
       smsInstallFailed: "无法打开快捷指令。",
+      smsTokenPending: "若令牌未显示，请重新打开此页 — 首次访问时会自动创建。",
       smsFirstForwardTip:
         "短信已转发！导入更早的短信：信息 → 长按消息 → 分享 → Albert SMS Share。",
       smsSteps:
@@ -349,6 +355,9 @@ export const translations = {
       contactsStatusGranted: "已授权",
       contactsStatusDenied: "已拒绝",
       contactsStatusUndetermined: "未设置",
+      contactsStatusUnavailable: "需要更新 App",
+      contactsUnavailableHint:
+        "通讯录查找需要安装最新版 Albert（TestFlight）— 仅 OTA 更新不够。请重新安装后再回来授权。",
       contactsAllow: "允许访问",
       contactsOpenSettings: "打开设置",
       contactsGrantedToast: "已开启通讯录访问。",

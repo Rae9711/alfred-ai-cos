@@ -101,6 +101,10 @@ def get_me(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MeOut:
+    # Ensure SMS token exists for any authenticated session (Shortcuts may POST before
+    # the user opens Settings).
+    sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
     return _me(db, user)
 
 

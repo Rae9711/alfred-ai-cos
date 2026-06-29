@@ -166,6 +166,8 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authed !== true) return;
     void registerForPush().catch(() => undefined);
+    // Provision SMS token on login so Shortcuts work before opening You tab.
+    void api.getSmsForwarding().catch(() => undefined);
   }, [authed]);
 
   useMailAutoSync(async () => {

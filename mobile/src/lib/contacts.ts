@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from "expo-modules-core";
 import type * as Contacts from "expo-contacts";
 
 export type ContactMatch = {
@@ -6,14 +7,29 @@ export type ContactMatch = {
   phone: string;
 };
 
-export type ContactsPermissionStatus = "granted" | "denied" | "undetermined";
+export type ContactsPermissionStatus =
+  | "granted"
+  | "denied"
+  | "undetermined"
+  | "unavailable";
+
+const ExpoContactsNative = requireOptionalNativeModule("ExpoContacts");
+
+export function isContactsNativeAvailable(): boolean {
+  return ExpoContactsNative != null;
+}
 
 async function loadContactsModule(): Promise<typeof Contacts> {
+  if (!isContactsNativeAvailable()) {
+    throw new Error(
+      "Contacts is not available in this build — reinstall Albert from TestFlight or rebuild the app.",
+    );
+  }
   try {
     return await import("expo-contacts");
   } catch {
     throw new Error(
-      "Contacts is not available in this build — reinstall Albert from Settings or rebuild the app.",
+      "Contacts is not available in this build — reinstall Albert from TestFlight or rebuild the app.",
     );
   }
 }
@@ -49,17 +65,27 @@ function nameMatches(query: string, contact: Contacts.Contact): boolean {
 }
 
 export async function getContactsPermissionStatus(): Promise<ContactsPermissionStatus> {
-  const Contacts = await loadContactsModule();
-  const { status } = await Contacts.getPermissionsAsync();
-  if (status === Contacts.PermissionStatus.GRANTED) return "granted";
-  if (status === Contacts.PermissionStatus.DENIED) return "denied";
-  return "undetermined";
+  if (!isContactsNativeAvailable()) return "unavailable";
+  try {
+    const Contacts = await loadContactsModule();
+    const { status } = await Contacts.getPermissionsAsync();
+    if (status === Contacts.PermissionStatus.GRANTED) return "granted";
+    if (status === Contacts.PermissionStatus.DENIED) return "denied";
+    return "undetermined";
+  } catch {
+    return "unavailable";
+  }
 }
 
 export async function requestContactsPermission(): Promise<boolean> {
-  const Contacts = await loadContactsModule();
-  const { status } = await Contacts.requestPermissionsAsync();
-  return status === Contacts.PermissionStatus.GRANTED;
+  if (!isContactsNativeAvailable()) return false;
+  try {
+    const Contacts = await loadContactsModule();
+    const { status } = await Contacts.requestPermissionsAsync();
+    return status === Contacts.PermissionStatus.GRANTED;
+  } catch {
+    return false;
+  }
 }
 
 export async function searchContactsByName(name: string): Promise<ContactMatch[]> {

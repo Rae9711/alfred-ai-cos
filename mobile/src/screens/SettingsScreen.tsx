@@ -36,8 +36,10 @@ import {
   SerifEm,
 } from "@/components/ui";
 import { colors, fonts, layout, spacing } from "@/theme/theme";
+import { translations } from "@/i18n/locales";
 import {
   getContactsPermissionStatus,
+  isContactsNativeAvailable,
   requestContactsPermission,
   type ContactsPermissionStatus,
 } from "@/lib/contacts";
@@ -45,6 +47,7 @@ import {
 export function SettingsScreen() {
   const { signOut } = useAuth();
   const { locale, setLocale, t } = useLocale();
+  const s = t.settings ?? translations.en.settings;
   const { syncAndRefresh } = useMailbox();
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -111,24 +114,22 @@ export function SettingsScreen() {
       try {
         await Linking.openSettings();
       } catch {
-        setNote(t.settings.contactsDeniedToast);
+        setNote(s.contactsDeniedToast);
       }
       return;
     }
     try {
       const granted = await requestContactsPermission();
       await refreshContactsStatus();
-      setNote(
-        granted ? t.settings.contactsGrantedToast : t.settings.contactsDeniedToast,
-      );
+      setNote(granted ? s.contactsGrantedToast : s.contactsDeniedToast);
     } catch {
-      setNote(t.settings.contactsDeniedToast);
+      setNote(s.contactsDeniedToast);
     }
   }, [
     contactsStatus,
     refreshContactsStatus,
-    t.settings.contactsDeniedToast,
-    t.settings.contactsGrantedToast,
+    s.contactsDeniedToast,
+    s.contactsGrantedToast,
   ]);
 
   const editQuietHours = useCallback(() => {
@@ -191,9 +192,9 @@ export function SettingsScreen() {
           // fall through
         }
       }
-      setNote(t.settings.smsInstallFailed);
+      setNote(s.smsInstallFailed);
     }
-  }, [smsShortcutUrl, smsImportUrl, t.settings.smsInstallFailed]);
+  }, [smsShortcutUrl, smsImportUrl, s.smsInstallFailed]);
 
   const openSmsBackfillShortcut = useCallback(async () => {
     const target = smsBackfillShortcutUrl ?? smsBackfillImportUrl;
@@ -210,20 +211,20 @@ export function SettingsScreen() {
           // fall through
         }
       }
-      setNote(t.settings.smsInstallFailed);
+      setNote(s.smsInstallFailed);
     }
-  }, [smsBackfillShortcutUrl, smsBackfillImportUrl, t.settings.smsInstallFailed]);
+  }, [smsBackfillShortcutUrl, smsBackfillImportUrl, s.smsInstallFailed]);
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;
     // Share works on existing native builds; expo-clipboard needs a new binary.
     try {
       await Share.share({ message: smsToken });
-      setNote(t.settings.smsTokenCopied);
+      setNote(s.smsTokenCopied);
     } catch {
-      setNote(t.settings.smsTokenCopied);
+      setNote(s.smsTokenCopied);
     }
-  }, [smsToken, t.settings.smsTokenCopied]);
+  }, [smsToken, s.smsTokenCopied]);
 
   const linkGmail = useCallback(async () => {
     setNote(null);
@@ -247,12 +248,12 @@ export function SettingsScreen() {
   const disconnectMailbox = useCallback(
     (accountId: string, email: string) => {
       Alert.alert(
-        t.settings.disconnectMailbox,
+        s.disconnectMailbox,
         email,
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: t.settings.disconnectMailbox,
+            text: s.disconnectMailbox,
             style: "destructive",
             onPress: () =>
               void api
@@ -269,7 +270,7 @@ export function SettingsScreen() {
         ],
       );
     },
-    [refreshMe, syncAndRefresh, t.settings.disconnectMailbox],
+    [refreshMe, syncAndRefresh, s.disconnectMailbox],
   );
 
   const enablePush = useCallback(async () => {
@@ -333,14 +334,15 @@ export function SettingsScreen() {
   const connectedMailboxes = me?.connected_mailboxes ?? [];
   const contactsStatusLabel =
     contactsStatus === "granted"
-      ? t.settings.contactsStatusGranted
+      ? s.contactsStatusGranted
       : contactsStatus === "denied"
-        ? t.settings.contactsStatusDenied
-        : t.settings.contactsStatusUndetermined;
+        ? s.contactsStatusDenied
+        : contactsStatus === "unavailable"
+          ? s.contactsStatusUnavailable
+          : s.contactsStatusUndetermined;
   const contactsActionLabel =
-    contactsStatus === "denied"
-      ? t.settings.contactsOpenSettings
-      : t.settings.contactsAllow;
+    contactsStatus === "denied" ? s.contactsOpenSettings : s.contactsAllow;
+  const contactsNativeReady = isContactsNativeAvailable();
 
   return (
     <ScrollView
@@ -349,7 +351,7 @@ export function SettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Eyebrow>{t.settings.you}</Eyebrow>
+        <Eyebrow>{s.you}</Eyebrow>
         <Serif size={32} style={styles.name}>
           <SerifEm>{firstName}</SerifEm>
           {rest}
@@ -359,41 +361,41 @@ export function SettingsScreen() {
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
 
-      <SectionTitle label={t.settings.language} />
+      <SectionTitle label={s.language} />
       <View style={styles.group}>
         <LanguageRow
-          label={t.settings.english}
+          label={s.english}
           selected={locale === "en"}
           onPress={() => setLocale("en")}
         />
         <LanguageRow
-          label={t.settings.chinese}
+          label={s.chinese}
           selected={locale === "zh"}
           onPress={() => setLocale("zh")}
           isLast
         />
       </View>
-      <Meta style={styles.langHint}>{t.settings.languageDetail}</Meta>
+      <Meta style={styles.langHint}>{s.languageDetail}</Meta>
 
-      <SectionTitle label={t.settings.smsTitle} />
+      <SectionTitle label={s.smsTitle} />
       <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{t.settings.smsHint}</Text>
+        <Text style={styles.smsHint}>{s.smsHint}</Text>
         <View style={styles.smsActions}>
           <Btn
-            label={t.settings.smsInstallShortcut}
+            label={s.smsInstallShortcut}
             kind="accent"
             tiny
             onPress={() => void installSmsShortcut()}
           />
           <Btn
-            label={t.settings.smsShareShortcut}
+            label={s.smsShareShortcut}
             kind="ghost"
             tiny
             onPress={() => void openSmsBackfillShortcut()}
           />
           {smsToken ? (
             <Btn
-              label={t.settings.smsCopyToken}
+              label={s.smsCopyToken}
               kind="ghost"
               tiny
               onPress={() => void copySmsToken()}
@@ -402,43 +404,51 @@ export function SettingsScreen() {
         </View>
         {smsToken ? (
           <>
-            <Text style={styles.smsLabel}>{t.settings.smsTokenLabel}</Text>
+            <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
             <Text selectable style={styles.smsMono}>
               {smsToken}
             </Text>
           </>
-        ) : null}
-        <Text style={styles.smsSteps}>{t.settings.smsSteps}</Text>
+        ) : (
+          <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
+        )}
+        <Text style={styles.smsSteps}>{s.smsSteps}</Text>
       </View>
 
-      <SectionTitle label={t.settings.contactsTitle} />
+      <SectionTitle label={s.contactsTitle} />
       <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{t.settings.contactsHint}</Text>
-        <View style={styles.contactsStatusRow}>
-          <View
-            style={[
-              styles.contactsDot,
-              contactsStatus === "granted" && styles.contactsDotGranted,
-              contactsStatus === "denied" && styles.contactsDotDenied,
-            ]}
-          />
-          <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
-        </View>
-        {contactsStatus !== "granted" ? (
-          <View style={styles.smsActions}>
-            <Btn
-              label={contactsActionLabel}
-              kind="accent"
-              tiny
-              onPress={() => void handleContactsPermission()}
-            />
-          </View>
-        ) : null}
+        <Text style={styles.smsHint}>{s.contactsHint}</Text>
+        {contactsNativeReady ? (
+          <>
+            <View style={styles.contactsStatusRow}>
+              <View
+                style={[
+                  styles.contactsDot,
+                  contactsStatus === "granted" && styles.contactsDotGranted,
+                  contactsStatus === "denied" && styles.contactsDotDenied,
+                ]}
+              />
+              <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
+            </View>
+            {contactsStatus !== "granted" ? (
+              <View style={styles.smsActions}>
+                <Btn
+                  label={contactsActionLabel}
+                  kind="accent"
+                  tiny
+                  onPress={() => void handleContactsPermission()}
+                />
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
+        )}
       </View>
 
       {/* Integrations */}
       <SectionTitle label="Integrations" />
-      <Meta style={styles.langHint}>{t.settings.connectedMailboxes}</Meta>
+      <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
       <View style={styles.group}>
         {connectedMailboxes.map((mailbox) => (
           <Row
@@ -447,7 +457,7 @@ export function SettingsScreen() {
             detail={
               mailbox.gmail_modify
                 ? "Gmail · synced"
-                : t.settings.reconnectForRead
+                : s.reconnectForRead
             }
             onPress={() =>
               mailbox.gmail_modify
@@ -457,7 +467,7 @@ export function SettingsScreen() {
           />
         ))}
         <Integration
-          name={t.settings.addGmail}
+          name={s.addGmail}
           detail="Link another inbox"
           onConnect={() => void linkGmail()}
         />
