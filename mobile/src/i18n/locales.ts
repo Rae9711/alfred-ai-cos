@@ -80,7 +80,7 @@ export const translations = {
       needsActionEmptySub: "Pull down to sync for new messages.",
       smsEmpty: "No texts here yet.",
       smsEmptySub:
-        "Set up forwarding in You → Settings. New texts arrive automatically; older ones must be shared one at a time (iOS cannot bulk-sync the last 10).",
+        "Set up SMS forwarding in You → Settings, then send yourself a test text.",
       unreadLabel: "Unread",
       readLabel: "Read",
       mailboxChip: "Mailbox",
@@ -155,19 +155,19 @@ export const translations = {
       disconnectMailbox: "Disconnect",
       smsTitle: "SMS forwarding",
       smsHint:
-        "New texts forward automatically once the automation is on. iOS does not let Albert bulk-sync your last 10 messages — use Share to import older texts one at a time. If you see Unknown Action after import, delete the shortcut and install again from here.",
+        "New incoming texts forward automatically once the automation is on. iOS only supports new messages — not older texts already on your phone.",
       smsTokenLabel: "X-Sms-Token (for import prompt):",
       smsInstallShortcut: "Install forward shortcut",
-      smsShareShortcut: "Import older texts (Share)",
       smsCopyToken: "Copy Token",
+      smsSetupGuide: "Open setup guide",
       smsTokenCopied: "Token copied.",
       smsInstallFailed: "Could not open Shortcuts.",
       smsTokenPending:
         "Open this screen again if the token does not appear — it is created on first visit.",
       smsFirstForwardTip:
-        "Text forwarded! For older messages: Messages → long-press → Share → Albert SMS Share.",
+        "Text forwarded! Pull to refresh Inbox → SMS to see it.",
       smsSteps:
-        "After install:\n1. Shortcuts → Automations → + → Message → Run Immediately → Albert SMS Forward.\n2. Older texts (not automatic): Messages → long-press → Share → Albert SMS Share — repeat per message.\n3. Send yourself a test text; check Inbox → SMS.\n\nThere is no reliable one-tap “sync last 10” on recent iOS. Reply may not pre-fill the recipient until you add Get Details of Messages manually in Shortcuts (see docs).",
+        "1. Install shortcut → paste X-Sms-Token when prompted.\n2. In Shortcuts, open Albert SMS Forward: Dictionary maps body, text, shortcut_input → Shortcut Input; POST JSON to inbox/sms with X-Sms-Token header.\n3. Settings → Shortcuts → Automation → + → When I receive a message → Run Immediately → Albert SMS Forward. Leave filters empty (extra filters break Chinese SMS).\n4. Test: send yourself a text → Inbox → SMS → pull to refresh.\n5. Optional: run the shortcut manually — message_id JSON means it's working.\n\nIf you see Unknown Action after import, delete the shortcut and install again from here.",
       contactsTitle: "Contacts",
       contactsHint:
         "Needed when you ask Albert to text someone by name in Ask — e.g. “text Mom: see you tomorrow”. Albert looks up the number in your contacts; nothing is uploaded.",
@@ -283,8 +283,7 @@ export const translations = {
       needsActionEmpty: "近 14 天内没有需要回复或决策的邮件。",
       needsActionEmptySub: "下拉同步以获取新消息。",
       smsEmpty: "暂无短信。",
-      smsEmptySub:
-        "请在「我的」配置短信转发。新短信会自动出现；旧短信需逐条「分享」导入，iOS 无法自动同步最近 10 条。",
+      smsEmptySub: "请在「我的」配置短信转发，然后给自己发一条测试短信。",
       unreadLabel: "未读",
       readLabel: "已读",
       mailboxChip: "邮箱",
@@ -355,18 +354,17 @@ export const translations = {
       disconnectMailbox: "断开",
       smsTitle: "短信转发",
       smsHint:
-        "开启自动化后，新短信会自动转发。受 iOS 限制，Albert 无法自动同步最近 10 条 — 请用「分享」逐条导入旧短信。若导入后出现未知操作，请删除快捷指令后从此处重新安装。",
+        "开启自动化后，新收到的短信会自动转发。iOS 只支持新短信，无法同步手机里已有的旧短信。",
       smsTokenLabel: "X-Sms-Token（导入时粘贴）：",
       smsInstallShortcut: "安装转发快捷指令",
-      smsShareShortcut: "导入旧短信（分享）",
       smsCopyToken: "复制令牌",
+      smsSetupGuide: "查看完整设置指南",
       smsTokenCopied: "已复制令牌。",
       smsInstallFailed: "无法打开快捷指令。",
       smsTokenPending: "若令牌未显示，请重新打开此页 — 首次访问时会自动创建。",
-      smsFirstForwardTip:
-        "短信已转发！导入更早的短信：信息 → 长按消息 → 分享 → Albert SMS Share。",
+      smsFirstForwardTip: "短信已转发！在收件箱 → 短信下拉刷新即可看到。",
       smsSteps:
-        "安装后：\n1. 快捷指令 → 自动化 → + → 信息 → 立即运行 → Albert SMS Forward。\n2. 旧短信（非自动）：信息 → 长按 → 分享 → Albert SMS Share，每条重复一次。\n3. 给自己发测试短信，在收件箱 → 短信中查看。\n\n近期 iOS 上没有可靠的一键「同步最近 10 条」。若需回复时自动填入收件人，请在快捷指令中手动添加「获取信息详细信息」（见文档）。",
+        "1. 安装快捷指令 → 按提示粘贴 X-Sms-Token。\n2. 在快捷指令中打开 Albert SMS Forward：词典将 body、text、shortcut_input 映射到「快捷指令输入」；以 JSON POST 到 inbox/sms，请求头带 X-Sms-Token。\n3. 设置 → 快捷指令 → 自动化 → + → 收到信息时 → 立即运行 → Albert SMS Forward。不要加额外筛选（空格会导致中文短信异常）。\n4. 测试：给自己发短信 → 收件箱 → 短信 → 下拉刷新。\n5. 可选：手动运行快捷指令 — 若返回含 message_id 的 JSON 即表示正常。\n\n若导入后出现「未知操作」，请删除快捷指令后从此处重新安装。",
       contactsTitle: "通讯录",
       contactsHint:
         "在「对话」里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Albert 只在本地查找号码，不会上传通讯录。",

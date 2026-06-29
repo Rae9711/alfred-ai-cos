@@ -54,8 +54,6 @@ export function SettingsScreen() {
   const [smsToken, setSmsToken] = useState<string | null>(null);
   const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
-  const [smsBackfillShortcutUrl, setSmsBackfillShortcutUrl] = useState<string | null>(null);
-  const [smsBackfillImportUrl, setSmsBackfillImportUrl] = useState<string | null>(null);
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
     null,
   );
@@ -76,16 +74,6 @@ export function SettingsScreen() {
         setSmsToken(null);
         setSmsShortcutUrl(null);
         setSmsImportUrl(null);
-      });
-    api
-      .getSmsBackfillInstall()
-      .then((cfg) => {
-        setSmsBackfillShortcutUrl(cfg.shortcut_url);
-        setSmsBackfillImportUrl(cfg.import_url);
-      })
-      .catch(() => {
-        setSmsBackfillShortcutUrl(null);
-        setSmsBackfillImportUrl(null);
       });
   }, []);
 
@@ -196,24 +184,17 @@ export function SettingsScreen() {
     }
   }, [smsShortcutUrl, smsImportUrl, s.smsInstallFailed]);
 
-  const openSmsBackfillShortcut = useCallback(async () => {
-    const target = smsBackfillShortcutUrl ?? smsBackfillImportUrl;
-    if (!target) return;
+  const SMS_SETUP_GUIDE_URL =
+    "https://github.com/Rae9711/alfred-ai-cos/blob/master/docs/integrations/ios-sms-shortcut.md";
+
+  const openSmsSetupGuide = useCallback(async () => {
     setNote(null);
     try {
-      await Linking.openURL(target);
+      await Linking.openURL(SMS_SETUP_GUIDE_URL);
     } catch {
-      if (smsBackfillImportUrl && target !== smsBackfillImportUrl) {
-        try {
-          await Linking.openURL(smsBackfillImportUrl);
-          return;
-        } catch {
-          // fall through
-        }
-      }
       setNote(s.smsInstallFailed);
     }
-  }, [smsBackfillShortcutUrl, smsBackfillImportUrl, s.smsInstallFailed]);
+  }, [s.smsInstallFailed]);
 
   const copySmsToken = useCallback(async () => {
     if (!smsToken) return;
@@ -387,12 +368,6 @@ export function SettingsScreen() {
             tiny
             onPress={() => void installSmsShortcut()}
           />
-          <Btn
-            label={s.smsShareShortcut}
-            kind="ghost"
-            tiny
-            onPress={() => void openSmsBackfillShortcut()}
-          />
           {smsToken ? (
             <Btn
               label={s.smsCopyToken}
@@ -401,6 +376,12 @@ export function SettingsScreen() {
               onPress={() => void copySmsToken()}
             />
           ) : null}
+          <Btn
+            label={s.smsSetupGuide}
+            kind="ghost"
+            tiny
+            onPress={() => void openSmsSetupGuide()}
+          />
         </View>
         {smsToken ? (
           <>
