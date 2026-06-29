@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.db.models import User
+from app.schemas.llm import AssistantInterpretation
 from app.services.assistant import build_assistant_context, chat_with_context
 from tests.fakes import FakeLLM
 
@@ -34,3 +35,28 @@ def test_chat_with_context_uses_llm(
     reply = chat_with_context(db, user, text="What am I forgetting?", tz="America/New_York")
     assert reply == "You forgot to reply to Dana."
     assert len(fake.chat_calls) == 1
+
+
+def test_chat_with_context_creates_reminder(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date, timedelta
+
+    from app.db.models import Task
+
+    due = date.today() + timedelta(days=1)
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="create_task",
+            title="Pay rent",
+            due_date=due,
+            reply="",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    reply = chat_with_context(
+        db, user, text="remind me tomorrow to pay rent", tz="America/New_York"
+    )
+    assert "Pay rent" in reply
+    assert db.query(Task).filter(Task.user_id == user.id).count() == 1
+    assert len(fake.chat_calls) == 0

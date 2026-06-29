@@ -1,9 +1,9 @@
 """Ask Albert (PRD 10.2). A free-text request → an interpreted action.
 
-v1 understands calendar booking ("book my calendar tomorrow 5-6pm"): the LLM resolves
-the times against the user's timezone, and the request runs through the capability spine
-(propose → execute) so it's audited like every other action. Booking your own time is a
-level-2 reversible write, so it executes without an approval card; Albert just confirms.
+v1 understands calendar booking ("book my calendar tomorrow 5-6pm") and reminders/todos
+("remind me tomorrow to pay rent"): the LLM resolves times against the user's timezone,
+and the request runs through the capability spine (propose → execute) so it's audited
+like every other action. Level-2 reversible writes execute without an approval card.
 Other intents return an honest reply rather than pretending."""
 
 from __future__ import annotations

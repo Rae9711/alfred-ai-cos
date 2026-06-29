@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import CalendarEvent, User
+from app.db.models import CalendarEvent, Task, User
 from app.schemas.llm import AssistantInterpretation
 from app.services.assistant import interpret_and_act
 from tests.fakes import FakeLLM
@@ -87,3 +87,26 @@ def test_none_passes_through_general_reply(
     monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
     out = interpret_and_act(db, user, text="What is the capital of France?", tz="America/New_York")
     assert out.reply == "The capital of France is Paris."
+
+
+def test_create_task_from_reminder(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    due = date.today() + timedelta(days=1)
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="create_task",
+            title="Pay rent",
+            due_date=due,
+            reply="",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    out = interpret_and_act(
+        db, user, text="明天提醒我交房租", tz="America/New_York"
+    )
+    assert out.action == "created"
+    assert "Pay rent" in out.reply
+    task = db.query(Task).filter(Task.user_id == user.id).one()
+    assert task.title == "Pay rent"
+    assert task.due_date == due

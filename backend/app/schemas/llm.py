@@ -78,11 +78,18 @@ class AssistantInterpretation(BaseModel):
 
     intent: str = Field(
         description=(
-            "One of: book_calendar, reschedule_calendar, cancel_calendar, check_calendar, none."
+            "One of: book_calendar, reschedule_calendar, cancel_calendar, check_calendar, "
+            "create_task, none."
         )
     )
     reply: str = Field(description="A short, calm one-line reply to show the user.")
-    title: str | None = Field(default=None, description="Event title when booking.")
+    title: str | None = Field(
+        default=None, description="Event title when booking, or task title when creating a reminder."
+    )
+    due_date: date | None = Field(
+        default=None,
+        description="Task due/reminder date as YYYY-MM-DD when intent is create_task.",
+    )
     start: str | None = Field(
         default=None, description="Event start, ISO 8601 with the user's UTC offset."
     )

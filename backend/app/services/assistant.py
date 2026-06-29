@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import ActionType
+from app.db.enums import ActionType, SourceType
 from app.db.models import Message, User
 from app.llm import get_llm
 from app.services import execution, meeting_prep
@@ -75,13 +75,50 @@ def _calendar_check_reply(db: Session, user_id: str, tz: str) -> str:
 
 _CALENDAR_ONLY_RE = (
     r"only help with calendar|can only help with calendar|"
-    r"只能.*日历|仅.*日历"
+    r"只能.*日历|仅.*日历|outside.*context|out of scope|超出.*范围"
 )
+
+_ACTION_HINTS = (
+    # calendar
+    "book",
+    "schedule",
+    "calendar",
+    "reschedule",
+    "cancel",
+    "订",
+    "日历",
+    "安排",
+    # reminders / tasks
+    "remind",
+    "reminder",
+    "todo",
+    "task",
+    "don't forget",
+    "remember to",
+    "提醒",
+    "备忘",
+    "待办",
+    "记一下",
+    "别忘了",
+)
+
+
+def _text_requests_action(text: str) -> bool:
+    lower = text.lower()
+    return any(h in lower for h in _ACTION_HINTS)
+
+
+def _format_due_date(d: date, tz: str) -> str:
+    try:
+        local = datetime(d.year, d.month, d.day, tzinfo=ZoneInfo(tz))
+    except (ZoneInfoNotFoundError, ValueError):
+        local = datetime(d.year, d.month, d.day)
+    return local.strftime("%a %b %-d")
 
 
 @dataclass
 class AssistantOutcome:
-    action: str  # booked | updated | cancelled | none
+    action: str  # booked | updated | cancelled | created | none
     reply: str
     detail: str | None = None
 
@@ -146,12 +183,34 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         reply = (interp.reply or "").strip() or _calendar_check_reply(db, user.id, tz)
         return AssistantOutcome(action="none", reply=reply)
 
+    if interp.intent == "create_task" and interp.title:
+        target: dict[str, str] = {
+            "title": interp.title,
+            "source_type": SourceType.manual.value,
+        }
+        if interp.due_date:
+            target["due_date"] = interp.due_date.isoformat()
+        proposal = propose_action_internal(
+            db,
+            user,
+            action_type=ActionType.create_task,
+            target=target,
+            reason="Reminder from an assistant request",
+        )
+        result = execution.execute_proposal(db, user, proposal)
+        reply = (interp.reply or "").strip() or result.detail
+        if not interp.reply and interp.due_date:
+            reply = f"Got it — I'll remind you {_format_due_date(interp.due_date, tz)}: {interp.title}."
+        return AssistantOutcome(
+            action="created", reply=reply, detail=result.detail
+        )
+
     reply = (interp.reply or "").strip()
     if not reply:
         reply = "I'm not sure how to help with that — try asking about your calendar."
     elif re.search(_CALENDAR_ONLY_RE, reply, re.IGNORECASE):
         reply = (
-            "I can check or book your calendar, draft a text by name "
+            "I can check or book your calendar, set reminders and tasks, draft a text by name "
             '(e.g. "text Mom: see you tomorrow"), or help reply from Inbox.'
         )
     return AssistantOutcome(action="none", reply=reply)
@@ -247,21 +306,14 @@ def chat_with_context(
     history: list[dict[str, str]] | None = None,
 ) -> str:
     """Answer a free-form question using Today, waiting, inbox, and calendar context."""
-    # Calendar booking/reschedule still routes through the action spine when detected.
-    calendar_hints = (
-        "book",
-        "schedule",
-        "calendar",
-        "reschedule",
-        "cancel",
-        "订",
-        "日历",
-        "安排",
-    )
-    lower = text.lower()
-    if any(h in lower for h in calendar_hints):
+    if _text_requests_action(text):
         outcome = interpret_and_act(db, user, text=text, tz=tz)
         if outcome.action != "none":
+            return outcome.reply
+        # check_calendar and other none-action intents still have a useful reply.
+        if outcome.reply and outcome.reply != (
+            "I'm not sure how to help with that — try asking about your calendar."
+        ):
             return outcome.reply
 
     context = build_assistant_context(db, user, tz=tz)

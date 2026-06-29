@@ -165,7 +165,7 @@ class AssistantAskRequest(BaseModel):
 
 class AssistantAskResponse(BaseModel):
     reply: str  # one-line message to show the user
-    action: str  # "booked" | "updated" | "cancelled" | "none"
+    action: str  # "booked" | "updated" | "cancelled" | "created" | "none"
     detail: str | None = None  # execution detail when an action ran
 
 

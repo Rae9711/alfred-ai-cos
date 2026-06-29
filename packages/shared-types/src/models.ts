@@ -249,7 +249,7 @@ export interface BookMessageResponse {
 // calendar event was created, "none" otherwise; `reply` is the line to show.
 export interface AssistantAskResponse {
   reply: string;
-  action: "booked" | "updated" | "cancelled" | "none";
+  action: "booked" | "updated" | "cancelled" | "created" | "none";
   detail: string | null;
 }
 

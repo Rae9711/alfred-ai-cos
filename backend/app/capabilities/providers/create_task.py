@@ -3,6 +3,7 @@ a task via the task service, so AI-suggested tasks share the manual creation pat
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -31,13 +32,24 @@ class CreateTaskCapability:
             raise CapabilityError("A task title is required")
 
     def execute(self, db: Session, user: User, payload: dict[str, Any]) -> ExecutionResult:
+        due_date = payload.get("due_date")
+        if isinstance(due_date, str):
+            due_date = date.fromisoformat(due_date)
+        source_raw = payload.get("source_type", SourceType.manual.value)
+        source_type = (
+            source_raw if isinstance(source_raw, SourceType) else SourceType(str(source_raw))
+        )
         task = task_service.create_task(
             db,
             user.id,
             title=str(payload["title"]),
             description=payload.get("description"),
-            source_type=SourceType.gmail,
+            due_date=due_date,
+            source_type=source_type,
             source_id=payload.get("source_id"),
             confidence=payload.get("confidence"),
         )
-        return ExecutionResult(detail=f"Created task: {task.title}", reversible=True)
+        detail = f"Created task: {task.title}"
+        if task.due_date:
+            detail += f" (due {task.due_date.isoformat()})"
+        return ExecutionResult(detail=detail, reversible=True)
