@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import MessageClassification
 from app.db.models import Message, OutboundReply
-from app.services.classification_adjust import upgrade_human_misclassified_as_fyi
+from app.services.classification_adjust import (
+    subject_implies_action_required,
+    upgrade_human_misclassified_as_fyi,
+)
 
 # Backend classification → the Inbox screen's four buckets (+ Processing while classifying).
 CATEGORY_LABEL = {
@@ -77,12 +80,29 @@ def category_for_message(classification: MessageClassification | None) -> str | 
     return CATEGORY_LABEL.get(classification, "FYI")
 
 
+def message_user_decided(message: Message) -> bool:
+    """True when the user explicitly marked this message handled in the app."""
+    headers = message.headers or {}
+    return bool(headers.get("user_decided"))
+
+
+def mark_message_user_decided(message: Message) -> None:
+    headers = dict(message.headers or {})
+    headers["user_decided"] = True
+    message.headers = headers
+
+
 def effective_inbox_category(message: Message) -> str:
     """UI category after correcting common LLM FYI mistakes on human mail."""
+    if message_user_decided(message):
+        return "FYI"
     if message.classification is None:
         # Synced mail awaiting LLM classification — but action_required means
         # the user should treat it as needs-reply, not a vague "Processing" tag.
-        if message.action_required:
+        if message.action_required or subject_implies_action_required(
+            subject=message.subject,
+            snippet=message.snippet,
+        ):
             return "Needs Reply"
         return "Processing"
     stored = upgrade_human_misclassified_as_fyi(
@@ -100,8 +120,42 @@ def message_needs_attention(
     *,
     category: str,
     user_replied: bool,
+    user_decided: bool = False,
 ) -> bool:
     """True when the message belongs in the needs-action tab."""
-    if user_replied or category == "Processing":
+    if user_decided or user_replied or category == "Processing":
         return False
     return category in _ACTION_CATEGORIES
+
+
+def needs_action_message_ids(
+    db: Session,
+    user_id: str,
+    *,
+    replied_ids: set[str] | None = None,
+) -> set[str]:
+    """Message ids that belong in the needs-action inbox tab."""
+    from app.services.inbox_filter import message_in_primary_inbox
+
+    cutoff = needs_action_cutoff_utc()
+    replied = replied_ids if replied_ids is not None else user_replied_message_ids(db, user_id)
+    rows = db.scalars(
+        select(Message).where(
+            Message.user_id == user_id,
+            Message.sent_at.is_not(None),
+            Message.sent_at >= cutoff,
+            Message.classification != MessageClassification.spam_noise,
+        )
+    )
+    ids: set[str] = set()
+    for message in rows:
+        if not message_in_primary_inbox(message):
+            continue
+        category = effective_inbox_category(message)
+        if message_needs_attention(
+            category=category,
+            user_replied=message.id in replied,
+            user_decided=message_user_decided(message),
+        ):
+            ids.add(message.id)
+    return ids

@@ -15,7 +15,6 @@ import {
 } from "react-native";
 
 import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
-import { api } from "@/api/client";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -55,6 +54,7 @@ export function InboxScreen() {
     syncAndRefresh,
     refresh,
     markRead,
+    markDecided,
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
@@ -121,9 +121,8 @@ export function InboxScreen() {
     ease();
     void (async () => {
       try {
-        await api.markMessageDecided(id);
+        await markDecided(id);
         showToast(t.inbox.markDecidedDone);
-        await syncAndRefresh();
       } catch (e) {
         showToast(
           e instanceof Error ? e.message : t.inbox.markReadFailed,
@@ -136,9 +135,8 @@ export function InboxScreen() {
     ease();
     void (async () => {
       try {
-        await api.markMessageDecided(id);
+        await markDecided(id);
         showToast(t.inbox.markProcessedDone);
-        await syncAndRefresh();
       } catch (e) {
         showToast(
           e instanceof Error ? e.message : t.inbox.markReadFailed,

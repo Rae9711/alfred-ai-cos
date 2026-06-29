@@ -27,7 +27,9 @@ from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
+    mark_message_user_decided,
     message_needs_attention,
+    message_user_decided,
     needs_action_cutoff_utc,
     start_of_today_utc,
     user_replied_message_ids,
@@ -129,6 +131,7 @@ def list_inbox(
         if scope == "needs_action" and not message_needs_attention(
             category=category,
             user_replied=user_replied,
+            user_decided=message_user_decided(m),
         ):
             continue
         messages.append(
@@ -228,6 +231,7 @@ def mark_decided(
     message = db.get(Message, message_id)
     if message is None or message.user_id != user.id:
         raise HTTPException(status_code=404, detail="Message not found")
+    mark_message_user_decided(message)
     message.classification = MessageClassification.informational
     message.action_required = False
     if not message.body_summary:

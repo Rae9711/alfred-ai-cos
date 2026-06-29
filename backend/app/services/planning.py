@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority, TaskStatus
 from app.db.models import CalendarEvent, Commitment, Task, User
 from app.schemas.today import PlanningItemType, QuickWin, TimeBlockSuggestion
+from app.services.inbox_view import needs_action_message_ids
 from app.services.meeting_prep import today_events
 from app.services.priority import ScoredCommitment, score_commitment
 from app.services.tasks import list_tasks
@@ -133,12 +134,17 @@ def _gap_reason(gap: TimeGap, estimated: int, tz: ZoneInfo) -> str:
 
 def _candidates_from_commitments(
     scored: list[ScoredCommitment],
+    *,
+    needs_action_ids: set[str],
 ) -> list[PlanCandidate]:
     out: list[PlanCandidate] = []
     for s in scored:
         if s.commitment.owner != CommitmentOwner.user:
             continue
         if s.priority == Priority.noise:
+            continue
+        source_id = s.commitment.source_id
+        if not source_id or source_id not in needs_action_ids:
             continue
         title = s.commitment.description
         out.append(
@@ -153,10 +159,16 @@ def _candidates_from_commitments(
     return out
 
 
-def _candidates_from_tasks(tasks: list[Task]) -> list[PlanCandidate]:
+def _candidates_from_tasks(
+    tasks: list[Task],
+    *,
+    needs_action_ids: set[str],
+) -> list[PlanCandidate]:
     out: list[PlanCandidate] = []
     for task in tasks:
         if task.status != TaskStatus.open:
+            continue
+        if not task.source_id or task.source_id not in needs_action_ids:
             continue
         title = task.title
         priority_bonus = {
@@ -273,7 +285,11 @@ def build_planning_suggestions(
         ]
 
     tasks = list_tasks(db, user_id, status=TaskStatus.open)
-    candidates = _candidates_from_commitments(scored) + _candidates_from_tasks(tasks)
+    needs_action_ids = needs_action_message_ids(db, user_id)
+    candidates = _candidates_from_commitments(
+        scored,
+        needs_action_ids=needs_action_ids,
+    ) + _candidates_from_tasks(tasks, needs_action_ids=needs_action_ids)
 
     used_ids: set[str] = set()
     suggestions = _pick_time_block_suggestions(gaps, candidates, tz=tz, used_ids=used_ids)

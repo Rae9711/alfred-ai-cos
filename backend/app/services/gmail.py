@@ -362,15 +362,19 @@ def _collect_body_parts(payload: dict[str, Any], *, mime_type: str, found: list[
 
 
 def _extract_body(payload: dict[str, Any]) -> str:
-    """Walk the MIME tree: prefer text/plain, fall back to text/html."""
+    """Walk the MIME tree: prefer non-empty text/plain, fall back to text/html."""
     plain_parts: list[str] = []
     html_parts: list[str] = []
     _collect_body_parts(payload, mime_type="text/plain", found=plain_parts)
     _collect_body_parts(payload, mime_type="text/html", found=html_parts)
-    if plain_parts:
-        return plain_parts[0].strip()
-    if html_parts:
-        return _html_to_text(html_parts[0])
+    for part in plain_parts:
+        text = part.strip()
+        if text:
+            return text
+    for part in html_parts:
+        text = _html_to_text(part)
+        if text:
+            return text
     return ""
 
 

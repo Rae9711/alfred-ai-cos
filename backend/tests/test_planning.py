@@ -97,10 +97,29 @@ def test_find_free_gap_between_meetings() -> None:
 
 
 def test_build_planning_suggests_time_block_for_gap(db: Session, user: User) -> None:
+    from app.db.models import Message
+    from app.db.enums import MessageClassification
+
+    msg = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="plan-msg-1",
+        sender="boss@corp.com",
+        recipients=[],
+        subject="Please reply today",
+        classification=MessageClassification.needs_reply,
+        action_required=True,
+        sent_at=NOW,
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        sender_classification="person",
+    )
+    db.add(msg)
+    db.flush()
     db.add(
         _commitment(
             user.id,
             "Finish Barnes term sheet reply",
+            source_id=msg.id,
         )
     )
     db.add(_event(user.id, NOW + timedelta(minutes=45), title="Client call"))
@@ -118,12 +137,30 @@ def test_build_planning_suggests_time_block_for_gap(db: Session, user: User) -> 
 
 
 def test_build_planning_quick_wins(db: Session, user: User) -> None:
+    from app.db.models import Message
+    from app.db.enums import MessageClassification
+
+    msg = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="plan-msg-2",
+        sender="friend@example.com",
+        recipients=[],
+        subject="RSVP",
+        classification=MessageClassification.needs_reply,
+        action_required=True,
+        sent_at=NOW,
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        sender_classification="person",
+    )
+    db.add(msg)
+    db.flush()
     # Block the calendar so items surface as quick wins, not time-block picks.
     db.add(_event(user.id, NOW - timedelta(hours=2), hours=20, title="Busy day"))
     db.add_all(
         [
-            _commitment(user.id, "Confirm dinner RSVP"),
-            _commitment(user.id, "Reply OK to Tom"),
+            _commitment(user.id, "Confirm dinner RSVP", source_id=msg.id),
+            _commitment(user.id, "Reply OK to Tom", source_id=msg.id),
             Task(
                 user_id=user.id,
                 title="Mark invoice paid",
@@ -145,8 +182,39 @@ def test_build_planning_quick_wins(db: Session, user: User) -> None:
     assert len(quick_wins) <= planning_service.MAX_QUICK_WINS
 
 
+def test_build_planning_ignores_non_action_commitments(db: Session, user: User) -> None:
+    db.add(_commitment(user.id, "FYI-only backlog item"))
+    db.add(_event(user.id, NOW + timedelta(minutes=45), title="Client call"))
+    db.commit()
+
+    suggestions, quick_wins = planning_service.build_planning_suggestions(
+        db, user.id, today=TODAY, now=NOW
+    )
+
+    assert suggestions == []
+    assert quick_wins == []
+
+
 def test_build_today_includes_planning_fields(db: Session, user: User) -> None:
-    db.add(_commitment(user.id, "Confirm dinner RSVP"))
+    from app.db.models import Message
+    from app.db.enums import MessageClassification
+
+    msg = Message(
+        user_id=user.id,
+        source="gmail",
+        external_id="plan-msg-3",
+        sender="friend@example.com",
+        recipients=[],
+        subject="Quick confirm",
+        classification=MessageClassification.needs_reply,
+        action_required=True,
+        sent_at=NOW,
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        sender_classification="person",
+    )
+    db.add(msg)
+    db.flush()
+    db.add(_commitment(user.id, "Confirm dinner RSVP", source_id=msg.id))
     db.commit()
 
     dashboard = build_today(db, user.id, today=TODAY)

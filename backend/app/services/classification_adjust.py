@@ -8,6 +8,18 @@ from app.db.enums import MessageClassification, Priority
 from app.schemas.llm import ClassificationResult
 
 _PERSON_SENDERS = frozenset({"person", "vip", "role_account"})
+# Billing / account alerts that need user action even when LLM extraction is skipped.
+_ACTION_SUBJECT_RE = re.compile(
+    r"\b("
+    r"action (?:required|needed)|"
+    r"(?:invoice|subscription|balance|payment|account).*?(?:past due|overdue|unpaid)|"
+    r"(?:past due|overdue|unpaid)(?: balance| invoice| payment| notice)?|"
+    r"payment (?:failed|declined|due)|"
+    r"card (?:expired|expiring|declined)"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _DIRECT_ASK_RE = re.compile(
     r"(\?|"
     r"\bplease (?:reply|respond|send|confirm|review|sign|let me know)\b|"
@@ -56,6 +68,16 @@ _SECURITY_FYI_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+def subject_implies_action_required(
+    *,
+    subject: str | None,
+    snippet: str | None = None,
+) -> bool:
+    """True when subject/snippet clearly signals the user must act."""
+    text = _message_text(subject=subject, snippet=snippet)
+    return bool(text and _ACTION_SUBJECT_RE.search(text))
 
 
 def _message_text(

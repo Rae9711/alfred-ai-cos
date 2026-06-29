@@ -33,6 +33,7 @@ type MailboxState = {
   refresh: () => Promise<void>;
   syncAndRefresh: () => Promise<number>;
   markRead: (id: string) => Promise<boolean>;
+  markDecided: (id: string) => Promise<void>;
   itemById: (id: string) => AppInboxItem | undefined;
 };
 
@@ -130,6 +131,31 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     return ingested;
   }, [loadInbox]);
 
+  const markDecided = useCallback(async (id: string) => {
+    await api.markMessageDecided(id);
+    setItems((prev) => {
+      if (filterRef.current.scope === "needs_action") {
+        return prev.filter((m) => m.id !== id);
+      }
+      return prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              section: "fyi" as const,
+              category: "FYI",
+              showReplyActions: false,
+              isUnread: false,
+              tags: m.tags.map((t) =>
+                t.label === "Needs Reply" || t.label === "Needs Decision"
+                  ? { label: "FYI", tone: "muted" as const }
+                  : t,
+              ),
+            }
+          : m,
+      );
+    });
+  }, []);
+
   const markRead = useCallback(async (id: string) => {
     const result = await api.markMessageRead(id);
     setItems((prev) => {
@@ -193,6 +219,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       refresh,
       syncAndRefresh,
       markRead,
+      markDecided,
       itemById,
     }),
     [
@@ -208,6 +235,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       refresh,
       syncAndRefresh,
       markRead,
+      markDecided,
       itemById,
     ],
   );

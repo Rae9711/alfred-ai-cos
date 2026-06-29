@@ -55,7 +55,8 @@ export function MessageDetailSheet({
         setSubject(detail.subject?.trim() || (detail.source === "sms" ? t.sms.messageLabel : "(No subject)"));
         setSender(detail.sender);
         setSummary(detail.take?.trim() || null);
-        setBody(detail.body);
+        const bodyText = detail.body?.trim() || detail.snippet?.trim() || "";
+        setBody(bodyText);
         setIsSms(detail.source === "sms");
       } catch (e) {
         if (!cancelled) {

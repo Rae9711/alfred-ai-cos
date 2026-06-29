@@ -19,7 +19,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.enums import SyncStatus
+from app.db.enums import MessageClassification, SyncStatus
 from app.db.models import ConnectedAccount, Message, User
 from app.services import gmail, sender_class
 from app.services.connected_accounts import list_google_accounts
@@ -28,6 +28,7 @@ from app.services.extraction import _EXTRACTION_BLOCKED_CLASSES
 from app.services.gmail import HistoryExpiredError, use_gmail_credentials
 from app.services.google_oauth import fresh_credentials
 from app.services.inbox_filter import message_in_primary_inbox
+from app.services.classification_adjust import subject_implies_action_required
 
 
 @dataclass(frozen=True)
@@ -110,6 +111,13 @@ def _ingest_message_ids(
         if sender_class.has_bulk_mail_headers(raw.get("headers")) and not is_updates_tab:
             continue
         message.sender_classification = cls.cls
+        if subject_implies_action_required(
+            subject=raw["subject"],
+            snippet=raw["snippet"],
+        ):
+            message.action_required = True
+            if cls.cls in _EXTRACTION_BLOCKED_CLASSES:
+                message.classification = MessageClassification.needs_decision
         db.add(message)
         new_messages.append(message)
     return new_messages

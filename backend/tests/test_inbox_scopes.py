@@ -184,3 +184,20 @@ def test_inbox_scopes_order_newest_first(db: Session, user: User) -> None:
         "Subject gmail:newer",
         "Subject gmail:older",
     ]
+
+
+def test_mark_decided_excludes_from_needs_action(db: Session, user: User) -> None:
+    now = datetime.now(UTC)
+    msg = _gmail_message(
+        user_id=user.id,
+        external_id="gmail:decide-me",
+        sent_at=now - timedelta(hours=1),
+        classification=MessageClassification.needs_reply,
+    )
+    db.add(msg)
+    db.commit()
+
+    messages_mod.mark_decided(msg.id, user=user, db=db)
+
+    out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert out.messages == []

@@ -5,6 +5,7 @@ from app.services.classification_adjust import (
     looks_like_automated_fyi,
     looks_like_security_fyi,
     looks_like_verification_code,
+    subject_implies_action_required,
 )
 
 
@@ -34,6 +35,12 @@ def test_human_reply_does_not_match() -> None:
     assert not looks_like_automated_fyi(
         subject="Please send the signed letter",
         snippet="When you have a moment, reply with the document.",
+    )
+
+
+def test_past_due_subject_implies_action() -> None:
+    assert subject_implies_action_required(
+        subject="Action needed, your balance is now past due",
     )
 
 

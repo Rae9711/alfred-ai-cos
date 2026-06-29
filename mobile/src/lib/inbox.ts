@@ -43,10 +43,20 @@ function tagForCategory(
   }
 }
 
+const ACTION_SUBJECT_RE =
+  /\b(action (?:required|needed)|(?:invoice|subscription|balance|payment|account).*?(?:past due|overdue|unpaid)|(?:past due|overdue|unpaid)(?: balance| invoice| payment| notice)?|payment (?:failed|declined|due)|card (?:expired|expiring|declined))\b/i;
+
+function subjectImpliesActionRequired(message: InboxMessage): boolean {
+  const text = [message.subject, message.snippet].filter(Boolean).join(" ");
+  return ACTION_SUBJECT_RE.test(text);
+}
+
 /** Resolve category for display/sectioning (backend may still say Processing). */
 function resolvedCategory(message: InboxMessage): InboxMessage["category"] {
-  if (message.category === "Processing" && message.action_required) {
-    return "Needs Reply";
+  if (message.category === "Processing") {
+    if (message.action_required || subjectImpliesActionRequired(message)) {
+      return "Needs Reply";
+    }
   }
   return message.category;
 }

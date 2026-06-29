@@ -48,6 +48,52 @@ def test_effective_inbox_category_action_required_before_classified() -> None:
     assert effective_inbox_category(m) == "Needs Reply"
 
 
+def test_effective_inbox_category_past_due_subject_before_classified() -> None:
+    from app.db.models import Message
+    from app.services.inbox_view import effective_inbox_category
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="p3",
+        sender="billing@chase.com",
+        recipients=[],
+        subject="Action needed, your balance is now past due",
+        snippet="Please pay now",
+        sender_classification="automated",
+    )
+    assert effective_inbox_category(m) == "Needs Reply"
+
+
+def test_message_user_decided_excluded_from_needs_action() -> None:
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        mark_message_user_decided,
+        message_needs_attention,
+    )
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="p4",
+        sender="a@b.com",
+        recipients=[],
+        classification=MessageClassification.needs_reply,
+    )
+    mark_message_user_decided(m)
+    category = effective_inbox_category(m)
+    assert category == "FYI"
+    assert (
+        message_needs_attention(
+            category=category,
+            user_replied=False,
+            user_decided=True,
+        )
+        is False
+    )
+
+
 def test_is_gmail_unread() -> None:
     assert is_gmail_unread(["INBOX", "UNREAD"]) is True
     assert is_gmail_unread(["INBOX", "CATEGORY_PERSONAL"]) is False

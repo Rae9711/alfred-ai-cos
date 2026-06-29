@@ -83,6 +83,24 @@ describe("mapInboxMessage", () => {
     expect(item.summary).toBe("snip");
   });
 
+  it("maps past-due subject Processing to needs reply", () => {
+    const item = mapInboxMessage({
+      id: "6",
+      sender: "Chase <billing@chase.com>",
+      subject: "Action needed, your balance is now past due",
+      snippet: "Please pay now",
+      take: null,
+      category: "Processing",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: false,
+      is_unread: true,
+      user_replied: false,
+    });
+    expect(item.section).toBe("reply");
+    expect(item.category).toBe("Needs Reply");
+  });
+
   it("maps action-required Processing to needs reply", () => {
     const item = mapInboxMessage({
       id: "5",

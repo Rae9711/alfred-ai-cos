@@ -40,3 +40,20 @@ def test_extract_body_falls_back_to_html() -> None:
         ],
     }
     assert "Step 1" in _extract_body(payload)
+
+
+def test_extract_body_skips_empty_plain_part() -> None:
+    payload = {
+        "mimeType": "multipart/alternative",
+        "parts": [
+            {
+                "mimeType": "text/plain",
+                "body": {"data": "ICA="},  # whitespace only
+            },
+            {
+                "mimeType": "text/html",
+                "body": {"data": "PHA+UGF5IG5vdy48L3A+"},  # <p>Pay now.</p>
+            },
+        ],
+    }
+    assert "Pay now" in _extract_body(payload)

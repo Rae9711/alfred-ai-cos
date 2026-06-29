@@ -25,6 +25,7 @@ from app.services.classification_adjust import (
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
 from app.services.message_body import build_thread_summary
+from app.services.inbox_view import message_user_decided
 
 # Common filler words that carry no identity for a commitment. Two phrasings of the
 # same task ("retain Premium" vs "maintain Premium") differ only in filler/synonyms,
@@ -150,6 +151,9 @@ def process_message(
     user = db.get(User, message.user_id)
     if user is None:
         raise ValueError("Missing user for extraction")
+
+    if message_user_decided(message):
+        return []
 
     # Extraction guard — applied before the LLM runs. The classifier ran at
     # ingest time and wrote sender_classification. If it's in the blocked set,
