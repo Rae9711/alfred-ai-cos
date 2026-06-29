@@ -26,12 +26,18 @@ def _emails_in(text: str | None) -> set[str]:
     return {m.lower() for m in _EMAIL_RE.findall(text)}
 
 
-def today_events(
-    db: Session, user_id: str, *, timezone: str | None
+def _local_tz(timezone: str | None):
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        return ZoneInfo(timezone or "UTC")
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def _events_between(
+    db: Session, user_id: str, *, start_utc: datetime, end_utc: datetime
 ) -> list[CalendarEvent]:
-    """All events on the user's local calendar day, including ones that already started."""
-    start_utc = start_of_today_utc(timezone)
-    end_utc = start_utc + timedelta(days=1)
     stmt = (
         select(CalendarEvent)
         .where(
@@ -43,6 +49,51 @@ def today_events(
         .order_by(CalendarEvent.start_time)
     )
     return list(db.scalars(stmt))
+
+
+def today_events(
+    db: Session, user_id: str, *, timezone: str | None
+) -> list[CalendarEvent]:
+    """All events on the user's local calendar day, including ones that already started."""
+    start_utc = start_of_today_utc(timezone)
+    return _events_between(db, user_id, start_utc=start_utc, end_utc=start_utc + timedelta(days=1))
+
+
+def week_events(
+    db: Session, user_id: str, *, timezone: str | None
+) -> list[CalendarEvent]:
+    """Events in the user's current local calendar week (Monday–Sunday)."""
+    tz = _local_tz(timezone)
+    local_now = datetime.now(tz)
+    week_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=local_now.weekday()
+    )
+    week_end = week_start + timedelta(days=7)
+    return _events_between(
+        db,
+        user_id,
+        start_utc=week_start.astimezone(UTC),
+        end_utc=week_end.astimezone(UTC),
+    )
+
+
+def month_events(
+    db: Session, user_id: str, *, timezone: str | None
+) -> list[CalendarEvent]:
+    """Events in the user's current local calendar month."""
+    tz = _local_tz(timezone)
+    local_now = datetime.now(tz)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+    return _events_between(
+        db,
+        user_id,
+        start_utc=month_start.astimezone(UTC),
+        end_utc=month_end.astimezone(UTC),
+    )
 
 
 def upcoming_events(

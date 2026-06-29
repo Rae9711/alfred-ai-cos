@@ -29,6 +29,7 @@ from app.services.message_read import account_has_gmail_modify, mark_message_rea
 from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
+    message_needs_attention,
     start_of_today_utc,
     user_replied_message_ids,
 )
@@ -45,6 +46,7 @@ def list_inbox(
     scope: str = Query(
         default="synced",
         description="'synced' = latest synced Primary mail (default); "
+        "'needs_action' = unread messages needing reply or follow-up; "
         "'unread' = unread Primary only; 'today' = since local midnight; "
         "'sms' = forwarded text messages only",
     ),
@@ -84,6 +86,8 @@ def list_inbox(
         stmt = stmt.where(Message.sent_at >= today_start)
     elif scope == "unread":
         stmt = stmt.limit(unread_limit * 2)
+    elif scope == "needs_action":
+        stmt = stmt.limit(synced_limit * 3)
     else:
         stmt = stmt.limit(synced_limit * 3)
 
@@ -92,7 +96,7 @@ def list_inbox(
     messages: list[InboxMessageOut] = []
     filtered = 0
     for m in rows:
-        if scope == "synced" and len(messages) >= synced_limit:
+        if scope in ("synced", "needs_action") and len(messages) >= synced_limit:
             break
         if scope == "unread" and len(messages) >= unread_limit:
             break
@@ -113,6 +117,13 @@ def list_inbox(
         if scope == "unread" and not is_unread:
             continue
         user_replied = m.id in replied_ids
+        if scope == "needs_action" and not message_needs_attention(
+            category=category,
+            action_required=m.action_required,
+            is_unread=is_unread,
+            user_replied=user_replied,
+        ):
+            continue
         messages.append(
             InboxMessageOut(
                 id=m.id,

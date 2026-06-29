@@ -168,7 +168,7 @@ export const api = {
   },
   getToday: () => request<TodayDashboard>("/today"),
   getInbox: (opts?: {
-    scope?: "unread" | "today" | "synced" | "sms";
+    scope?: "needs_action" | "unread" | "today" | "synced" | "sms";
     mailbox?: string;
   }) => {
     const params = new URLSearchParams();
@@ -250,9 +250,15 @@ export const api = {
   rejectAction: (actionId: string) =>
     request<ActionProposal>(`/actions/${actionId}/reject`, { method: "POST" }),
   listPendingActions: () => request<ActionProposal[]>("/actions/pending"),
-  listUpcomingMeetings: (opts?: { today?: boolean }) => {
+  listUpcomingMeetings: (opts?: {
+    today?: boolean;
+    week?: boolean;
+    month?: boolean;
+  }) => {
     const params = new URLSearchParams();
     if (opts?.today) params.set("today", "true");
+    if (opts?.week) params.set("week", "true");
+    if (opts?.month) params.set("month", "true");
     const q = params.toString();
     return request<UpcomingMeeting[]>(`/meetings/upcoming${q ? `?${q}` : ""}`);
   },

@@ -22,6 +22,13 @@ export const translations = {
       butlerLabel: "Alfred",
       speechHi: "Hi!",
       sectionToday: "Today",
+      sectionWeek: "This week",
+      scheduleViews: {
+        day: "Day",
+        week: "Week",
+        month: "Month",
+      },
+      scheduleWeekEmpty: "Nothing on the calendar this week.",
       composerPlaceholder: "Any plans for today?",
       nextScheduleReminder: (time: string, title: string) =>
         `Up next at ${time} — ${title}`,
@@ -64,11 +71,13 @@ export const translations = {
       syncedJustNow: "Synced just now",
       retry: "Tap to retry",
       filters: {
-        inbox: "Inbox",
+        needsAction: "Needs action",
         unread: "Unread",
-        today: "Today",
         sms: "SMS",
+        email: "Email",
       },
+      needsActionEmpty: "Nothing needs your attention right now.",
+      needsActionEmptySub: "Pull down to sync for new messages.",
       smsEmpty: "No texts here yet.",
       smsEmptySub:
         "Set up forwarding in You → Settings. New texts arrive automatically; older ones must be shared one at a time (iOS cannot bulk-sync the last 10).",
@@ -218,6 +227,13 @@ export const translations = {
       butlerLabel: "管家",
       speechHi: "Hi!",
       sectionToday: "今天",
+      sectionWeek: "本周",
+      scheduleViews: {
+        day: "日",
+        week: "周",
+        month: "月",
+      },
+      scheduleWeekEmpty: "本周日历上没有安排。",
       composerPlaceholder: "今天有什么计划吗",
       nextScheduleReminder: (time: string, title: string) =>
         `接下来 ${time} · ${title}`,
@@ -259,11 +275,13 @@ export const translations = {
       syncedJustNow: "刚刚同步",
       retry: "点击重试",
       filters: {
-        inbox: "收件箱",
+        needsAction: "需要处理",
         unread: "未读",
-        today: "今天",
         sms: "短信",
+        email: "邮箱",
       },
+      needsActionEmpty: "目前没有需要您处理的消息。",
+      needsActionEmptySub: "下拉同步以获取新消息。",
       smsEmpty: "暂无短信。",
       smsEmptySub:
         "请在「我的」配置短信转发。新短信会自动出现；旧短信需逐条「分享」导入，iOS 无法自动同步最近 10 条。",

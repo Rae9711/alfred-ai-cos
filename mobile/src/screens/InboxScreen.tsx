@@ -57,24 +57,21 @@ export function InboxScreen() {
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
-  const [filter, setFilter] = useState("inbox");
+  const [filter, setFilter] = useState("needs_action");
   const [deferred, setDeferred] = useState<Set<string>>(new Set());
 
   const mailboxTabs = useMemo(
     () => [
-      { id: "inbox", label: t.inbox.filters.inbox },
+      { id: "needs_action", label: t.inbox.filters.needsAction },
       { id: "unread", label: t.inbox.filters.unread },
       { id: "sms", label: t.inbox.filters.sms },
-      ...mailboxes.map((email) => ({
-        id: email,
-        label: mailboxTabLabel(email),
-      })),
+      { id: "email", label: t.inbox.filters.email },
     ],
     [
-      mailboxes,
-      t.inbox.filters.inbox,
+      t.inbox.filters.needsAction,
       t.inbox.filters.unread,
       t.inbox.filters.sms,
+      t.inbox.filters.email,
     ],
   );
 
@@ -86,8 +83,9 @@ export function InboxScreen() {
   const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
   const fyiItems = filtered.filter((m) => m.section === "fyi");
-  const unread = live.filter((m) => m.isUnread && m.section === "reply").length;
-  const showMailboxChip = inboxScope === "synced" && mailboxes.length > 1;
+  const unread = live.filter((m) => m.section === "reply").length;
+  const showMailboxChip =
+    filter === "email" && inboxScope === "synced" && mailboxes.length > 1;
 
   const onSelectFilter = (id: string) => {
     setFilter(id);
@@ -282,10 +280,18 @@ export function InboxScreen() {
       {filtered.length === 0 ? (
         <View style={styles.empty}>
           <Serif size={17} italic color={colors.ink3}>
-            {filter === "sms" ? t.inbox.smsEmpty : t.inbox.inboxZero}
+            {filter === "sms"
+              ? t.inbox.smsEmpty
+              : filter === "needs_action"
+                ? t.inbox.needsActionEmpty
+                : t.inbox.inboxZero}
           </Serif>
           <Text style={styles.pullHint}>
-            {filter === "sms" ? t.inbox.smsEmptySub : t.inbox.pullToSync}
+            {filter === "sms"
+              ? t.inbox.smsEmptySub
+              : filter === "needs_action"
+                ? t.inbox.needsActionEmptySub
+                : t.inbox.pullToSync}
           </Text>
         </View>
       ) : null}

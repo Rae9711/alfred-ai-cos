@@ -61,3 +61,17 @@ def test_upcoming_events_excludes_past_today(db: Session, user: User) -> None:
 
     assert "Morning standup" not in titles
     assert "Afternoon sync" in titles
+
+
+def test_week_events_stays_within_local_week(db: Session, user: User) -> None:
+    now = datetime.now(UTC)
+    in_week = _event(user.id, now + timedelta(days=1), "This week")
+    far = _event(user.id, now + timedelta(days=10), "Far away")
+    db.add_all([in_week, far])
+    db.commit()
+
+    out = meeting_prep.week_events(db, user.id, timezone=user.timezone)
+    titles = {e.title for e in out}
+
+    assert "This week" in titles
+    assert "Far away" not in titles

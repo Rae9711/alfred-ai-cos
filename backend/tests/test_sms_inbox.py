@@ -343,3 +343,44 @@ def test_list_inbox_sms_scope_returns_only_texts(
     assert len(out.messages) == 1
     assert out.messages[0].source == "sms"
     assert "Text me back" in (out.messages[0].snippet or "")
+
+
+def test_list_inbox_needs_action_scope_returns_actionable_unread(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.api.v1 import messages as messages_mod
+    from app.db.enums import MessageClassification
+
+    db.add(
+        Message(
+            user_id=user.id,
+            source="gmail",
+            external_id="gmail:needs-reply",
+            sender="boss@corp.com",
+            subject="Please reply",
+            snippet="Need your answer",
+            sent_at=datetime.now(UTC),
+            classification=MessageClassification.needs_reply,
+            gmail_labels=["INBOX", "UNREAD"],
+        )
+    )
+    db.add(
+        Message(
+            user_id=user.id,
+            source="gmail",
+            external_id="gmail:fyi-read",
+            sender="news@corp.com",
+            subject="Newsletter",
+            snippet="FYI",
+            sent_at=datetime.now(UTC),
+            classification=MessageClassification.informational,
+            gmail_labels=["INBOX"],
+        )
+    )
+    db.commit()
+
+    out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert len(out.messages) == 1
+    assert out.messages[0].category == "Needs Reply"
