@@ -28,23 +28,28 @@ def _action_ids(data: dict) -> list[str]:
 def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
     assert _action_ids(data) == [
-        DETECT_TEXT_ACTION,
         "is.workflow.actions.dictionary",
         "is.workflow.actions.downloadurl",
     ]
 
-    dict_action = data["WFWorkflowActions"][1]
+    dict_action = data["WFWorkflowActions"][0]
     items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]["WFDictionaryFieldValueItems"]
+    assert len(items) == 3
     keys = {item["WFKey"]["Value"]["string"] for item in items}
     assert keys == {"body", "shortcut_input", "text"}
     by_key = {item["WFKey"]["Value"]["string"]: item for item in items}
-    assert by_key["body"]["WFValue"]["Value"]["OutputName"] == "Message Text"
-    assert by_key["text"]["WFValue"]["Value"]["OutputName"] == "Message Text"
-    assert by_key["shortcut_input"]["WFValue"]["Value"]["VariableName"] == "Shortcut Input"
+    for key in ("body", "text", "shortcut_input"):
+        val = by_key[key]["WFValue"]["Value"]
+        assert val["Type"] == "Variable"
+        assert val["VariableName"] == "Shortcut Input"
+        assert "OutputUUID" not in val
 
     post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
-    assert "WFJSONValues" in post["WFWorkflowActionParameters"]
+    json_items = post["WFWorkflowActionParameters"]["WFJSONValues"]["Value"][
+        "WFDictionaryFieldValueItems"
+    ]
+    assert len(json_items) == 3
 
 
 def test_build_sms_forward_shortcut_does_not_use_unsupported_message_actions() -> None:
@@ -79,9 +84,13 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
         build_sms_forward_shortcut(webhook_url="https://example.test/sms", sms_token="tok")
     )
     assert data["WFWorkflowImportQuestions"] == []
-    assert data["WFWorkflowActions"][1]["WFWorkflowActionIdentifier"] == (
+    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
         "is.workflow.actions.dictionary"
     )
+    dict_items = data["WFWorkflowActions"][0]["WFWorkflowActionParameters"]["WFItems"]["Value"][
+        "WFDictionaryFieldValueItems"
+    ]
+    assert len(dict_items) == 3
     post = data["WFWorkflowActions"][-1]
     headers = post["WFWorkflowActionParameters"]["WFHTTPHeaders"]["Value"][
         "WFDictionaryFieldValueItems"

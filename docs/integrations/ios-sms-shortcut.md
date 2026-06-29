@@ -77,13 +77,17 @@ body) and Albert dedupes via `external_id`.
 | Step       | Action ID                                 | Purpose                                      |
 | ---------- | ----------------------------------------- | -------------------------------------------- |
 | 1 (import) | `is.workflow.actions.gettext`             | Prompt for X-Sms-Token                       |
-| 2          | `is.workflow.actions.detect.text`         | Message body text from Shortcut Input        |
-| 3          | `is.workflow.actions.dictionary`          | JSON payload (`body`, `text`, `shortcut_input`) |
-| 4          | `is.workflow.actions.downloadurl`         | POST to Albert webhook                       |
+| 2          | `is.workflow.actions.dictionary`          | JSON payload (`body`, `text`, `shortcut_input` → Shortcut Input) |
+| 3          | `is.workflow.actions.downloadurl`         | POST to Albert webhook                       |
 
 
-The forward shortcut sends **both** extracted text and the raw Shortcut Input so Albert
-can parse whichever shape your iOS version provides. Sender phone is not included
+After import, open **Shortcuts → Albert SMS Forward** and confirm the **Dictionary**
+action lists **three keys** (`body`, `text`, `shortcut_input`), each mapped to
+**Shortcut Input** — not an empty dictionary with only *Add New Item*. The POST step
+should show **JSON** request body and headers **Content-Type** + **X-Sms-Token**.
+
+The forward shortcut maps **Shortcut Input** (the incoming message from the automation
+trigger) into the JSON body. Sender phone is not included
 (Message Received does not expose it reliably on all iOS versions) — **Open in Messages**
 may show a toast instead of pre-filling the recipient unless you add **Get Details of
 Messages** manually (advanced).
@@ -190,7 +194,7 @@ Success looks like:
 | **Importing unsigned shortcut files is not supported** | Unsigned server build                   | Maintainer: `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
 | **401 Missing/Invalid X-Sms-Token**                    | Wrong or missing header                 | Copy token again from Albert → You → SMS forwarding                       |
 | **422 Unprocessable Entity**                           | Body shape from Shortcuts               | Use **Text** for phone; ensure `body` is message text                     |
-| **400 SMS body is required**                           | Empty message text                      | Map `body` via **Get Text from Input**                                    |
+| **Dictionary shows only *Add New Item***                  | ActionOutput refs stripped on import    | Delete shortcut, re-import signed Forward from Albert settings; Dictionary must show 3 keys. |
 | SMS missing in Inbox                                   | Sync delay                              | Pull to refresh; confirm curl returns 200 first                           |
 | Reply opens Messages without recipient                 | No sender phone from Shortcut           | Expected if Get Details fails; add **Get Details of Messages** manually   |
 | Backfill shows 0 new texts                             | All 10 already imported                 | Re-run is safe (deduped); send a new test SMS                             |
