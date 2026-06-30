@@ -84,4 +84,5 @@ def test_checkout_creates_stripe_session(
     )
     assert out["checkout_url"] == "https://checkout.stripe.test/cs"
     assert captured["data"]["mode"] == "subscription"
+    assert captured["data"]["payment_method_types[0]"] == "card"
     assert captured["data"]["line_items[0][price]"] == "price_test_pro"

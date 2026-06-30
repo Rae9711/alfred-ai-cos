@@ -110,6 +110,7 @@ def create_checkout_session(
             "cancel_url": cancel_url,
             "customer_email": user.email,
             "client_reference_id": user.id,
+            "payment_method_types[0]": "card",
             "line_items[0][price]": price_id,
             "line_items[0][quantity]": "1",
             "metadata[user_id]": user.id,
