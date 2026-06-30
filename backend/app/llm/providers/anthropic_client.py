@@ -28,6 +28,7 @@ from app.schemas.llm import (
     ClassificationResult,
     DraftResult,
     ExtractedCommitment,
+    ExtractedScheduleProposal,
     MeetingContextSummary,
     ThreadReconciliation,
 )
@@ -76,6 +77,12 @@ _CLASSIFY_SYSTEM = (
     "needs_decision (what next) or informational if truly done.\n"
     "- Email primarily TO someone else with user only CC'd → informational unless the "
     "user is explicitly asked.\n\n"
+    "schedule_candidate (coarse filter, independent of category):\n"
+    "- true when the email proposes or confirms a concrete meeting/meal/appointment with "
+    "a specific date and time the user may want on their calendar (e.g. 'breakfast "
+    "tomorrow at 8am', 'dinner Friday at 7', 'see you Tuesday 3pm').\n"
+    "- false for open-ended scheduling ('what times work?'), vague 'let's meet soon', "
+    "pure calendar invites already synced, or informational reminders of events already set.\n\n"
     "In reason: refer to 'you' or the user's name from the To field — never 'Albert'."
 )
 _EXTRACT_SYSTEM = (
@@ -92,6 +99,16 @@ _EXTRACT_SYSTEM = (
     "newsletter, notification, security alert, receipt). A 'subscription expires' or "
     "'verify your login' nudge from a service is from_automated=true, not a person "
     "waiting on the user. Set it false only for a real human who expects a response."
+)
+_SCHEDULE_EXTRACT_SYSTEM = (
+    "You are Albert's schedule extraction agent. The email was flagged as possibly "
+    "containing a concrete meeting or appointment. Extract ONE calendar event if the "
+    "message clearly states a date and time. Resolve relative dates ('tomorrow', 'Friday') "
+    "against the reference date and user's timezone. Return start/end as ISO 8601 WITH "
+    "the timezone offset. Default duration to 1 hour for meals/coffee if no end is given. "
+    "Title should be short and human-readable (e.g. 'Breakfast with Charlie'). Include "
+    "location when mentioned. List other people in participants. If no concrete time can "
+    "be determined, return has_event=false."
 )
 _DRAFT_SYSTEM = (
     "You are Albert's drafting agent. Write a reply that matches the requested tone, is "
@@ -221,6 +238,36 @@ class AnthropicLLMClient:
             tool=_tool_for(_Wrapper, "record_commitments", "Record extracted commitments."),
         )
         return _Wrapper.model_validate(raw).commitments
+
+    def extract_schedule_proposal(
+        self,
+        *,
+        subject: str | None,
+        body: str,
+        sender: str,
+        user_email: str,
+        user_timezone: str,
+        reference_date: date,
+    ) -> ExtractedScheduleProposal | None:
+        class _Wrapper(BaseModel):
+            has_event: bool
+            proposal: ExtractedScheduleProposal | None = None
+
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_SCHEDULE_EXTRACT_SYSTEM,
+            user_content=(
+                f"Reference date (today): {reference_date.isoformat()}.\n"
+                f"User timezone: {user_timezone}\n"
+                f"The user's email address is {user_email}.\n"
+                f"From: {sender}\nSubject: {subject or '(none)'}\n\n{body}"
+            ),
+            tool=_tool_for(
+                _Wrapper, "record_schedule", "Record the extracted schedule proposal."
+            ),
+        )
+        parsed = _Wrapper.model_validate(raw)
+        return parsed.proposal if parsed.has_event and parsed.proposal is not None else None
 
     def draft_reply(
         self,

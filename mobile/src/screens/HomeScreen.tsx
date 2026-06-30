@@ -92,6 +92,7 @@ export function HomeScreen() {
   const [syncing, setSyncing] = useState(false);
   const [composer, setComposer] = useState("");
   const [asking, setAsking] = useState(false);
+  const [scheduleAction, setScheduleAction] = useState(false);
 
   const [scheduleView, setScheduleView] = useState<ScheduleView>("day");
   const [selectedMonthDay, setSelectedMonthDay] = useState<Date | null>(null);
@@ -207,7 +208,23 @@ export function HomeScreen() {
     [meetings],
   );
 
-  const butlerPrompt = nextMeeting
+  const topScheduleProposal = todayData?.schedule_proposals?.[0] ?? null;
+
+  const formatScheduleWhen = (iso: string) =>
+    new Date(iso).toLocaleString(locale === "zh" ? "zh-CN" : undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+  const butlerPrompt = topScheduleProposal
+    ? t.home.scheduleProposalPrompt(
+        topScheduleProposal.counterparty ?? t.home.untitledMeeting,
+        topScheduleProposal.title,
+        formatScheduleWhen(topScheduleProposal.start_time),
+      )
+    : nextMeeting
     ? t.home.nextScheduleReminder(
         formatMeetingTime(nextMeeting.start_time),
         nextMeeting.title ?? t.home.untitledMeeting,
@@ -216,7 +233,9 @@ export function HomeScreen() {
       ? t.home.scheduleDoneForDay
       : t.home.noScheduleToday;
 
-  const butlerCta = nextMeeting
+  const butlerCta = topScheduleProposal
+    ? null
+    : nextMeeting
     ? nextMeeting.prep_required
       ? t.home.viewPrep
       : t.home.viewSchedule
@@ -267,6 +286,46 @@ export function HomeScreen() {
       <MeetingDetailSheet eventId={nextMeeting.id} onChanged={() => void load(scheduleView)} />,
     );
   };
+
+  const acceptScheduleProposal = useCallback(() => {
+    if (!topScheduleProposal || scheduleAction) return;
+    setScheduleAction(true);
+    void (async () => {
+      try {
+        await api.acceptScheduleProposal(topScheduleProposal.id);
+        showToast(t.home.scheduleProposalAccepted);
+        await api.sync({ calendarOnly: true }).catch(() => undefined);
+        await load(scheduleView);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : t.home.scheduleProposalFailed);
+      } finally {
+        setScheduleAction(false);
+      }
+    })();
+  }, [
+    load,
+    scheduleAction,
+    scheduleView,
+    showToast,
+    t.home.scheduleProposalAccepted,
+    t.home.scheduleProposalFailed,
+    topScheduleProposal,
+  ]);
+
+  const dismissScheduleProposal = useCallback(() => {
+    if (!topScheduleProposal || scheduleAction) return;
+    setScheduleAction(true);
+    void (async () => {
+      try {
+        await api.dismissScheduleProposal(topScheduleProposal.id);
+        await load(scheduleView);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : t.home.scheduleProposalFailed);
+      } finally {
+        setScheduleAction(false);
+      }
+    })();
+  }, [load, scheduleAction, scheduleView, showToast, t.home.scheduleProposalFailed, topScheduleProposal]);
 
   const completeReminder = useCallback(
     (task: Task) => {
@@ -362,6 +421,23 @@ export function HomeScreen() {
                 onPress={onButlerPress}
                 style={styles.proactiveBtn}
               />
+            ) : null}
+            {topScheduleProposal ? (
+              <View style={styles.scheduleProposalActions}>
+                <Btn
+                  label={t.home.addToCalendar}
+                  onPress={acceptScheduleProposal}
+                  style={styles.proactiveBtn}
+                  disabled={scheduleAction}
+                />
+                <Pressable
+                  onPress={dismissScheduleProposal}
+                  disabled={scheduleAction}
+                  hitSlop={8}
+                >
+                  <Text style={styles.dismissProposal}>{t.home.dismissProposal}</Text>
+                </Pressable>
+              </View>
             ) : null}
             {reminders.length > 0 ? (
               <View style={styles.remindersBlock}>
@@ -513,6 +589,8 @@ const styles = StyleSheet.create({
   },
   proactiveText: { color: colors.ink2, lineHeight: 24 },
   proactiveBtn: { alignSelf: "flex-start" },
+  scheduleProposalActions: { gap: 10 },
+  dismissProposal: { fontSize: 13, color: colors.ink4 },
   remindersBlock: { gap: 8, marginTop: 4 },
   remindersLabel: {
     fontFamily: fonts.mono,

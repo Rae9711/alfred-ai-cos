@@ -18,6 +18,7 @@ from app.api.v1 import (
     notifications,
     search,
     senders,
+    schedule_proposals,
     sync,
     tasks,
     today,
@@ -30,6 +31,7 @@ api_router.include_router(auth.router)
 api_router.include_router(assistant.router)
 api_router.include_router(sync.router)
 api_router.include_router(today.router)
+api_router.include_router(schedule_proposals.router)
 api_router.include_router(commitments.router)
 api_router.include_router(drafts.router)
 api_router.include_router(actions.router)

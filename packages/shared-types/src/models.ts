@@ -51,6 +51,19 @@ export interface QuickWin {
   estimated_minutes: number;
 }
 
+export interface ScheduleProposal {
+  id: string;
+  source_message_id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  timezone: string;
+  location: string | null;
+  participants: string[];
+  confidence: number;
+  counterparty: string | null;
+}
+
 export interface TodayDashboard {
   summary: string;
   top_priorities: TodayPriority[];
@@ -59,6 +72,7 @@ export interface TodayDashboard {
   meetings_to_prepare: MeetingToPrepare[];
   suggestions: TimeBlockSuggestion[];
   quick_wins: QuickWin[];
+  schedule_proposals: ScheduleProposal[];
 }
 
 export interface UpcomingMeeting {

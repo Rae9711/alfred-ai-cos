@@ -110,6 +110,12 @@ class NotificationStatus(enum.StrEnum):
     suppressed = "suppressed"  # batched away or below threshold
 
 
+class ScheduleProposalStatus(enum.StrEnum):
+    pending = "pending"
+    accepted = "accepted"
+    dismissed = "dismissed"
+
+
 # Priority floor a notification type must clear to send immediately vs. batch.
 class NotificationImportance(enum.IntEnum):
     low = 1

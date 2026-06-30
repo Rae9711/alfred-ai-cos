@@ -179,6 +179,17 @@ class ScheduleBlockResponse(BaseModel):
     event_id: str | None = None
 
 
+class AcceptScheduleProposalRequest(BaseModel):
+    timezone: str | None = None
+
+
+class AcceptScheduleProposalResponse(BaseModel):
+    accepted: bool
+    reply: str
+    detail: str | None = None
+    event_id: str | None = None
+
+
 class AssistantAskRequest(BaseModel):
     text: str
     # The device's IANA timezone (e.g. "Europe/Paris"). Sent so "5pm" resolves to the

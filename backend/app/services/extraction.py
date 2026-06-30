@@ -18,6 +18,7 @@ from app.db.models import Commitment, Message, User
 from app.llm import get_llm
 from app.schemas.llm import ClassificationResult
 from app.services import gmail
+from app.services import schedule_proposal as schedule_proposal_service
 from app.services.classification_adjust import (
     apply_action_subject_classification,
     automated_fyi_override,
@@ -220,6 +221,7 @@ def process_message(
             priority=classification.priority,
             action_required=True,
             reason=classification.reason,
+            schedule_candidate=classification.schedule_candidate,
         )
     message.classification = classification.classification
     message.priority = classification.priority
@@ -272,4 +274,14 @@ def process_message(
         commitments.append(commitment)
 
     db.commit()
+
+    schedule_proposal_service.maybe_extract_schedule_proposal(
+        db,
+        user,
+        message,
+        body=thread_body,
+        classification=classification,
+        reference_date=reference_date,
+    )
+
     return commitments

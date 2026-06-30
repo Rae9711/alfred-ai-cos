@@ -17,6 +17,26 @@ class ClassificationResult(BaseModel):
     reason: str = Field(
         description="Why this classification, in one sentence. Address the recipient as 'you'."
     )
+    schedule_candidate: bool = Field(
+        default=False,
+        description=(
+            "True when the email mentions a concrete meeting, meal, or appointment with a "
+            "specific date/time the user may want on their calendar (e.g. 'breakfast tomorrow "
+            "at 8am', 'see you Tuesday at 3'). False for vague scheduling back-and-forth, "
+            "already-confirmed calendar invites with no new time, or purely informational "
+            "reminders of events already on the calendar."
+        ),
+    )
+
+
+class ExtractedScheduleProposal(BaseModel):
+    title: str = Field(description="Short event title for the calendar.")
+    start: str = Field(description="Event start as ISO 8601 with timezone offset.")
+    end: str = Field(description="Event end as ISO 8601 with timezone offset.")
+    timezone: str = Field(description="IANA timezone used to interpret relative times.")
+    location: str | None = None
+    participants: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
 
 
 class ExtractedCommitment(BaseModel):

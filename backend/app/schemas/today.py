@@ -52,6 +52,19 @@ class QuickWin(BaseModel):
     estimated_minutes: int
 
 
+class ScheduleProposalOut(BaseModel):
+    id: str
+    source_message_id: str
+    title: str
+    start_time: str
+    end_time: str
+    timezone: str
+    location: str | None
+    participants: list[str]
+    confidence: float
+    counterparty: str | None = None
+
+
 class TodayDashboard(BaseModel):
     summary: str
     top_priorities: list[TodayPriority]
@@ -60,3 +73,4 @@ class TodayDashboard(BaseModel):
     meetings_to_prepare: list[MeetingToPrepare]
     suggestions: list[TimeBlockSuggestion] = []
     quick_wins: list[QuickWin] = []
+    schedule_proposals: list[ScheduleProposalOut] = []

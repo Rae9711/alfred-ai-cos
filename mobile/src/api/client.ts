@@ -324,6 +324,18 @@ export const api = {
       "/today/schedule-block",
       { method: "POST", body: JSON.stringify(body) },
     ),
+  acceptScheduleProposal: (id: string, timezone?: string) =>
+    request<{ accepted: boolean; reply: string; event_id?: string | null }>(
+      `/schedule-proposals/${id}/accept`,
+      {
+        method: "POST",
+        body: JSON.stringify({ timezone: timezone ?? deviceTimezone() }),
+      },
+    ),
+  dismissScheduleProposal: (id: string) =>
+    request<{ dismissed: boolean }>(`/schedule-proposals/${id}/dismiss`, {
+      method: "POST",
+    }),
   updateTaskStatus: (id: string, status: TaskStatus) =>
     request<Task>(`/tasks/${id}/status?status=${status}`, { method: "POST" }),
   captureText: (text: string) =>

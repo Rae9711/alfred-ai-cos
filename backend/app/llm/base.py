@@ -18,6 +18,7 @@ from app.schemas.llm import (
     ClassificationResult,
     DraftResult,
     ExtractedCommitment,
+    ExtractedScheduleProposal,
     MeetingContextSummary,
     ThreadReconciliation,
 )
@@ -51,6 +52,19 @@ class LLMClient(Protocol):
         reference_date anchors relative deadlines ("tomorrow", "by Friday") so the
         model can resolve them to absolute dates. Pass the email's sent date.
         """
+        ...
+
+    def extract_schedule_proposal(
+        self,
+        *,
+        subject: str | None,
+        body: str,
+        sender: str,
+        user_email: str,
+        user_timezone: str,
+        reference_date: date,
+    ) -> ExtractedScheduleProposal | None:
+        """Extract a concrete calendar event from an email flagged schedule_candidate."""
         ...
 
     def draft_reply(

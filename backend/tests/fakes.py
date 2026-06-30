@@ -13,6 +13,7 @@ from app.schemas.llm import (
     ClassificationResult,
     DraftResult,
     ExtractedCommitment,
+    ExtractedScheduleProposal,
     MeetingContextSummary,
     ParsedTask,
     ThreadReconciliation,
@@ -30,6 +31,8 @@ class FakeLLM:
         detected_project: str | None = None,
         interpretation: AssistantInterpretation | None = None,
         chat_reply: str = "You have 2 open loops today.",
+        schedule_candidate: bool = False,
+        schedule_proposal: ExtractedScheduleProposal | None = None,
     ) -> None:
         self._commitments = commitments or []
         self._capture_tasks = capture_tasks or []
@@ -39,6 +42,8 @@ class FakeLLM:
         self.interpret_calls: list[dict] = []
         self.chat_calls: list[dict] = []
         self.chat_reply = chat_reply
+        self._schedule_candidate = schedule_candidate
+        self._schedule_proposal = schedule_proposal
 
     def classify_message(
         self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
@@ -48,7 +53,21 @@ class FakeLLM:
             priority=Priority.medium,
             action_required=True,
             reason="fake classification",
+            schedule_candidate=self._schedule_candidate,
         )
+
+    def extract_schedule_proposal(
+        self,
+        *,
+        subject: str | None,
+        body: str,
+        sender: str,
+        user_email: str,
+        user_timezone: str,
+        reference_date: date,
+    ) -> ExtractedScheduleProposal | None:
+        del subject, body, sender, user_email, user_timezone, reference_date
+        return self._schedule_proposal
 
     def extract_commitments(
         self,

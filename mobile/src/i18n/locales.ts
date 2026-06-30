@@ -46,6 +46,12 @@ export const translations = {
       upcomingReminders: "Reminders",
       reminderDue: (when: string) => `Due ${when}`,
       reminderAt: (when: string) => `Reminder ${when}`,
+      scheduleProposalPrompt: (who: string, title: string, when: string) =>
+        `${who} suggested: ${title} — ${when}`,
+      addToCalendar: "Add to calendar",
+      dismissProposal: "Dismiss",
+      scheduleProposalAccepted: "Added to your calendar.",
+      scheduleProposalFailed: "Couldn't add to calendar — try again.",
     },
     planning: {
       sectionLabel: "Planning",
@@ -328,6 +334,12 @@ export const translations = {
       upcomingReminders: "提醒事项",
       reminderDue: (when: string) => `${when} 到期`,
       reminderAt: (when: string) => `${when} 提醒`,
+      scheduleProposalPrompt: (who: string, title: string, when: string) =>
+        `${who} 提议：${title}，${when}`,
+      addToCalendar: "加入日历",
+      dismissProposal: "忽略",
+      scheduleProposalAccepted: "已加入日历。",
+      scheduleProposalFailed: "无法加入日历 — 请重试。",
     },
     planning: {
       sectionLabel: "时间块建议",

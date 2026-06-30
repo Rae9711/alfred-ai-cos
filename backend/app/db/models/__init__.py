@@ -17,6 +17,7 @@ from app.db.models.draft_reply import DraftReply
 from app.db.models.message import Message
 from app.db.models.notification import Device, Notification
 from app.db.models.outbound_reply import OutboundReply
+from app.db.models.schedule_proposal import ScheduleProposal
 from app.db.models.task import Task
 from app.db.models.user import User
 
@@ -33,6 +34,7 @@ __all__ = [
     "Message",
     "Notification",
     "OutboundReply",
+    "ScheduleProposal",
     "SpendLimit",
     "Task",
     "User",

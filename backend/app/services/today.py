@@ -12,11 +12,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
-from app.db.models import Commitment, User
-from app.schemas.today import MeetingToPrepare, TodayDashboard, TodayPriority, WaitingItem
+from app.db.models import Commitment, Message, User
+from app.schemas.today import (
+    MeetingToPrepare,
+    ScheduleProposalOut,
+    TodayDashboard,
+    TodayPriority,
+    WaitingItem,
+)
 from app.services.meeting_prep import upcoming_events
 from app.services.planning import build_planning_suggestions
 from app.services.priority import build_context, score_commitment
+from app.services.schedule_proposal import list_pending_proposals
 
 
 def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
@@ -92,6 +99,29 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
         db, user_id, today=today, scored=scored
     )
 
+    pending_schedule = list_pending_proposals(db, user_id, limit=5)
+    message_ids = {p.source_message_id for p in pending_schedule}
+    senders_by_msg: dict[str, str] = {}
+    if message_ids:
+        for msg in db.scalars(select(Message).where(Message.id.in_(message_ids))):
+            senders_by_msg[msg.id] = (msg.sender or "").split("<")[0].strip() or msg.sender
+
+    schedule_proposals = [
+        ScheduleProposalOut(
+            id=p.id,
+            source_message_id=p.source_message_id,
+            title=p.title,
+            start_time=p.start_time.isoformat(),
+            end_time=p.end_time.isoformat(),
+            timezone=p.timezone,
+            location=p.location,
+            participants=p.participants,
+            confidence=p.confidence,
+            counterparty=senders_by_msg.get(p.source_message_id),
+        )
+        for p in pending_schedule
+    ]
+
     summary = (
         f"You have {len(open_commitments)} open loop(s). "
         f"{len(top)} matter today. {len(waiting_on_user)} people are waiting on you. "
@@ -105,4 +135,5 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
         meetings_to_prepare=meetings,
         suggestions=suggestions,
         quick_wins=quick_wins,
+        schedule_proposals=schedule_proposals,
     )
