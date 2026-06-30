@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -25,9 +25,10 @@ router = APIRouter(prefix="/today", tags=["today"])
 def get_today(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    locale: str = Query("en", pattern="^(en|zh)$"),
 ) -> TodayDashboard:
     today = datetime.now(UTC).date()
-    return build_today(db, user.id, today=today)
+    return build_today(db, user.id, today=today, locale=locale)
 
 
 @router.post("/schedule-block", response_model=ScheduleBlockResponse)

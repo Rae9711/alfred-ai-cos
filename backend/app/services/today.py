@@ -15,18 +15,59 @@ from app.db.enums import CommitmentOwner, CommitmentStatus, Priority
 from app.db.models import Commitment, Message, User
 from app.schemas.today import (
     MeetingToPrepare,
+    ScheduleConflictOut,
     ScheduleProposalOut,
     TodayDashboard,
     TodayPriority,
     WaitingItem,
 )
-from app.services.meeting_prep import upcoming_events
+from app.services.meeting_prep import today_events, upcoming_events
 from app.services.planning import build_planning_suggestions
 from app.services.priority import build_context, score_commitment
-from app.services.schedule_proposal import list_pending_proposals
+from app.services.schedule_proposal import find_proposal_conflicts, list_pending_proposals
 
 
-def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
+def build_day_overview(
+    *,
+    meeting_count: int,
+    pending_proposals: list[tuple[str, str]],
+    locale: str = "en",
+) -> str | None:
+    """One-line Today summary for the butler block, e.g. '今天 3 个会，1 个待确认约会'."""
+    if meeting_count == 0 and not pending_proposals:
+        return None
+    if locale == "zh":
+        parts: list[str] = []
+        if meeting_count > 0:
+            parts.append(f"今天 {meeting_count} 个会")
+        if pending_proposals:
+            who, title = pending_proposals[0]
+            label = f"{who} {title}" if who else title
+            n = len(pending_proposals)
+            if n == 1:
+                parts.append(f"1 个待确认约会（{label}）")
+            else:
+                parts.append(f"{n} 个待确认约会（{label} 等）")
+        return "，".join(parts) + "。"
+    parts_en: list[str] = []
+    if meeting_count > 0:
+        parts_en.append(
+            f"{meeting_count} meeting{'s' if meeting_count != 1 else ''} today"
+        )
+    if pending_proposals:
+        who, title = pending_proposals[0]
+        label = f"{who}: {title}" if who else title
+        n = len(pending_proposals)
+        if n == 1:
+            parts_en.append(f"1 pending invite ({label})")
+        else:
+            parts_en.append(f"{n} pending invites ({label}, …)")
+    return ", ".join(parts_en) + "."
+
+
+def build_today(
+    db: Session, user_id: str, *, today: date, locale: str = "en"
+) -> TodayDashboard:
     open_commitments = list(
         db.scalars(
             select(Commitment).where(
@@ -118,9 +159,24 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
             participants=p.participants,
             confidence=p.confidence,
             counterparty=senders_by_msg.get(p.source_message_id),
+            conflicts=[
+                ScheduleConflictOut(event_id=eid, title=etitle)
+                for eid, etitle in find_proposal_conflicts(
+                    db, user_id, start=p.start_time, end=p.end_time
+                )
+            ],
         )
         for p in pending_schedule
     ]
+
+    proposal_labels = [
+        (senders_by_msg.get(p.source_message_id) or "", p.title) for p in pending_schedule
+    ]
+    day_overview = build_day_overview(
+        meeting_count=len(today_events(db, user_id, timezone=user.timezone if user else None)),
+        pending_proposals=proposal_labels,
+        locale=locale,
+    )
 
     summary = (
         f"You have {len(open_commitments)} open loop(s). "
@@ -129,6 +185,7 @@ def build_today(db: Session, user_id: str, *, today: date) -> TodayDashboard:
     )
     return TodayDashboard(
         summary=summary,
+        day_overview=day_overview,
         top_priorities=top,
         people_waiting_on_you=waiting_on_user,
         you_are_waiting_on=user_waiting_on,

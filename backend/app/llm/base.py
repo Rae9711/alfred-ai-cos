@@ -63,6 +63,7 @@ class LLMClient(Protocol):
         user_email: str,
         user_timezone: str,
         reference_date: date,
+        locale: str = "en",
     ) -> ExtractedScheduleProposal | None:
         """Extract a concrete calendar event from an email flagged schedule_candidate."""
         ...

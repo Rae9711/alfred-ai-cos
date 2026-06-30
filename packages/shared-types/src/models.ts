@@ -51,6 +51,11 @@ export interface QuickWin {
   estimated_minutes: number;
 }
 
+export interface ScheduleConflict {
+  event_id: string;
+  title: string;
+}
+
 export interface ScheduleProposal {
   id: string;
   source_message_id: string;
@@ -62,10 +67,12 @@ export interface ScheduleProposal {
   participants: string[];
   confidence: number;
   counterparty: string | null;
+  conflicts?: ScheduleConflict[];
 }
 
 export interface TodayDashboard {
   summary: string;
+  day_overview: string | null;
   top_priorities: TodayPriority[];
   people_waiting_on_you: WaitingItem[];
   you_are_waiting_on: WaitingItem[];

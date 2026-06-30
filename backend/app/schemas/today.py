@@ -52,6 +52,11 @@ class QuickWin(BaseModel):
     estimated_minutes: int
 
 
+class ScheduleConflictOut(BaseModel):
+    event_id: str
+    title: str
+
+
 class ScheduleProposalOut(BaseModel):
     id: str
     source_message_id: str
@@ -63,10 +68,12 @@ class ScheduleProposalOut(BaseModel):
     participants: list[str]
     confidence: float
     counterparty: str | None = None
+    conflicts: list[ScheduleConflictOut] = []
 
 
 class TodayDashboard(BaseModel):
     summary: str
+    day_overview: str | None = None
     top_priorities: list[TodayPriority]
     people_waiting_on_you: list[WaitingItem]
     you_are_waiting_on: list[WaitingItem]

@@ -11,7 +11,7 @@ from app.db.enums import Provider, ScheduleProposalStatus
 from app.db.models import CalendarEvent, ConnectedAccount, Message, ScheduleProposal, User
 from app.schemas.llm import ExtractedScheduleProposal
 from app.services import extraction, schedule_proposal as schedule_service
-from app.services.today import build_today
+from app.services.today import build_day_overview, build_today
 from tests.fakes import FakeLLM
 
 
@@ -182,3 +182,84 @@ def test_accept_proposal_books_calendar(
     assert accepted.status == ScheduleProposalStatus.accepted
     assert accepted.calendar_event_id == booked.id
     assert "Breakfast" in detail
+
+
+def test_find_proposal_conflicts_overlapping_event(db: Session, user: User) -> None:
+    start = datetime(2026, 6, 30, 15, 0, tzinfo=UTC)
+    db.add(
+        CalendarEvent(
+            user_id=user.id,
+            external_id="standup",
+            title="Team standup",
+            start_time=start,
+            end_time=start + timedelta(minutes=30),
+        )
+    )
+    db.commit()
+    conflicts = schedule_service.find_proposal_conflicts(
+        db,
+        user.id,
+        start=start + timedelta(minutes=15),
+        end=start + timedelta(hours=1, minutes=15),
+    )
+    assert len(conflicts) == 1
+    assert conflicts[0][1] == "Team standup"
+
+
+def test_build_today_includes_conflicts_and_day_overview(db: Session, user: User) -> None:
+    msg = _message(user.id)
+    db.add(msg)
+    db.flush()
+    start = datetime(2026, 6, 30, 15, 0, tzinfo=UTC)
+    db.add(
+        CalendarEvent(
+            user_id=user.id,
+            external_id="standup",
+            title="Team standup",
+            start_time=start,
+            end_time=start + timedelta(minutes=30),
+        )
+    )
+    db.add(
+        ScheduleProposal(
+            user_id=user.id,
+            source_message_id=msg.id,
+            title="Breakfast with Charlie",
+            start_time=start + timedelta(minutes=15),
+            end_time=start + timedelta(hours=1, minutes=15),
+            timezone="America/Los_Angeles",
+            participants=["Charlie"],
+            confidence=0.9,
+        )
+    )
+    db.commit()
+
+    dashboard = build_today(
+        db, user.id, today=datetime(2026, 6, 29, tzinfo=UTC).date(), locale="zh"
+    )
+    assert dashboard.schedule_proposals[0].conflicts
+    assert dashboard.schedule_proposals[0].conflicts[0].title == "Team standup"
+    assert dashboard.day_overview is not None
+    assert "待确认约会" in dashboard.day_overview
+    assert "Charlie" in dashboard.day_overview
+
+
+def test_build_day_overview_english() -> None:
+    line = build_day_overview(
+        meeting_count=3,
+        pending_proposals=[("Charlie", "Breakfast")],
+        locale="en",
+    )
+    assert line is not None
+    assert "3 meetings" in line
+    assert "Charlie" in line
+
+
+def test_extraction_locale_from_chinese_body(db: Session, user: User) -> None:
+    assert schedule_service._extraction_locale("明天早上8点见面", user) == "zh"
+
+
+def test_extraction_locale_from_user_preference(db: Session, user: User) -> None:
+    user.preferences = {"locale": "zh"}
+    db.commit()
+    assert schedule_service._extraction_locale("see you tomorrow", user) == "zh"

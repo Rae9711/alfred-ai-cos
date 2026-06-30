@@ -22,12 +22,59 @@ def _parse_iso(ts: str) -> datetime:
     return dt
 
 
+def _extraction_locale(body: str, user: User) -> str:
+    pref = (user.preferences or {}).get("locale")
+    if pref in ("zh", "en"):
+        return pref
+    if any("\u4e00" <= ch <= "\u9fff" for ch in body):
+        return "zh"
+    return "en"
+
+
 def _title_matches(existing: str | None, proposed: str) -> bool:
     if not existing:
         return False
     a = existing.strip().lower()
     b = proposed.strip().lower()
     return a == b or a in b or b in a
+
+
+def _event_bounds(event: CalendarEvent) -> tuple[datetime, datetime] | None:
+    if event.start_time is None or event.end_time is None:
+        return None
+    start = event.start_time if event.start_time.tzinfo else event.start_time.replace(tzinfo=UTC)
+    end = event.end_time if event.end_time.tzinfo else event.end_time.replace(tzinfo=UTC)
+    return start, end
+
+
+def find_proposal_conflicts(
+    db: Session,
+    user_id: str,
+    *,
+    start: datetime,
+    end: datetime,
+) -> list[tuple[str, str]]:
+    """Return (event_id, title) for calendar events overlapping [start, end]."""
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=UTC)
+    conflicts: list[tuple[str, str]] = []
+    events = db.scalars(
+        select(CalendarEvent).where(
+            CalendarEvent.user_id == user_id,
+            CalendarEvent.start_time.is_not(None),
+            CalendarEvent.end_time.is_not(None),
+        )
+    )
+    for event in events:
+        bounds = _event_bounds(event)
+        if bounds is None:
+            continue
+        e_start, e_end = bounds
+        if e_start < end and e_end > start:
+            conflicts.append((event.id, event.title or "(untitled)"))
+    return conflicts
 
 
 def _overlaps_existing_event(
@@ -68,6 +115,7 @@ def maybe_extract_schedule_proposal(
     if existing is not None:
         return existing
 
+    locale = _extraction_locale(body, user)
     extracted = get_llm().extract_schedule_proposal(
         subject=message.subject,
         body=body,
@@ -75,6 +123,7 @@ def maybe_extract_schedule_proposal(
         user_email=user.email,
         user_timezone=user.timezone or "UTC",
         reference_date=reference_date,
+        locale=locale,
     )
     if extracted is None:
         return None

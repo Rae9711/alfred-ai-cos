@@ -44,6 +44,8 @@ export type WorkflowThread = {
 type WorkflowApi = {
   thread: WorkflowThread | null;
   openChatFromInbox: (messageId: string, mode: "reply" | "delegate") => void;
+  /** Opens Ask with a pre-filled short confirmation reply to an email thread. */
+  openConfirmReply: (messageId: string, draftBody: string) => void;
   openChatFromHome: () => void;
   /** Opens Ask free chat; optional message is sent once the screen mounts. */
   openFreeChat: (initialMessage?: string) => void;
@@ -176,6 +178,64 @@ export function WorkflowProvider({
     [setTab, itemById, loadDraft],
   );
 
+  const openConfirmReply = useCallback(
+    (messageId: string, draftBody: string) => {
+      const item = itemById(messageId);
+      setThread({
+        messageId,
+        source: item?.source ?? "email",
+        replyPhone: item?.replyPhone ?? null,
+        sender: item?.sender ?? "Contact",
+        subject: item?.title ?? "Message",
+        summary: item?.take || null,
+        body: "",
+        bodyLoading: true,
+        bodyError: null,
+        mode: "reply",
+        draft: {
+          to: item?.sender ?? "",
+          subject: item?.title ? `Re: ${item.title}` : "Re:",
+          body: draftBody,
+        },
+        draftId: null,
+        draftLoading: false,
+        draftError: null,
+        revisionHistory: [],
+      });
+      setTab("ask");
+      void (async () => {
+        try {
+          const detail = await api.getMessage(messageId);
+          setThread((current) =>
+            current?.messageId === messageId
+              ? {
+                  ...current,
+                  source: detail.source === "sms" ? "sms" : "email",
+                  replyPhone: detail.reply_phone?.trim() || current.replyPhone,
+                  sender: detail.sender,
+                  subject: detail.subject?.trim()
+                    ? `Re: ${detail.subject.trim()}`
+                    : current.draft.subject,
+                  summary: detail.take?.trim() || current.summary,
+                  body: detail.body,
+                  bodyLoading: false,
+                }
+              : current,
+          );
+        } catch (e) {
+          const message =
+            e instanceof Error ? e.message : "Couldn't load email";
+          setThread((current) =>
+            current?.messageId === messageId
+              ? { ...current, bodyLoading: false, bodyError: message }
+              : current,
+          );
+        }
+      })();
+    },
+    [setTab, itemById],
+  );
+
   const openChatFromHome = useCallback(() => {
     const p = getWorkflowProactive(locale);
     setThread({
@@ -279,6 +339,7 @@ export function WorkflowProvider({
     () => ({
       thread,
       openChatFromInbox,
+      openConfirmReply,
       openChatFromHome,
       openFreeChat,
       consumePendingFreeChatMessage,
@@ -290,6 +351,7 @@ export function WorkflowProvider({
     [
       thread,
       openChatFromInbox,
+      openConfirmReply,
       openChatFromHome,
       openFreeChat,
       consumePendingFreeChatMessage,

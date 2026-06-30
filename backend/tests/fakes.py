@@ -65,8 +65,9 @@ class FakeLLM:
         user_email: str,
         user_timezone: str,
         reference_date: date,
+        locale: str = "en",
     ) -> ExtractedScheduleProposal | None:
-        del subject, body, sender, user_email, user_timezone, reference_date
+        del subject, body, sender, user_email, user_timezone, reference_date, locale
         return self._schedule_proposal
 
     def extract_commitments(

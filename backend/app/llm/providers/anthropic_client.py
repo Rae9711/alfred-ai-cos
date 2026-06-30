@@ -103,12 +103,22 @@ _EXTRACT_SYSTEM = (
 _SCHEDULE_EXTRACT_SYSTEM = (
     "You are Albert's schedule extraction agent. The email was flagged as possibly "
     "containing a concrete meeting or appointment. Extract ONE calendar event if the "
-    "message clearly states a date and time. Resolve relative dates ('tomorrow', 'Friday') "
-    "against the reference date and user's timezone. Return start/end as ISO 8601 WITH "
-    "the timezone offset. Default duration to 1 hour for meals/coffee if no end is given. "
-    "Title should be short and human-readable (e.g. 'Breakfast with Charlie'). Include "
-    "location when mentioned. List other people in participants. If no concrete time can "
-    "be determined, return has_event=false."
+    "message clearly states a date and time. Resolve relative dates against the "
+    "reference date and user's timezone. Return start/end as ISO 8601 WITH the timezone "
+    "offset. Default duration to 1 hour for meals/coffee if no end is given. Title "
+    "should be short and human-readable. Include location when mentioned. List other "
+    "people in participants. If no concrete time can be determined, return has_event=false.\n"
+    "English examples: 'breakfast tomorrow at 8am' → tomorrow 08:00 local; "
+    "'see you Friday at 3pm' → next Friday 15:00 local; 'coffee next Tuesday 10:30'.\n"
+    "Chinese examples (use the user's IANA timezone for 明天/后天/本周五): "
+    "'明天早上8点吃早餐' → tomorrow 08:00; '后天下午3点开会' → day after tomorrow 15:00; "
+    "'这周五晚上7点' → this week's Friday 19:00; '下周二上午10点半见面' → next Tuesday 10:30; "
+    "'周六中午12点' → upcoming Saturday 12:00. Parse 上午/下午/晚上/中午 correctly."
+)
+_SCHEDULE_EXTRACT_SYSTEM_ZH = (
+    _SCHEDULE_EXTRACT_SYSTEM
+    + "\nThe email is in Chinese. Interpret all dates and times in the user's timezone. "
+    "Prefer Chinese event titles when the email is Chinese (e.g. '与 Charlie 早餐')."
 )
 _DRAFT_SYSTEM = (
     "You are Albert's drafting agent. Write a reply that matches the requested tone, is "
@@ -248,14 +258,16 @@ class AnthropicLLMClient:
         user_email: str,
         user_timezone: str,
         reference_date: date,
+        locale: str = "en",
     ) -> ExtractedScheduleProposal | None:
         class _Wrapper(BaseModel):
             has_event: bool
             proposal: ExtractedScheduleProposal | None = None
 
+        system = _SCHEDULE_EXTRACT_SYSTEM_ZH if locale == "zh" else _SCHEDULE_EXTRACT_SYSTEM
         raw = self._structured(
             model=settings.llm_extract_model,
-            system=_SCHEDULE_EXTRACT_SYSTEM,
+            system=system,
             user_content=(
                 f"Reference date (today): {reference_date.isoformat()}.\n"
                 f"User timezone: {user_timezone}\n"

@@ -52,6 +52,9 @@ export const translations = {
       dismissProposal: "Dismiss",
       scheduleProposalAccepted: "Added to your calendar.",
       scheduleProposalFailed: "Couldn't add to calendar — try again.",
+      scheduleProposalConflict: (meeting: string) =>
+        `Conflicts with ${meeting} — add anyway?`,
+      replyConfirm: (who: string) => `Reply to ${who}: Sounds good`,
     },
     planning: {
       sectionLabel: "Planning",
@@ -340,6 +343,9 @@ export const translations = {
       dismissProposal: "忽略",
       scheduleProposalAccepted: "已加入日历。",
       scheduleProposalFailed: "无法加入日历 — 请重试。",
+      scheduleProposalConflict: (meeting: string) =>
+        `与「${meeting}」冲突，仍加入？`,
+      replyConfirm: (who: string) => `回复 ${who}：好的`,
     },
     planning: {
       sectionLabel: "时间块建议",

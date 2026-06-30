@@ -81,7 +81,7 @@ export function HomeScreen() {
   const { meta, state, setThinking } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
-  const { openFreeChat } = useWorkflow();
+  const { openFreeChat, openConfirmReply } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
@@ -114,7 +114,7 @@ export function HomeScreen() {
               ? { week: true }
               : { month: true },
         ),
-        view === "day" ? api.getToday().catch(() => null) : Promise.resolve(null),
+        view === "day" ? api.getToday(locale).catch(() => null) : Promise.resolve(null),
         view === "day" ? api.listTasks({ upcoming: true }).catch(() => [] as Task[]) : Promise.resolve([] as Task[]),
       ]);
       setMe(profile);
@@ -129,14 +129,17 @@ export function HomeScreen() {
       showToast(e instanceof Error ? e.message : t.home.askFailed);
       setMeetings([]);
     }
-  }, [showToast, t.home.askFailed]);
+  }, [locale, showToast, t.home.askFailed]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setLoading(true);
       try {
-        await api.sync({ calendarOnly: true }).catch(() => undefined);
+        await Promise.all([
+          api.sync({ ingestOnly: true }).catch(() => undefined),
+          api.sync({ calendarOnly: true }).catch(() => undefined),
+        ]);
         if (!cancelled) await load(scheduleView);
       } finally {
         if (!cancelled) setLoading(false);
@@ -209,6 +212,7 @@ export function HomeScreen() {
   );
 
   const topScheduleProposal = todayData?.schedule_proposals?.[0] ?? null;
+  const proposalConflict = topScheduleProposal?.conflicts?.[0] ?? null;
 
   const formatScheduleWhen = (iso: string) =>
     new Date(iso).toLocaleString(locale === "zh" ? "zh-CN" : undefined, {
@@ -219,11 +223,17 @@ export function HomeScreen() {
     });
 
   const butlerPrompt = topScheduleProposal
-    ? t.home.scheduleProposalPrompt(
-        topScheduleProposal.counterparty ?? t.home.untitledMeeting,
-        topScheduleProposal.title,
-        formatScheduleWhen(topScheduleProposal.start_time),
-      )
+    ? proposalConflict
+      ? `${t.home.scheduleProposalPrompt(
+          topScheduleProposal.counterparty ?? t.home.untitledMeeting,
+          topScheduleProposal.title,
+          formatScheduleWhen(topScheduleProposal.start_time),
+        )} ${t.home.scheduleProposalConflict(proposalConflict.title)}`
+      : t.home.scheduleProposalPrompt(
+          topScheduleProposal.counterparty ?? t.home.untitledMeeting,
+          topScheduleProposal.title,
+          formatScheduleWhen(topScheduleProposal.start_time),
+        )
     : nextMeeting
     ? t.home.nextScheduleReminder(
         formatMeetingTime(nextMeeting.start_time),
@@ -286,6 +296,12 @@ export function HomeScreen() {
       <MeetingDetailSheet eventId={nextMeeting.id} onChanged={() => void load(scheduleView)} />,
     );
   };
+
+  const confirmScheduleReply = useCallback(() => {
+    if (!topScheduleProposal) return;
+    const body = locale === "zh" ? "好的" : "Sounds good";
+    openConfirmReply(topScheduleProposal.source_message_id, body);
+  }, [locale, openConfirmReply, topScheduleProposal]);
 
   const acceptScheduleProposal = useCallback(() => {
     if (!topScheduleProposal || scheduleAction) return;
@@ -411,6 +427,9 @@ export function HomeScreen() {
 
         <View style={styles.butlerBlock}>
           <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
+          {todayData?.day_overview ? (
+            <Text style={styles.dayOverview}>{todayData.day_overview}</Text>
+          ) : null}
           <View style={styles.proactiveCard}>
             <Serif size={17} style={styles.proactiveText}>
               {butlerPrompt}
@@ -428,6 +447,15 @@ export function HomeScreen() {
                   label={t.home.addToCalendar}
                   onPress={acceptScheduleProposal}
                   style={styles.proactiveBtn}
+                  disabled={scheduleAction}
+                />
+                <Btn
+                  label={t.home.replyConfirm(
+                    topScheduleProposal.counterparty ?? t.home.untitledMeeting,
+                  )}
+                  onPress={confirmScheduleReply}
+                  style={styles.proactiveBtn}
+                  kind="ghost"
                   disabled={scheduleAction}
                 />
                 <Pressable
@@ -578,6 +606,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: "uppercase",
     color: colors.ink4,
+  },
+  dayOverview: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.ink3,
+    fontStyle: "italic",
   },
   proactiveCard: {
     backgroundColor: colors.card,

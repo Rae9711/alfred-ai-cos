@@ -167,7 +167,8 @@ export const api = {
           : 120_000,
     );
   },
-  getToday: () => request<TodayDashboard>("/today"),
+  getToday: (locale?: "en" | "zh") =>
+    request<TodayDashboard>(`/today${locale ? `?locale=${locale}` : ""}`),
   getInbox: (opts?: {
     scope?: "needs_action" | "unread" | "today" | "synced" | "sms";
     mailbox?: string;
