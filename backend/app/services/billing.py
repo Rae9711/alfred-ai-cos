@@ -6,10 +6,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
+import logging
+
 import httpx
 
 from app.core.config import get_settings
 from app.db.models import User
+
+logger = logging.getLogger(__name__)
 
 SubscriptionStatus = Literal["inactive", "trialing", "active", "past_due", "canceled"]
 
@@ -118,6 +122,19 @@ def create_checkout_session(
         timeout=30,
     )
     if resp.status_code >= 400:
+        stripe_message: str | None = None
+        try:
+            err = resp.json().get("error")
+            if isinstance(err, dict):
+                stripe_message = err.get("message")
+        except Exception:
+            pass
+        if stripe_message:
+            logger.warning(
+                "Stripe checkout session failed (%s): %s",
+                resp.status_code,
+                stripe_message,
+            )
         return {
             "checkout_url": None,
             "message": f"Could not start checkout ({resp.status_code}). Try again later.",
