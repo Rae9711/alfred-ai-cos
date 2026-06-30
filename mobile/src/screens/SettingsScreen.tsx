@@ -40,6 +40,7 @@ import {
 } from "@/components/ui";
 import { colors, fonts, layout, spacing } from "@/theme/theme";
 import { translations } from "@/i18n/locales";
+import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 import {
   getContactsPermissionStatus,
   isContactsNativeAvailable,
@@ -743,6 +744,30 @@ export function SettingsScreen() {
           desc="Purchase, payment, signed doc"
           req="strong"
           isLast
+        />
+      </View>
+
+      {/* Ask chat history */}
+      <SectionTitle label={s.askHistoryTitle} />
+      <View style={styles.group}>
+        <Row
+          label={s.askHistoryClear}
+          detail={s.askHistoryDetail}
+          isLast
+          onPress={() => {
+            Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: s.askHistoryClear,
+                style: "destructive",
+                onPress: () => {
+                  void clearFreeChatHistory().then(() =>
+                    setNote(s.askHistoryCleared),
+                  );
+                },
+              },
+            ]);
+          }}
         />
       </View>
 

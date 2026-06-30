@@ -37,6 +37,11 @@ import {
   parseSmsComposeStarter,
 } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
+import {
+  loadFreeChatHistory,
+  saveFreeChatHistory,
+  subscribeFreeChatCleared,
+} from "@/lib/freeChatHistory";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, fonts, layout, radius } from "@/theme/theme";
@@ -74,6 +79,7 @@ export function AskScreen() {
     useWorkflow();
 
   const [freeChat, setFreeChat] = useState<FreeMsg[]>([]);
+  const [freeChatHydrated, setFreeChatHydrated] = useState(false);
   const [taskChat, setTaskChat] = useState<TaskMessage[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinkingLocal] = useState(false);
@@ -94,9 +100,50 @@ export function AskScreen() {
     if (q.trim()) sendFreeRef.current(q);
   });
 
+  const seedMsg = useCallback(
+    (): FreeMsg => ({ role: "alfred", text: t.freeChat.seed, ts: "now" }),
+    [t.freeChat.seed],
+  );
+
+  // Hydrate free chat from device storage on mount (tab switches unmount AskScreen).
   useEffect(() => {
-    setFreeChat([{ role: "alfred", text: t.freeChat.seed, ts: "now" }]);
-  }, [locale, t.freeChat.seed]);
+    let cancelled = false;
+    const seed = t.freeChat.seed;
+    void (async () => {
+      const stored = await loadFreeChatHistory();
+      if (cancelled) return;
+      setFreeChat(
+        stored && stored.length > 0
+          ? stored
+          : [{ role: "alfred", text: seed, ts: "now" }],
+      );
+      setFreeChatHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [t.freeChat.seed]);
+
+  // When locale changes, refresh the lone seed greeting — keep real conversation.
+  useEffect(() => {
+    if (!freeChatHydrated) return;
+    setFreeChat((c) => {
+      if (c.length !== 1 || c[0]?.role !== "alfred") return c;
+      return [seedMsg()];
+    });
+  }, [locale, seedMsg, freeChatHydrated]);
+
+  // Persist free chat (not email task threads).
+  useEffect(() => {
+    if (!freeChatHydrated || thread) return;
+    void saveFreeChatHistory(freeChat);
+  }, [freeChat, freeChatHydrated, thread]);
+
+  useEffect(() => {
+    return subscribeFreeChatCleared(() => {
+      setFreeChat([seedMsg()]);
+    });
+  }, [seedMsg]);
 
   const sendFreeRef = useRef<(text: string) => void>(() => undefined);
 

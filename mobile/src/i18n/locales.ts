@@ -251,6 +251,10 @@ export const translations = {
       quietHoursNotSet: "Not set",
       quietHoursHint:
         "During quiet hours, only needs-action mail still alerts you (format HH-HH, e.g. 22-08).",
+      askHistoryTitle: "Ask chat history",
+      askHistoryDetail: "Stored on this device only",
+      askHistoryClear: "Clear Ask history",
+      askHistoryCleared: "Ask history cleared.",
     },
     smsSetupGuide: {
       title: "SMS forwarding setup",
@@ -563,6 +567,10 @@ export const translations = {
       quietHoursNotSet: "未设置",
       quietHoursHint:
         "免打扰时段内，仅高置信度需处理邮件仍会提醒（格式 HH-HH，如 22-08）。",
+      askHistoryTitle: "对话记录",
+      askHistoryDetail: "仅保存在本设备",
+      askHistoryClear: "清除对话记录",
+      askHistoryCleared: "对话记录已清除。",
     },
     smsSetupGuide: {
       title: "短信转发设置",

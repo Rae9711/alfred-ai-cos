@@ -13,6 +13,7 @@ import {
 
 import { setOnAuthExpired } from "@/api/client";
 import { clearToken, getToken } from "@/api/auth";
+import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 
 type AuthState = {
   authed: boolean | null; // null = still loading
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await clearToken();
+    await clearFreeChatHistory();
     setAuthed(false);
   }, []);
 
