@@ -75,6 +75,7 @@ export const translations = {
       adjustTime: "Adjust time",
       earlier: "−15 min",
       laterSlot: "+15 min",
+      dismiss: "Dismiss",
     },
     inbox: {
       titleEm: "attention",
@@ -394,6 +395,7 @@ export const translations = {
       adjustTime: "调整时间",
       earlier: "−15 分钟",
       laterSlot: "+15 分钟",
+      dismiss: "忽略",
     },
     inbox: {
       titleEm: "处理",

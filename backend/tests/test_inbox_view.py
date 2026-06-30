@@ -309,8 +309,38 @@ def test_needs_decision_qualifies_without_action_required() -> None:
     )
 
 
+def test_needs_decision_from_automated_sender_qualifies() -> None:
+    """Stripe-style billing alerts: automated sender + needs_decision → 需处理."""
+    from app.db.enums import Priority
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_qualifies_for_needs_action_tab,
+    )
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="stripe-fail",
+        sender="billing@stripe.com",
+        recipients=[],
+        subject="Your payment failed",
+        classification=MessageClassification.needs_decision,
+        action_required=False,
+        priority=Priority.medium,
+        sender_classification="automated",
+    )
+    category = effective_inbox_category(m)
+    assert category == "Needs Decision"
+    assert (
+        message_qualifies_for_needs_action_tab(
+            m, category=category, user_replied=False
+        )
+        is True
+    )
+
+
 def test_meeting_scheduling_needs_decision_category_stays_strict() -> None:
-    """UI 'Needs Decision' from deadline/meeting still needs action + high priority."""
     from app.db.enums import Priority
     from app.db.models import Message
     from app.services.inbox_view import (

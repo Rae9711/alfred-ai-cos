@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CalendarEvent, User, UserHabit
 from app.schemas.today import HabitSuggestionOut
 from app.services.meeting_prep import today_events
+from app.services.planning_dismiss import is_dismissed
 
 LOOKBACK_DAYS = 30
 MIN_OCCURRENCES = 3
@@ -270,6 +271,8 @@ def build_habit_suggestions(
 
     for habit in habits:
         if weekday not in habit.typical_days:
+            continue
+        if user and is_dismissed(user, kind="habit", item_id=habit.id, day=today):
             continue
         if any(_event_covers_habit(e, habit, tz=tz) for e in todays_events):
             continue

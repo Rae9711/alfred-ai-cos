@@ -340,6 +340,14 @@ export const api = {
     request<{ dismissed: boolean }>(`/schedule-proposals/${id}/dismiss`, {
       method: "POST",
     }),
+  dismissHabitSuggestion: (habitId: string) =>
+    request<{ dismissed: boolean }>(`/today/habit-suggestions/${habitId}/dismiss`, {
+      method: "POST",
+    }),
+  dismissPlanningSuggestion: (itemId: string) =>
+    request<{ dismissed: boolean }>(`/today/planning-suggestions/${itemId}/dismiss`, {
+      method: "POST",
+    }),
   updateTaskStatus: (id: string, status: TaskStatus) =>
     request<Task>(`/tasks/${id}/status?status=${status}`, { method: "POST" }),
   captureText: (text: string) =>

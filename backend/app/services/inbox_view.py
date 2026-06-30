@@ -210,10 +210,11 @@ def message_qualifies_for_needs_action_tab(
         return False
     if message.classification not in _HIGH_CONFIDENCE_CLASSIFICATIONS:
         return False
-    if (message.sender_classification or "") in _UNTRUSTED_SENDERS:
-        return False
+    # needs_decision qualifies even from automated senders (Stripe billing, etc.).
     if message.classification == MessageClassification.needs_decision:
         return True
+    if (message.sender_classification or "") in _UNTRUSTED_SENDERS:
+        return False
     if message.classification in _CORE_REPLY_CLASSIFICATIONS:
         return bool(message.action_required)
     if not message.action_required:

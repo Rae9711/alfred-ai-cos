@@ -84,6 +84,15 @@ function TimeBlockRow({
       .finally(() => setSlot((s) => ({ ...s, scheduling: false })));
   };
 
+  const dismiss = () => {
+    setSlot((s) => ({ ...s, scheduling: true }));
+    void api
+      .dismissPlanningSuggestion(suggestion.item_id)
+      .then(() => onChanged?.())
+      .catch(() => showToast(t.planning.updateFailed))
+      .finally(() => setSlot((s) => ({ ...s, scheduling: false })));
+  };
+
   return (
     <View style={styles.blockCard}>
       <Serif size={16} style={styles.blockTitle}>
@@ -115,6 +124,14 @@ function TimeBlockRow({
         disabled={slot.scheduling}
         style={styles.scheduleBtn}
       />
+      <Pressable
+        onPress={dismiss}
+        disabled={slot.scheduling}
+        hitSlop={8}
+        style={styles.dismissBtn}
+      >
+        <Text style={styles.dismissText}>{t.planning.dismiss}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -216,6 +233,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   scheduleBtn: { alignSelf: "stretch" },
+  dismissBtn: { alignSelf: "flex-start" },
+  dismissText: { fontSize: 13, color: colors.ink4 },
   quickSection: { gap: 6 },
   quickRow: {
     flexDirection: "row",

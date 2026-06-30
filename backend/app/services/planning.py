@@ -19,6 +19,7 @@ from app.db.models import CalendarEvent, Commitment, Task, User
 from app.schemas.today import PlanningItemType, QuickWin, TimeBlockSuggestion
 from app.services.inbox_view import needs_action_message_ids
 from app.services.meeting_prep import today_events
+from app.services.planning_dismiss import is_dismissed
 from app.services.priority import ScoredCommitment, score_commitment
 from app.services.tasks import list_tasks
 
@@ -290,6 +291,12 @@ def build_planning_suggestions(
         scored,
         needs_action_ids=needs_action_ids,
     ) + _candidates_from_tasks(tasks, needs_action_ids=needs_action_ids)
+    if user is not None:
+        candidates = [
+            c
+            for c in candidates
+            if not is_dismissed(user, kind="planning", item_id=c.item_id, day=today)
+        ]
 
     used_ids: set[str] = set()
     suggestions = _pick_time_block_suggestions(gaps, candidates, tz=tz, used_ids=used_ids)

@@ -371,6 +371,28 @@ export function HomeScreen() {
     })();
   }, [load, scheduleAction, scheduleView, showToast, t.home.scheduleProposalFailed, topScheduleProposal]);
 
+  const dismissHabitSuggestion = useCallback(() => {
+    if (!topHabitSuggestion || habitAction) return;
+    setHabitAction(true);
+    void (async () => {
+      try {
+        await api.dismissHabitSuggestion(topHabitSuggestion.habit_id);
+        await load(scheduleView);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : t.home.habitBlockFailed);
+      } finally {
+        setHabitAction(false);
+      }
+    })();
+  }, [
+    habitAction,
+    load,
+    scheduleView,
+    showToast,
+    t.home.habitBlockFailed,
+    topHabitSuggestion,
+  ]);
+
   const completeReminder = useCallback(
     (task: Task) => {
       void (async () => {
@@ -471,7 +493,23 @@ export function HomeScreen() {
             {topHabitSuggestion && !topScheduleProposal ? (
               <Text style={styles.habitPattern}>{topHabitSuggestion.pattern_summary}</Text>
             ) : null}
-            {butlerCta ? (
+            {topHabitSuggestion && !topScheduleProposal ? (
+              <View style={styles.habitActions}>
+                <Btn
+                  label={butlerCta ?? t.home.habitBlockCta}
+                  onPress={onButlerPress}
+                  style={styles.proactiveBtn}
+                  disabled={habitAction}
+                />
+                <Pressable
+                  onPress={dismissHabitSuggestion}
+                  disabled={habitAction}
+                  hitSlop={8}
+                >
+                  <Text style={styles.dismissProposal}>{t.home.dismissProposal}</Text>
+                </Pressable>
+              </View>
+            ) : butlerCta ? (
               <Btn
                 label={butlerCta}
                 onPress={onButlerPress}
@@ -671,6 +709,7 @@ const styles = StyleSheet.create({
   },
   weekAheadText: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
   proactiveBtn: { alignSelf: "flex-start" },
+  habitActions: { gap: 10 },
   scheduleProposalActions: { gap: 10 },
   dismissProposal: { fontSize: 13, color: colors.ink4 },
   remindersBlock: { gap: 8, marginTop: 4 },
