@@ -8,10 +8,19 @@ cd "$(dirname "$0")/.."
 COMPOSE="docker compose -p albert -f docker-compose.prod.yml"
 
 # Tag images by git sha so a rollback is just ALBERT_TAG=<old-sha> ./albert-deploy.sh.
-export ALBERT_TAG="$(git rev-parse --short HEAD)"
+# hetzner-ship.sh passes ALBERT_TAG; on a git clone we derive it and pull latest.
+if [[ -z "${ALBERT_TAG:-}" ]]; then
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    export ALBERT_TAG="$(git rev-parse --short HEAD)"
+  else
+    export ALBERT_TAG="archive-$(date -u +%Y%m%d%H%M%S)"
+  fi
+fi
 echo "→ deploying albert @ ${ALBERT_TAG}"
 
-git pull --ff-only
+if [[ -d .git ]]; then
+  git pull --ff-only
+fi
 $COMPOSE build
 $COMPOSE up -d
 

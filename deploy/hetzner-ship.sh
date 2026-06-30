@@ -14,10 +14,11 @@ set -euo pipefail
 REMOTE_DIR="${HETZNER_REMOTE_DIR:-/opt/albert/repo}"
 ARCHIVE="/tmp/albert-src-$$.tar.gz"
 BRANCH="${HETZNER_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
+LOCAL_SHA="$(git rev-parse --short HEAD)"
 
 cd "$(dirname "$0")/.."
 
-echo "→ archive ${BRANCH} @ $(git rev-parse --short HEAD)"
+echo "→ archive ${BRANCH} @ ${LOCAL_SHA}"
 git archive --format=tar.gz -o "$ARCHIVE" "$BRANCH"
 
 echo "→ ensure remote dir"
@@ -41,7 +42,7 @@ ssh "$HETZNER_HOST" "set -euo pipefail
     exit 1
   fi
   chmod 600 .env
-  ./deploy/albert-deploy.sh
+  ALBERT_TAG='${LOCAL_SHA}' ./deploy/albert-deploy.sh
 "
 
 echo "✓ deployed to $HETZNER_HOST"
