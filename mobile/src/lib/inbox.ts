@@ -121,3 +121,24 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     showReplyActions: showsReplyActions(message),
   };
 }
+
+/** UI tab ids on the Inbox screen. */
+export type InboxTabId = "needs_action" | "unread" | "all" | "sms";
+
+/** Scope query param for GET /messages. */
+export type InboxApiScope = "needs_action" | "unread" | "synced" | "sms";
+
+export function tabToScope(tab: string): InboxApiScope {
+  if (tab === "needs_action") return "needs_action";
+  if (tab === "unread") return "unread";
+  if (tab === "sms") return "sms";
+  return "synced";
+}
+
+export function scopeToTab(scope: string): InboxTabId {
+  if (scope === "synced") return "all";
+  if (scope === "needs_action" || scope === "unread" || scope === "sms") {
+    return scope;
+  }
+  return "all";
+}

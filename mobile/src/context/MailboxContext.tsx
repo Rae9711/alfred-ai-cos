@@ -15,17 +15,26 @@ import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
 import { useMailAutoSync } from "@/hooks/useMailAutoSync";
-import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
+import {
+  type AppInboxItem,
+  type InboxApiScope,
+  type InboxTabId,
+  mapInboxMessage,
+  scopeToTab,
+  tabToScope,
+} from "@/lib/inbox";
 
-export type InboxScope = "needs_action" | "unread" | "today" | "synced" | "sms";
-export type InboxFilter = "needs_action" | "unread" | "sms" | "all" | "email" | string;
+export type InboxScope = InboxApiScope | "today";
+export type InboxFilter = InboxTabId | "email" | string;
 
 type MailboxState = {
   items: AppInboxItem[];
   mailboxes: string[];
-  inboxScope: InboxScope;
+  inboxScope: InboxApiScope;
+  inboxFilter: InboxTabId;
   inboxMailbox: string | undefined;
   loading: boolean;
+  tabLoading: boolean;
   syncing: boolean;
   error: string | null;
   lastSyncedAt: Date | null;
@@ -44,49 +53,54 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
-  const [inboxScope, setInboxScope] = useState<InboxScope>("needs_action");
+  const [inboxScope, setInboxScope] = useState<InboxApiScope>("needs_action");
+  const [inboxFilter, setInboxFilterState] = useState<InboxTabId>("needs_action");
   const [inboxMailbox, setInboxMailbox] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const filterRef = useRef<{ scope: InboxScope; mailbox?: string }>({
+  const filterRef = useRef<{ scope: InboxApiScope; mailbox?: string }>({
     scope: "needs_action",
   });
+  const loadSeqRef = useRef(0);
 
   const loadInbox = useCallback(
-    async (scope: InboxScope, mailbox?: string) => {
+    async (scope: InboxApiScope, mailbox?: string) => {
+      const seq = ++loadSeqRef.current;
+      filterRef.current = { scope, mailbox };
+
       const view = await api.getInbox({
         scope,
         mailbox: scope === "synced" ? mailbox : undefined,
       });
+
+      if (seq !== loadSeqRef.current) return;
+
       setItems(view.messages.map(mapInboxMessage));
       setMailboxes(view.mailboxes ?? []);
       setInboxScope(scope);
+      setInboxFilterState(scopeToTab(scope));
       setInboxMailbox(mailbox);
-      filterRef.current = { scope, mailbox };
     },
     [],
   );
 
   const setInboxFilter = useCallback(
     async (filter: InboxFilter) => {
+      const scope = tabToScope(filter);
+      const tab = scopeToTab(scope);
+      setInboxFilterState(tab);
+      setTabLoading(true);
       setError(null);
       try {
-        if (filter === "needs_action") {
-          await loadInbox("needs_action");
-        } else if (filter === "unread") {
-          await loadInbox("unread");
-        } else if (filter === "sms") {
-          await loadInbox("sms");
-        } else if (filter === "all" || filter === "email") {
-          await loadInbox("synced");
-        } else {
-          await loadInbox("synced");
-        }
+        await loadInbox(scope);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't load inbox");
         throw e;
+      } finally {
+        setTabLoading(false);
       }
     },
     [loadInbox],
@@ -95,11 +109,14 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const { scope, mailbox } = filterRef.current;
     setError(null);
+    setTabLoading(true);
     try {
       await loadInbox(scope, mailbox);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load inbox");
       throw e;
+    } finally {
+      setTabLoading(false);
     }
   }, [loadInbox]);
 
@@ -108,16 +125,29 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     setSyncing(true);
     setError(null);
     const { scope, mailbox } = filterRef.current;
+    const scopeAtStart = scope;
+    const mailboxAtStart = mailbox;
     let ingested = 0;
     try {
       await loadInbox(scope, mailbox);
       const result = await api.sync({ ingestOnly: true });
       ingested = result.ingested;
-      await loadInbox(scope, mailbox);
+      if (
+        filterRef.current.scope === scopeAtStart &&
+        filterRef.current.mailbox === mailboxAtStart
+      ) {
+        await loadInbox(scopeAtStart, mailboxAtStart);
+      }
       setLastSyncedAt(new Date());
       if (ingested > 0) {
         setTimeout(() => {
           const current = filterRef.current;
+          if (
+            current.scope !== scopeAtStart ||
+            current.mailbox !== mailboxAtStart
+          ) {
+            return;
+          }
           void loadInbox(current.scope, current.mailbox).catch(() => undefined);
         }, 5_000);
       }
@@ -224,8 +254,10 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       items,
       mailboxes,
       inboxScope,
+      inboxFilter,
       inboxMailbox,
       loading,
+      tabLoading,
       syncing,
       error,
       lastSyncedAt,
@@ -241,8 +273,10 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       items,
       mailboxes,
       inboxScope,
+      inboxFilter,
       inboxMailbox,
       loading,
+      tabLoading,
       syncing,
       error,
       lastSyncedAt,

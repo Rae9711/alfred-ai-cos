@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mapInboxMessage, parseSenderDisplay } from "./inbox";
+import { mapInboxMessage, parseSenderDisplay, scopeToTab, tabToScope } from "./inbox";
 
 describe("parseSenderDisplay", () => {
   it("extracts name from angle-bracket form", () => {
@@ -178,5 +178,22 @@ describe("mapInboxMessage", () => {
     expect(item.section).toBe("fyi");
     expect(item.userDecided).toBe(true);
     expect(item.showReplyActions).toBe(false);
+  });
+});
+
+describe("inbox tab scope mapping", () => {
+  it("maps each UI tab to the correct API scope", () => {
+    expect(tabToScope("needs_action")).toBe("needs_action");
+    expect(tabToScope("unread")).toBe("unread");
+    expect(tabToScope("all")).toBe("synced");
+    expect(tabToScope("sms")).toBe("sms");
+    expect(tabToScope("email")).toBe("synced");
+  });
+
+  it("maps API scopes back to UI tabs", () => {
+    expect(scopeToTab("needs_action")).toBe("needs_action");
+    expect(scopeToTab("unread")).toBe("unread");
+    expect(scopeToTab("synced")).toBe("all");
+    expect(scopeToTab("sms")).toBe("sms");
   });
 });

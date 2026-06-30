@@ -1,6 +1,6 @@
 // Inbox — live Gmail messages from Albert's classification pipeline.
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ActivityIndicator,
   LayoutAnimation,
@@ -48,7 +48,9 @@ export function InboxScreen() {
     items,
     mailboxes,
     inboxScope,
+    inboxFilter,
     loading,
+    tabLoading,
     syncing,
     error,
     lastSyncedAt,
@@ -60,7 +62,6 @@ export function InboxScreen() {
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
-  const [filter, setFilter] = useState("needs_action");
 
   const mailboxTabs = useMemo(
     () => [
@@ -77,7 +78,7 @@ export function InboxScreen() {
     ],
   );
 
-  const live = items;
+  const live = tabLoading ? [] : items;
 
   const filtered = live;
   const replyItems = filtered.filter((m) => m.section === "reply");
@@ -85,10 +86,10 @@ export function InboxScreen() {
   const fyiItems = filtered.filter((m) => m.section === "fyi");
   const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
-    filter === "all" && inboxScope === "synced" && mailboxes.length > 1;
+    inboxFilter === "all" && inboxScope === "synced" && mailboxes.length > 1;
 
   const onSelectFilter = (id: string) => {
-    setFilter(id);
+    if (id === inboxFilter || tabLoading) return;
     void setInboxFilter(id);
   };
 
@@ -181,7 +182,7 @@ export function InboxScreen() {
 
   const onPullRefresh = async () => {
     try {
-      if (filter === "sms") {
+      if (inboxFilter === "sms") {
         await refresh();
         showToast(t.inbox.refreshed);
         return;
@@ -257,13 +258,20 @@ export function InboxScreen() {
           <Pill
             key={f.id}
             label={f.label}
-            kind={filter === f.id ? "accent" : "muted"}
+            kind={inboxFilter === f.id ? "accent" : "muted"}
             mono={false}
             onPress={() => onSelectFilter(f.id)}
             style={styles.filterPill}
           />
         ))}
       </ScrollView>
+
+      {tabLoading ? (
+        <View style={styles.tabLoading}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
+        </View>
+      ) : null}
 
       {replyItems.length > 0 ? (
         <Section title={t.inbox.sectionReply}>
@@ -356,23 +364,23 @@ export function InboxScreen() {
         </Section>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {!tabLoading && filtered.length === 0 ? (
         <View style={styles.empty}>
           <Serif size={17} italic color={colors.ink3}>
-            {filter === "sms"
+            {inboxFilter === "sms"
               ? t.inbox.smsEmpty
-              : filter === "needs_action"
+              : inboxFilter === "needs_action"
                 ? t.inbox.needsActionEmpty
-                : filter === "unread"
+                : inboxFilter === "unread"
                   ? t.inbox.unreadEmpty
                   : t.inbox.inboxZero}
           </Serif>
           <Text style={styles.pullHint}>
-            {filter === "sms"
+            {inboxFilter === "sms"
               ? t.inbox.smsEmptySub
-              : filter === "needs_action"
+              : inboxFilter === "needs_action"
                 ? t.inbox.needsActionEmptySub
-                : filter === "unread"
+                : inboxFilter === "unread"
                   ? t.inbox.unreadEmptySub
                   : t.inbox.pullToSync}
           </Text>
@@ -678,6 +686,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { fontSize: 14, color: colors.ink3 },
+  tabLoading: {
+    paddingVertical: 48,
+    alignItems: "center",
+    gap: 12,
+  },
   header: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
