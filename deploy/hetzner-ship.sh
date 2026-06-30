@@ -42,7 +42,7 @@ ssh "$HETZNER_HOST" "set -euo pipefail
     exit 1
   fi
   chmod 600 .env
-  ALBERT_TAG='${LOCAL_SHA}' ./deploy/albert-deploy.sh
+  ALBERT_TAG=${LOCAL_SHA} ./deploy/albert-deploy.sh
 "
 
 echo "✓ deployed to $HETZNER_HOST"
