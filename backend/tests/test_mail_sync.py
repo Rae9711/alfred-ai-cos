@@ -1,11 +1,11 @@
-"""New-mail background sync and push notifications."""
+"""New-mail background sync and needs-action push notifications."""
 
 from __future__ import annotations
 
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.enums import MessageClassification, NotificationType
+from app.db.enums import MessageClassification, NotificationType, Priority
 from app.db.models import Device, Message, User
 from app.services import mail_sync
 from app.services.ingestion import SyncIngestResult
@@ -33,21 +33,26 @@ def user(db: Session) -> User:
     return user
 
 
-def _message(user_id: str, *, ext: str) -> Message:
+def _message(user_id: str, *, ext: str, qualifies: bool = False) -> Message:
     return Message(
         user_id=user_id,
         source="gmail",
         external_id=ext,
         sender="Ray <ray@example.com>",
         recipients=[],
-        subject="Hello",
+        subject="Please sign the contract today",
+        snippet="Need your signature",
         classification=MessageClassification.needs_reply,
+        sender_classification="person",
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        action_required=qualifies,
+        priority=Priority.high if qualifies else Priority.low,
     )
 
 
-def test_notify_new_mail_enqueues_without_push(db: Session, user: User) -> None:
+def test_notify_new_mail_skips_non_qualifying(db: Session, user: User) -> None:
     db.add(Device(user_id=user.id, push_token="ExponentPushToken[test]", platform="ios"))
-    msg = _message(user.id, ext="m1")
+    msg = _message(user.id, ext="m1", qualifies=False)
     db.add(msg)
     db.commit()
 
@@ -56,8 +61,23 @@ def test_notify_new_mail_enqueues_without_push(db: Session, user: User) -> None:
     assert notifier.sent == []
     from app.db.models import Notification
 
+    assert db.query(Notification).count() == 0
+
+
+def test_notify_new_mail_pushes_qualifying_needs_action(db: Session, user: User) -> None:
+    db.add(Device(user_id=user.id, push_token="ExponentPushToken[test]", platform="ios"))
+    msg = _message(user.id, ext="m1", qualifies=True)
+    db.add(msg)
+    db.commit()
+
+    notifier = _StubNotifier()
+    assert notify_new_mail(db, user, [msg], provider=notifier) is True
+    assert len(notifier.sent) == 1
+    assert "Needs action" in notifier.sent[0]["title"]
+    from app.db.models import Notification
+
     notif = db.query(Notification).one()
-    assert notif.type == NotificationType.new_mail
+    assert notif.type == NotificationType.needs_action_mail
 
 
 def test_sync_user_and_notify_skips_initial_backfill(db: Session, user: User, monkeypatch) -> None:

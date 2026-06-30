@@ -102,6 +102,7 @@ class NotificationType(enum.StrEnum):
     schedule_conflict = "schedule_conflict"
     reminder = "reminder"
     new_mail = "new_mail"
+    needs_action_mail = "needs_action_mail"
 
 
 class NotificationStatus(enum.StrEnum):

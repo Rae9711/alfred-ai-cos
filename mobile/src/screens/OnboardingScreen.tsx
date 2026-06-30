@@ -52,15 +52,6 @@ const QUESTIONS: Question[] = [
       { value: "inbox", label: "Inbox control" },
     ],
   },
-  {
-    key: "proactiveness",
-    prompt: "How proactive should Albert be?",
-    options: [
-      { value: "quiet", label: "Quiet" },
-      { value: "balanced", label: "Balanced" },
-      { value: "very_proactive", label: "Very proactive" },
-    ],
-  },
 ];
 
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {

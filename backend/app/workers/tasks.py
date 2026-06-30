@@ -139,8 +139,10 @@ def dispatch_due_briefings() -> dict[str, int]:
 
 @celery_app.task(name="albert.scan_notifications")  # type: ignore[untyped-decorator]
 def scan_notifications() -> dict[str, int]:
-    """Beat entry point: scan every user for at-risk loops, enqueue notifications,
-    and dispatch the ones that clear the threshold and quiet hours."""
+    """Beat entry point: calendar prep + task reminders only; dispatch push-eligible rows.
+
+    Other scanners (deadline risk, top priorities, briefings, approvals, etc.) are
+    intentionally not called — push policy is needs-action mail, reminders, and meetings."""
     db = SessionLocal()
     notifier = get_notifier()
     enqueued = sent = held = 0

@@ -237,6 +237,14 @@ export const translations = {
       subscriptionManage: "Manage subscription",
       subscriptionComingSoon: "Coming soon",
       subscriptionCheckoutFailed: "Could not open checkout.",
+      notificationsTitle: "Notifications",
+      notificationsPolicy:
+        "Albert only pushes for mail that needs your action, task reminders, and upcoming meetings.",
+      enablePush: "Enable push",
+      quietHours: "Quiet hours",
+      quietHoursNotSet: "Not set",
+      quietHoursHint:
+        "During quiet hours, only needs-action mail still alerts you (format HH-HH, e.g. 22-08).",
     },
     smsSetupGuide: {
       title: "SMS forwarding setup",
@@ -535,6 +543,14 @@ export const translations = {
       subscriptionManage: "管理订阅",
       subscriptionComingSoon: "即将开放",
       subscriptionCheckoutFailed: "无法打开结账页面。",
+      notificationsTitle: "通知",
+      notificationsPolicy:
+        "Albert 仅在需处理邮件、任务提醒和即将开始的会议时推送。",
+      enablePush: "开启推送",
+      quietHours: "免打扰时段",
+      quietHoursNotSet: "未设置",
+      quietHoursHint:
+        "免打扰时段内，仅高置信度需处理邮件仍会提醒（格式 HH-HH，如 22-08）。",
     },
     smsSetupGuide: {
       title: "短信转发设置",

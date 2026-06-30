@@ -31,9 +31,10 @@ from app.db.models import (
 )
 
 # Notification types that may reach the user's device. Everything else is
-# still enqueued for in-app history but never pushed (user preference: calendar + reminders only).
+# still enqueued for in-app history but never pushed (distraction-minimal policy).
 _PUSH_ALLOWED: frozenset[NotificationType] = frozenset(
     {
+        NotificationType.needs_action_mail,
         NotificationType.meeting_prep,
         NotificationType.reminder,
     }
@@ -145,6 +146,7 @@ _IMPORTANCE: dict[NotificationType, NotificationImportance] = {
     NotificationType.unanswered_email: NotificationImportance.high,
     NotificationType.reminder: NotificationImportance.normal,
     NotificationType.new_mail: NotificationImportance.normal,
+    NotificationType.needs_action_mail: NotificationImportance.high,
     NotificationType.daily_briefing: NotificationImportance.low,
 }
 
@@ -207,7 +209,11 @@ def decide_delivery(
     quiet_hours_raw: object,
 ) -> DeliveryDecision:
     """Decide whether to send immediately or hold/batch a notification."""
-    threshold = _THRESHOLD.get(proactiveness or "balanced", NotificationImportance.normal)
+    # Allowed push types always clear the proactiveness gate; quiet hours still apply.
+    if ntype in _PUSH_ALLOWED:
+        threshold = NotificationImportance.low
+    else:
+        threshold = _THRESHOLD.get(proactiveness or "balanced", NotificationImportance.normal)
     if importance_of(ntype) < threshold:
         return DeliveryDecision(False, "below importance threshold; batched")
     if in_quiet_hours(now, _parse_quiet_hours(quiet_hours_raw)):

@@ -660,12 +660,13 @@ export function SettingsScreen() {
       </View>
 
       {/* Notifications */}
-      <SectionTitle label="Notifications" />
+      <SectionTitle label={s.notificationsTitle ?? "Notifications"} />
+      <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
       <View style={styles.group}>
-        <Row label="Enable push" detail="" onPress={() => void enablePush()} />
+        <Row label={s.enablePush ?? "Enable push"} detail="" onPress={() => void enablePush()} />
         <Row
-          label="Quiet hours"
-          detail={quietHours ?? "Not set"}
+          label={s.quietHours ?? "Quiet hours"}
+          detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
           isLast={!editingQuietHours}
           onPress={editQuietHours}
         />
@@ -673,7 +674,8 @@ export function SettingsScreen() {
       {editingQuietHours ? (
         <View style={styles.quietEditor}>
           <Text style={styles.quietHint}>
-            Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08).
+            {s.quietHoursHint ??
+              "Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08)."}
           </Text>
           <TextInput
             value={quietHoursDraft}

@@ -180,7 +180,17 @@ def test_enqueue_dedup_returns_none(db: Session, user: User) -> None:
 # --- dispatch end to end with a fake provider + a registered device ---
 
 
-def test_dispatch_sends_calendar_and_suppresses_other_types(db: Session, user: User) -> None:
+def test_meeting_prep_sends_under_quiet_proactiveness() -> None:
+    d = n.decide_delivery(
+        ntype=NotificationType.meeting_prep,
+        now=time(12, 0),
+        proactiveness="quiet",
+        quiet_hours_raw=None,
+    )
+    assert d.send_now is True
+
+
+def test_dispatch_sends_allowed_types_and_suppresses_other_types(db: Session, user: User) -> None:
     from app.db.models import Device, Notification
     from tests.fakes import FakeNotifier
 
@@ -192,6 +202,14 @@ def test_dispatch_sends_calendar_and_suppresses_other_types(db: Session, user: U
             type=NotificationType.reminder,
             title="Pay rent",
             body="Due tomorrow",
+        )
+    )
+    db.add(
+        Notification(
+            user_id=user.id,
+            type=NotificationType.needs_action_mail,
+            title="Needs action: Dana",
+            body="Contract due",
         )
     )
     db.add(
@@ -214,9 +232,11 @@ def test_dispatch_sends_calendar_and_suppresses_other_types(db: Session, user: U
 
     notifier = FakeNotifier()
     result = n.dispatch_pending(db, user, now=time(12, 0), provider=notifier)
-    assert result == {"sent": 1, "held": 2}
-    assert len(notifier.sent) == 1
-    assert notifier.sent[0]["title"] == "Pay rent"
+    assert result == {"sent": 2, "held": 2}
+    assert len(notifier.sent) == 2
+    titles = {s["title"] for s in notifier.sent}
+    assert "Pay rent" in titles
+    assert "Needs action: Dana" in titles
 
 
 # --- approval push: only fires once the grace window has passed ---

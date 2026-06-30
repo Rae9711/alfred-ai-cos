@@ -1,10 +1,57 @@
-# Stripe payments
+# Stripe (subscriptions + payments)
 
-Albert can charge a payment method through Stripe. This is a level-4 (financial)
-capability: it runs only after explicit approval, a strong second confirmation, and a
-spend-limit check. By default it operates in **test mode** and refuses to move real money.
+Albert supports **Albert Pro subscriptions** (Stripe Checkout) and **one-off payments**
+(`make_payment` capability). This doc covers both.
 
-## What is built
+## Subscription checkout (commit ae80066)
+
+Albert Pro subscriptions use Stripe Checkout in `subscription` mode. Plan state is read
+from `user.preferences` (`subscription_plan`, `subscription_status`, etc.). Checkout is
+enabled only when both env vars below are set on the server.
+
+### Configuration
+
+```
+STRIPE_SECRET_KEY=sk_test_...           # or sk_live_ with ALLOW_LIVE_PAYMENTS=true
+STRIPE_SUBSCRIPTION_PRICE_ID=price_...  # recurring Price id from Stripe Dashboard
+ALLOW_LIVE_PAYMENTS=false               # never true without compliance steps below
+```
+
+Also documented in `.env.example` and `.env.production.example`.
+
+### Stripe Dashboard setup (checklist)
+
+1. **Products** → Create product **Albert Pro** (or reuse an existing product).
+2. **Add price** → Recurring, monthly (catalog shows $12/mo; set your amount), save.
+3. Copy the **Price ID** (`price_…`) → set `STRIPE_SUBSCRIPTION_PRICE_ID` in server `.env`.
+4. **Developers → API keys** → copy **Secret key** → set `STRIPE_SECRET_KEY` in server `.env`.
+5. Restart API after env change: `systemctl restart albert-web` (systemd) or
+   `./deploy/albert-deploy.sh` (Docker on Hetzner).
+6. **Webhook (recommended, not yet implemented in code):** Developers → Webhooks →
+   add endpoint `https://YOUR_DOMAIN/api/v1/billing/webhook` for events
+   `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`. Until a webhook handler ships, subscription status in
+   the app stays on Free/inactive after checkout — update `user.preferences` manually or
+   wait for the webhook PR.
+7. **Test checkout:** open mobile **Settings → Subscription → Subscribe**. Success/cancel
+   URLs are `albert://settings?billing=success|cancel`. Use Stripe test card `4242…`.
+
+### API routes
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/v1/billing/subscription` | Current plan + `checkout_available` |
+| GET | `/api/v1/billing/plans` | Catalog (Albert Pro monthly) |
+| POST | `/api/v1/billing/checkout` | Body: `{ success_url, cancel_url }` → Stripe Checkout URL |
+
+### Live billing
+
+Same guard as payments: `sk_live_` is refused unless `ALLOW_LIVE_PAYMENTS=true`. Complete
+the compliance prerequisites in the next section before enabling live keys.
+
+---
+
+## One-off payments (make_payment capability)
 
 - `app/capabilities/providers/stripe_payment.py`: creates a Stripe PaymentIntent via the
   Stripe API. The only place the Stripe API is touched.

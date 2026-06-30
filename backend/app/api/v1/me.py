@@ -66,7 +66,7 @@ _USER_SCOPED = (
     ConnectedAccount,
 )
 
-_ONBOARDING_KEYS = ("focus", "optimize_for", "proactiveness")
+_ONBOARDING_KEYS = ("focus", "optimize_for")
 
 
 def _is_onboarded(user: User) -> bool:

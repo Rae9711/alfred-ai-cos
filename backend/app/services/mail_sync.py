@@ -59,38 +59,48 @@ def notify_new_mail(
     provider: NotificationProvider,
     now: datetime | None = None,
 ) -> bool:
-    """Push when fresh mail arrived (not initial backfill). Returns True if a push sent."""
+    """Push only when fresh mail qualifies for the high-confidence needs-action tab.
+    Generic new-mail and FYI arrivals are never pushed. Returns True if a push sent."""
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_qualifies_for_needs_action_tab,
+        message_user_decided,
+        user_replied_message_ids,
+    )
+
     if not new_messages:
         return False
     now_dt = now or datetime.now(UTC)
-    count = len(new_messages)
-    first = new_messages[0]
-    sender = (first.sender or "").split("<")[0].strip() or "Someone"
-    if count == 1:
-        title = f"New mail from {sender[:40]}"
-        body = (first.subject or first.snippet or "Open your inbox")[:160]
-    else:
-        title = f"{count} new emails"
-        body = (first.subject or first.snippet or "Open your inbox")[:160]
-
-    dedup_key = "mail:" + ":".join(sorted(m.id for m in new_messages))
-    created = notifications.enqueue(
-        db,
-        user.id,
-        ntype=NotificationType.new_mail,
-        title=title[:80],
-        body=body,
-        payload={
-            "deep_link": "/inbox",
-            "message_id": first.id,
-            "count": count,
-        },
-        dedup_key=dedup_key,
-    )
-    if created is None:
+    replied = user_replied_message_ids(db, user.id)
+    enqueued = False
+    for message in new_messages:
+        if not message_qualifies_for_needs_action_tab(
+            message,
+            category=effective_inbox_category(message),
+            user_replied=message.id in replied,
+            user_decided=message_user_decided(message),
+        ):
+            continue
+        sender = (message.sender or "").split("<")[0].strip() or "Someone"
+        title = f"Needs action: {sender[:40]}"
+        body = (message.subject or message.snippet or "Open your inbox")[:160]
+        created = notifications.enqueue(
+            db,
+            user.id,
+            ntype=NotificationType.needs_action_mail,
+            title=title[:80],
+            body=body,
+            payload={"deep_link": "/inbox", "message_id": message.id},
+            dedup_key=f"needs_action:{message.id}",
+        )
+        if created is not None:
+            enqueued = True
+    if not enqueued:
         return False
-    # New-mail notifications are in-app only; do not push to mobile.
-    return False
+    result = notifications.dispatch_pending(
+        db, user, now=now_dt.time(), provider=provider
+    )
+    return result["sent"] > 0
 
 
 def sync_user_and_notify(
@@ -100,7 +110,7 @@ def sync_user_and_notify(
     provider: NotificationProvider,
     notify: bool = True,
 ) -> dict[str, int]:
-    """Background/API path: sync one user and push if new Primary mail arrived."""
+    """Background/API path: sync one user and push if needs-action mail arrived."""
     result, processed, commitments = run_mail_sync(db, user.id)
     pushed = 0
     if notify and result.new_messages and not result.initial_backfill:
