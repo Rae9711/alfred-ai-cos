@@ -6,7 +6,7 @@ calendar_only=true syncs Google Calendar without touching Gmail (fast home refre
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -61,9 +61,12 @@ def sync_now(
             initial_backfill=False,
         )
 
-    result, processed, commitments = run_mail_sync(
-        db, user.id, ingest_only=ingest_only, reclassify=reclassify
-    )
+    try:
+        result, processed, commitments = run_mail_sync(
+            db, user.id, ingest_only=ingest_only, reclassify=reclassify
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if ingest_only:
         classify_pending_messages.delay(user.id)
     events = calendar.sync_calendar(db, user.id) if not ingest_only else []

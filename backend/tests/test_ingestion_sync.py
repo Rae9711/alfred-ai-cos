@@ -313,3 +313,32 @@ def test_incremental_catchup_skips_messages_pending_in_session(
 
     assert [m.external_id for m in result.new_messages] == ["m-overlap", "m-new"]
     assert db.query(Message).count() == 2
+
+
+def test_ingest_skips_deleted_gmail_messages(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _connect(db, user, history_id="hist-old")
+
+    class FakeHttpError(Exception):
+        def __init__(self) -> None:
+            self.resp = type("R", (), {"status": 404})()
+
+    monkeypatch.setattr(
+        gmail,
+        "list_history_added_message_ids",
+        lambda _t, start, label_id=None: (["m-gone", "m-ok"], "hist-new"),
+    )
+
+    def labels(_t: dict, mid: str) -> list[str]:
+        if mid == "m-gone":
+            raise FakeHttpError()
+        return ["INBOX", "CATEGORY_PERSONAL"]
+
+    monkeypatch.setattr(gmail, "get_message_label_ids", labels)
+    monkeypatch.setattr(gmail, "get_message", lambda _t, mid: _raw(mid))
+    monkeypatch.setattr(gmail, "get_history_id", lambda _t: "hist-99")
+
+    result = ingestion.sync_messages(db, user.id)
+
+    assert [m.external_id for m in result.new_messages] == ["m-ok"]

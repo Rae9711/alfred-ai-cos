@@ -77,7 +77,13 @@ def _ingest_message_ids(
         seen_ids.add(message_id)
         if _message_exists(db, account.id, message_id):
             continue
-        labels = gmail.get_message_label_ids(token, message_id)
+        try:
+            labels = gmail.get_message_label_ids(token, message_id)
+        except Exception as exc:
+            # History/catchup can reference messages the user deleted in Gmail.
+            if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
+                continue
+            raise
         if not gmail.should_ingest_inbox_message(labels):
             continue
         raw = gmail.get_message(token, message_id)

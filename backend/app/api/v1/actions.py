@@ -161,6 +161,9 @@ def approve_action(
         execution.execute_proposal(db, user, proposal)
     except execution.ExecutionBlocked as exc:
         raise HTTPException(status_code=502, detail=f"Execution failed: {exc}") from exc
+    except Exception as exc:
+        # Gmail/LLM/network errors are audited as failed proposals; return 502 not 500.
+        raise HTTPException(status_code=502, detail=f"Execution failed: {exc}") from exc
     return proposal
 
 

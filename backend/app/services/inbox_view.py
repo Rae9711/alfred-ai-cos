@@ -87,11 +87,23 @@ def message_user_decided(message: Message) -> bool:
     return bool(headers.get("user_decided"))
 
 
+def _classification_storage_value(
+    classification: MessageClassification | str | None,
+) -> str | None:
+    """Normalize classification for JSON headers (DB may return plain strings)."""
+    if classification is None:
+        return None
+    if isinstance(classification, MessageClassification):
+        return classification.value
+    return str(classification)
+
+
 def mark_message_user_decided(message: Message) -> None:
     headers = dict(message.headers or {})
     if not headers.get("user_decided"):
-        if message.classification is not None:
-            headers["pre_decide_classification"] = message.classification.value
+        pre_cls = _classification_storage_value(message.classification)
+        if pre_cls is not None:
+            headers["pre_decide_classification"] = pre_cls
         headers["pre_decide_action_required"] = bool(message.action_required)
     headers["user_decided"] = True
     message.headers = headers

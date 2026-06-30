@@ -383,7 +383,7 @@ export function AskScreen() {
         await api.approveAction(proposal.id);
         showToast(t.ask.toastSent);
         await markRead(thread.messageId).catch(() => undefined);
-        await syncAndRefresh();
+        await syncAndRefresh().catch(() => undefined);
         completeChat();
       } catch (e) {
         showToast(

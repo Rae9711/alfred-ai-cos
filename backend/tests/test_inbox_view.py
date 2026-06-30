@@ -65,6 +65,24 @@ def test_effective_inbox_category_past_due_subject_before_classified() -> None:
     assert effective_inbox_category(m) == "Needs Reply"
 
 
+def test_mark_message_user_decided_accepts_string_classification_from_db() -> None:
+    from app.db.models import Message
+    from app.services.inbox_view import mark_message_user_decided
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="p4b",
+        sender="a@b.com",
+        recipients=[],
+        classification="needs_reply",
+        action_required=True,
+    )
+    mark_message_user_decided(m)
+    assert m.headers is not None
+    assert m.headers["pre_decide_classification"] == "needs_reply"
+
+
 def test_message_user_decided_excluded_from_needs_action() -> None:
     from app.db.models import Message
     from app.services.inbox_view import (
