@@ -29,6 +29,7 @@ from app.db.models import (
     Notification,
     User,
 )
+from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
 
 # Notification types that may reach the user's device. Everything else is
 # still enqueued for in-app history but never pushed (distraction-minimal policy).
@@ -367,14 +368,17 @@ def scan_task_reminders(db: Session, user_id: str, *, now: datetime) -> int:
 def scan_for_risks(db: Session, user_id: str, *, today: date_type) -> int:
     """Enqueue notifications for at-risk open loops (PRD 12.8). Deduped per
     commitment+type so a rescan does not re-notify. Returns the count enqueued."""
-    open_commitments = list(
-        db.scalars(
-            select(Commitment).where(
-                Commitment.user_id == user_id,
-                Commitment.status == CommitmentStatus.open,
-                Commitment.due_date.is_not(None),
+    open_commitments = filter_actionable_commitments(
+        list(
+            db.scalars(
+                select(Commitment).where(
+                    Commitment.user_id == user_id,
+                    Commitment.status == CommitmentStatus.open,
+                    Commitment.due_date.is_not(None),
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user_id),
     )
     enqueued = 0
     for c in open_commitments:
@@ -403,17 +407,20 @@ def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
     a deadline_risk). Skips automated senders. Deduped per commitment id."""
     today = now.date()
     cutoff_dt = now - timedelta(days=WAITING_AGING_DAYS)
-    stale = list(
-        db.scalars(
-            select(Commitment).where(
-                Commitment.user_id == user_id,
-                Commitment.status == CommitmentStatus.open,
-                Commitment.owner == CommitmentOwner.user,
-                Commitment.counterparty.is_not(None),
-                Commitment.from_automated.is_(False),
-                Commitment.created_at <= cutoff_dt,
+    stale = filter_actionable_commitments(
+        list(
+            db.scalars(
+                select(Commitment).where(
+                    Commitment.user_id == user_id,
+                    Commitment.status == CommitmentStatus.open,
+                    Commitment.owner == CommitmentOwner.user,
+                    Commitment.counterparty.is_not(None),
+                    Commitment.from_automated.is_(False),
+                    Commitment.created_at <= cutoff_dt,
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user_id),
     )
     enqueued = 0
     for c in stale:

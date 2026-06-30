@@ -20,7 +20,12 @@ from app.llm import get_llm
 from app.services import execution, meeting_prep
 from app.services.actions import propose_action_internal
 from app.services.inbox_filter import message_in_primary_inbox
-from app.services.inbox_view import effective_inbox_category, message_needs_attention
+from app.services.inbox_view import (
+    effective_inbox_category,
+    message_needs_attention,
+    message_user_decided,
+    user_replied_message_ids,
+)
 from app.services.today import build_today
 from app.services.waiting import build_waiting
 
@@ -380,6 +385,7 @@ def _format_waiting_context(db: Session, user_id: str) -> str:
 
 
 def _format_inbox_context(db: Session, user_id: str) -> str:
+    replied = user_replied_message_ids(db, user_id)
     rows = list(
         db.scalars(
             select(Message)
@@ -394,7 +400,11 @@ def _format_inbox_context(db: Session, user_id: str) -> str:
         if m.source == "sms" or not message_in_primary_inbox(m):
             continue
         category = effective_inbox_category(m)
-        if not message_needs_attention(category=category, user_replied=False):
+        if not message_needs_attention(
+            category=category,
+            user_replied=m.id in replied,
+            user_decided=message_user_decided(m),
+        ):
             continue
         subj = m.subject or m.snippet or "(no subject)"
         lines.append(f"- [{category}] {m.sender}: {subj}")

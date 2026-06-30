@@ -22,6 +22,7 @@ from app.db.models import DraftReply, Message, User
 from app.services import gmail, outbound_tracking
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
+from app.services.inbox_resolution import resolve_derivatives_for_message
 from app.services.message_read import mark_message_read
 from app.services.writing_style import incorporate_sent_reply
 
@@ -59,6 +60,7 @@ class SendEmailCapability:
                 recipient=message.sender,
                 subject=draft.subject,
             )
+            resolve_derivatives_for_message(db, user.id, message.id)
             try:
                 incorporate_sent_reply(db, user, draft.body)
             except Exception:
@@ -85,6 +87,7 @@ class SendEmailCapability:
             recipient=message.sender,
             subject=subject,
         )
+        resolve_derivatives_for_message(db, user.id, message.id)
         try:
             incorporate_sent_reply(db, user, draft.body)
         except Exception:

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus
 from app.db.models import Commitment
+from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
 
 
 @dataclass
@@ -35,14 +36,17 @@ def _age_days(commitment: Commitment, *, now: datetime) -> int:
 
 def build_waiting(db: Session, user_id: str) -> WaitingView:
     now = datetime.now(UTC)
-    open_with_counterparty = list(
-        db.scalars(
-            select(Commitment).where(
-                Commitment.user_id == user_id,
-                Commitment.status == CommitmentStatus.open,
-                Commitment.counterparty.is_not(None),
+    open_with_counterparty = filter_actionable_commitments(
+        list(
+            db.scalars(
+                select(Commitment).where(
+                    Commitment.user_id == user_id,
+                    Commitment.status == CommitmentStatus.open,
+                    Commitment.counterparty.is_not(None),
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user_id),
     )
     waiting_on_you: list[WaitingEntry] = []
     you_are_waiting_on: list[WaitingEntry] = []

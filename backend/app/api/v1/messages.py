@@ -28,6 +28,7 @@ from app.services import tasks as task_service
 from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
+from app.services.inbox_resolution import resolve_derivatives_for_message
 from app.services.inbox_view import (
     clear_message_user_decided,
     effective_inbox_category,
@@ -243,6 +244,7 @@ def mark_decided(
     message.action_required = False
     if not message.body_summary:
         message.body_summary = "Marked as decided."
+    resolve_derivatives_for_message(db, user.id, message.id)
     db.commit()
     try:
         message, gmail_synced = mark_message_read(db, user, message)

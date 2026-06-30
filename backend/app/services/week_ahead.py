@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.enums import CommitmentStatus, ScheduleProposalStatus
 from app.db.models import CalendarEvent, Commitment, ScheduleProposal, User
 from app.schemas.today import WeekAheadOut
+from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
 
 _EN_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _ZH_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -88,14 +89,17 @@ def build_week_ahead(
         )
     )
 
-    fuzzy_commitments = list(
-        db.scalars(
-            select(Commitment).where(
-                Commitment.user_id == user_id,
-                Commitment.status == CommitmentStatus.open,
-                Commitment.due_date.is_(None),
+    fuzzy_commitments = filter_actionable_commitments(
+        list(
+            db.scalars(
+                select(Commitment).where(
+                    Commitment.user_id == user_id,
+                    Commitment.status == CommitmentStatus.open,
+                    Commitment.due_date.is_(None),
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user_id),
     )
 
     if locale == "zh":
