@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # which itself requires a sk_live_ key. The provider refuses a live key otherwise.
     # See docs/integrations/stripe.md for the compliance prerequisites.
     stripe_secret_key: str = ""
+    stripe_subscription_price_id: str = ""
     allow_live_payments: bool = False
 
     # WhatsApp Business Cloud API (sandbox). Official API only; unofficial automation

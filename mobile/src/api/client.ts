@@ -10,6 +10,7 @@ import type {
   AssistantChatResponse,
   AuthStartResponse,
   BookMessageResponse,
+  BillingCheckout,
   Briefing,
   CaptureResponse,
   Commitment,
@@ -27,6 +28,8 @@ import type {
   SmsInstallOut,
   SmsIngestResult,
   SessionToken,
+  Subscription,
+  SubscriptionPlan,
   SyncResponse,
   Task,
   TaskCreateRequest,
@@ -396,4 +399,11 @@ export const api = {
   disconnectMailbox: (accountId: string) =>
     request<void>(`/connected-accounts/${accountId}`, { method: "DELETE" }),
   deleteAccount: () => request<void>("/me", { method: "DELETE" }),
+  getSubscription: () => request<Subscription>("/billing/subscription"),
+  getSubscriptionPlans: () => request<SubscriptionPlan[]>("/billing/plans"),
+  startBillingCheckout: (body: { success_url: string; cancel_url: string }) =>
+    request<BillingCheckout>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

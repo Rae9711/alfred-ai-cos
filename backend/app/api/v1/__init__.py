@@ -6,6 +6,7 @@ from app.api.v1 import (
     actions,
     assistant,
     auth,
+    billing,
     briefings,
     capture,
     commitments,
@@ -42,6 +43,7 @@ api_router.include_router(tasks.router)
 api_router.include_router(capture.router)
 api_router.include_router(waiting.router)
 api_router.include_router(me.router)
+api_router.include_router(billing.router)
 api_router.include_router(notifications.router)
 api_router.include_router(inbox.router)
 api_router.include_router(integrations_mod.router)

@@ -18,7 +18,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import type { Me } from "@albert/shared-types";
+import type { Me, Subscription, SubscriptionPlan } from "@albert/shared-types";
 import * as LinkingExpo from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
@@ -65,6 +65,9 @@ export function SettingsScreen() {
   );
   const [quietHoursDraft, setQuietHoursDraft] = useState("");
   const [editingQuietHours, setEditingQuietHours] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [billingBusy, setBillingBusy] = useState(false);
 
   useEffect(() => {
     api
@@ -90,6 +93,14 @@ export function SettingsScreen() {
         setSmsToken((prev) => prev ?? cfg.token);
       })
       .catch(() => setSmsWebhookUrl(null));
+    api
+      .getSubscription()
+      .then(setSubscription)
+      .catch(() => setSubscription(null));
+    api
+      .getSubscriptionPlans()
+      .then(setPlans)
+      .catch(() => setPlans([]));
   }, []);
 
   const refreshContactsStatus = useCallback(async () => {
@@ -325,6 +336,91 @@ export function SettingsScreen() {
     );
   }, [signOut]);
 
+  const formatBillingDate = useCallback(
+    (iso: string) => {
+      try {
+        return new Date(iso).toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      } catch {
+        return iso;
+      }
+    },
+    [locale],
+  );
+
+  const subscriptionStatusLabel = useCallback(
+    (status: Subscription["status"]) => {
+      switch (status) {
+        case "trialing":
+          return s.subscriptionStatusTrialing;
+        case "active":
+          return s.subscriptionStatusActive;
+        case "past_due":
+          return s.subscriptionStatusPastDue;
+        case "canceled":
+          return s.subscriptionStatusCanceled;
+        default:
+          return s.subscriptionStatusInactive;
+      }
+    },
+    [
+      s.subscriptionStatusActive,
+      s.subscriptionStatusCanceled,
+      s.subscriptionStatusInactive,
+      s.subscriptionStatusPastDue,
+      s.subscriptionStatusTrialing,
+    ],
+  );
+
+  const openBillingCheckout = useCallback(async () => {
+    if (billingBusy) return;
+    setNote(null);
+    setBillingBusy(true);
+    try {
+      const returnUrl = LinkingExpo.createURL("settings");
+      const { checkout_url, message } = await api.startBillingCheckout({
+        success_url: `${returnUrl}?billing=success`,
+        cancel_url: `${returnUrl}?billing=cancel`,
+      });
+      if (checkout_url) {
+        const result = await WebBrowser.openAuthSessionAsync(checkout_url, returnUrl);
+        if (result.type === "success") {
+          const refreshed = await api.getSubscription();
+          setSubscription(refreshed);
+          setNote(s.subscriptionStatusActive);
+        }
+        return;
+      }
+      Alert.alert(s.subscriptionTitle, message ?? s.subscriptionComingSoon);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : s.subscriptionCheckoutFailed);
+    } finally {
+      setBillingBusy(false);
+    }
+  }, [
+    billingBusy,
+    s.subscriptionCheckoutFailed,
+    s.subscriptionComingSoon,
+    s.subscriptionStatusActive,
+    s.subscriptionTitle,
+  ]);
+
+  const openBillingManage = useCallback(async () => {
+    const url = subscription?.manage_url;
+    if (!url) {
+      void openBillingCheckout();
+      return;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setNote(s.subscriptionCheckoutFailed);
+    }
+  }, [openBillingCheckout, s.subscriptionCheckoutFailed, subscription?.manage_url]);
+
   const name = me?.name?.trim() || "You";
   const firstName = name.split(/\s+/)[0] ?? name;
   const rest = name.slice(firstName.length);
@@ -345,6 +441,15 @@ export function SettingsScreen() {
   const contactsNativeReady = isContactsNativeAvailable();
   const smsHint =
     Platform.OS === "ios" ? s.smsHintIos : s.smsHintAndroid;
+  const proPlan = plans[0] ?? null;
+  const isSubscribed =
+    subscription?.status === "active" || subscription?.status === "trialing";
+  const subscriptionDetail =
+    subscription?.trial_ends_at && subscription.status === "trialing"
+      ? s.subscriptionTrialEnds(formatBillingDate(subscription.trial_ends_at))
+      : subscription?.renews_at && isSubscribed
+        ? s.subscriptionRenews(formatBillingDate(subscription.renews_at))
+        : null;
 
   return (
     <ScrollView
@@ -378,6 +483,68 @@ export function SettingsScreen() {
         />
       </View>
       <Meta style={styles.langHint}>{s.languageDetail}</Meta>
+
+      <SectionTitle label={s.subscriptionTitle} />
+      <View style={styles.smsCard}>
+        <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
+        <View style={styles.subscriptionHead}>
+          <View style={styles.subscriptionPlanBlock}>
+            <Text style={styles.smsLabel}>{s.subscriptionCurrentPlan}</Text>
+            <Text style={styles.subscriptionPlanName}>
+              {subscription?.plan_name ?? s.subscriptionStatusInactive}
+            </Text>
+            {subscriptionDetail ? (
+              <Meta style={styles.subscriptionMeta}>{subscriptionDetail}</Meta>
+            ) : null}
+          </View>
+          <Pill
+            label={subscriptionStatusLabel(subscription?.status ?? "inactive")}
+            kind={
+              isSubscribed
+                ? "accent"
+                : subscription?.status === "past_due"
+                  ? "warn"
+                  : "muted"
+            }
+          />
+        </View>
+        {proPlan ? (
+          <>
+            <View style={styles.subscriptionDivider} />
+            <Text style={styles.subscriptionPlanName}>
+              {proPlan.name} · {proPlan.price_label}
+            </Text>
+            <Text style={styles.smsLabel}>{s.subscriptionIncludes}</Text>
+            {proPlan.features.map((feature) => (
+              <View key={feature} style={styles.subscriptionFeatureRow}>
+                <View style={styles.subscriptionBullet} />
+                <Text style={styles.subscriptionFeature}>{feature}</Text>
+              </View>
+            ))}
+          </>
+        ) : null}
+        <View style={styles.smsActions}>
+          {isSubscribed ? (
+            <Btn
+              label={s.subscriptionManage}
+              kind="ghost"
+              tiny
+              onPress={() => void openBillingManage()}
+            />
+          ) : (
+            <Btn
+              label={
+                subscription?.checkout_available
+                  ? s.subscriptionSubscribe
+                  : s.subscriptionComingSoon
+              }
+              kind="accent"
+              tiny
+              onPress={() => void openBillingCheckout()}
+            />
+          )}
+        </View>
+      </View>
 
       <SectionTitle label={s.smsTitle} />
       <View style={styles.smsCard}>
@@ -812,6 +979,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.ink,
     lineHeight: 16,
+  },
+  subscriptionValue: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.ink,
+    fontFamily: fonts.serif,
+  },
+  subscriptionHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  subscriptionPlanBlock: { flex: 1, minWidth: 0, gap: 2 },
+  subscriptionPlanName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.ink,
+  },
+  subscriptionMeta: { marginTop: 2 },
+  subscriptionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.hair,
+  },
+  subscriptionFeatureRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  subscriptionBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+    marginTop: 6,
+  },
+  subscriptionFeature: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.ink2,
   },
   contactsStatusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   contactsDot: {

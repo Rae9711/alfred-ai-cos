@@ -338,6 +338,31 @@ export interface SmsIngestResult {
   draft_created: boolean;
 }
 
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price_label: string;
+  price_minor: number;
+  currency: string;
+  interval: "month" | "year";
+  features: string[];
+}
+
+export interface Subscription {
+  plan_id: string;
+  plan_name: string;
+  status: "inactive" | "trialing" | "active" | "past_due" | "canceled";
+  renews_at: string | null;
+  trial_ends_at: string | null;
+  manage_url: string | null;
+  checkout_available: boolean;
+}
+
+export interface BillingCheckout {
+  checkout_url: string | null;
+  message: string | null;
+}
+
 export interface SessionToken {
   access_token: string;
   token_type: string;
