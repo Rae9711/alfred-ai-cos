@@ -60,20 +60,20 @@ export function InboxScreen() {
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
-  const [filter, setFilter] = useState("needs_action");
+  const [filter, setFilter] = useState("unread");
 
   const mailboxTabs = useMemo(
     () => [
       { id: "unread", label: t.inbox.filters.unread },
-      { id: "needs_action", label: t.inbox.filters.needsAction },
+      { id: "all", label: t.inbox.filters.all },
       { id: "sms", label: t.inbox.filters.sms },
-      { id: "email", label: t.inbox.filters.email },
+      { id: "needs_action", label: t.inbox.filters.needsAction },
     ],
     [
       t.inbox.filters.unread,
-      t.inbox.filters.needsAction,
+      t.inbox.filters.all,
       t.inbox.filters.sms,
-      t.inbox.filters.email,
+      t.inbox.filters.needsAction,
     ],
   );
 
@@ -85,7 +85,7 @@ export function InboxScreen() {
   const fyiItems = filtered.filter((m) => m.section === "fyi");
   const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
-    filter === "email" && inboxScope === "synced" && mailboxes.length > 1;
+    filter === "all" && inboxScope === "synced" && mailboxes.length > 1;
 
   const onSelectFilter = (id: string) => {
     setFilter(id);

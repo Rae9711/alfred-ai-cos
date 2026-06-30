@@ -18,7 +18,7 @@ import { useMailAutoSync } from "@/hooks/useMailAutoSync";
 import { type AppInboxItem, mapInboxMessage } from "@/lib/inbox";
 
 export type InboxScope = "needs_action" | "unread" | "today" | "synced" | "sms";
-export type InboxFilter = "needs_action" | "unread" | "sms" | "email" | string;
+export type InboxFilter = "needs_action" | "unread" | "sms" | "all" | "email" | string;
 
 type MailboxState = {
   items: AppInboxItem[];
@@ -44,14 +44,14 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
-  const [inboxScope, setInboxScope] = useState<InboxScope>("needs_action");
+  const [inboxScope, setInboxScope] = useState<InboxScope>("unread");
   const [inboxMailbox, setInboxMailbox] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const filterRef = useRef<{ scope: InboxScope; mailbox?: string }>({
-    scope: "needs_action",
+    scope: "unread",
   });
 
   const loadInbox = useCallback(
@@ -79,7 +79,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
           await loadInbox("unread");
         } else if (filter === "sms") {
           await loadInbox("sms");
-        } else if (filter === "email") {
+        } else if (filter === "all" || filter === "email") {
           await loadInbox("synced");
         } else {
           await loadInbox("synced");
@@ -188,7 +188,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        await loadInbox("needs_action");
+        await loadInbox("unread");
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Couldn't load inbox");

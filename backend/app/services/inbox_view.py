@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import MessageClassification
+from app.db.enums import MessageClassification, Priority
 from app.db.models import Message, OutboundReply
 from app.services.classification_adjust import (
     apply_action_subject_classification,
@@ -31,6 +31,18 @@ CATEGORY_LABEL = {
 
 _ACTION_CATEGORIES = frozenset({"Needs Reply", "Needs Decision"})
 NEEDS_ACTION_WINDOW_DAYS = 14
+
+# Needs-action tab: only messages ~90% likely to be genuinely useful.
+_HIGH_CONFIDENCE_CLASSIFICATIONS = frozenset(
+    {
+        MessageClassification.needs_reply,
+        MessageClassification.needs_decision,
+        MessageClassification.deadline,
+        MessageClassification.meeting_scheduling,
+    }
+)
+_HIGH_PRIORITIES = frozenset({Priority.critical, Priority.high})
+_UNTRUSTED_SENDERS = frozenset({"automated", "bulk", "suspicious", "muted"})
 
 
 def needs_action_cutoff_utc(*, now: datetime | None = None) -> datetime:
@@ -177,6 +189,33 @@ def message_needs_attention(
     return category in _ACTION_CATEGORIES
 
 
+def message_qualifies_for_needs_action_tab(
+    message: Message,
+    *,
+    category: str,
+    user_replied: bool,
+    user_decided: bool = False,
+) -> bool:
+    """~90% precision needs-action tab — stricter than message_needs_attention."""
+    if not message_needs_attention(
+        category=category,
+        user_replied=user_replied,
+        user_decided=user_decided,
+    ):
+        return False
+    if message.classification is None:
+        return False
+    if message.classification not in _HIGH_CONFIDENCE_CLASSIFICATIONS:
+        return False
+    if not message.action_required:
+        return False
+    if message.priority not in _HIGH_PRIORITIES:
+        return False
+    if (message.sender_classification or "") in _UNTRUSTED_SENDERS:
+        return False
+    return True
+
+
 def needs_action_message_ids(
     db: Session,
     user_id: str,
@@ -201,7 +240,8 @@ def needs_action_message_ids(
         if not message_in_primary_inbox(message):
             continue
         category = effective_inbox_category(message)
-        if message_needs_attention(
+        if message_qualifies_for_needs_action_tab(
+            message,
             category=category,
             user_replied=message.id in replied,
             user_decided=message_user_decided(message),

@@ -27,8 +27,12 @@ def _gmail_message(
     sent_at: datetime,
     classification: MessageClassification | None = None,
     labels: list[str] | None = None,
+    action_required: bool = False,
+    priority: str | None = None,
 ) -> Message:
-    return Message(
+    from app.db.enums import Priority
+
+    msg = Message(
         user_id=user_id,
         source="gmail",
         external_id=external_id,
@@ -38,7 +42,19 @@ def _gmail_message(
         sent_at=sent_at,
         classification=classification,
         gmail_labels=labels or ["INBOX", "CATEGORY_PERSONAL"],
+        sender_classification="person",
     )
+    if action_required:
+        msg.action_required = True
+    if priority:
+        msg.priority = Priority(priority)
+    elif classification in (
+        MessageClassification.needs_reply,
+        MessageClassification.needs_decision,
+    ):
+        msg.priority = Priority.high
+        msg.action_required = True
+    return msg
 
 
 def _sms_message(
@@ -96,6 +112,35 @@ def test_unread_scope_includes_email_and_sms(db: Session, user: User) -> None:
     sources = {m.source for m in out.messages}
     assert sources == {"gmail", "sms"}
     assert len(out.messages) == 2
+
+
+def test_needs_action_excludes_low_confidence(db: Session, user: User) -> None:
+    now = datetime.now(UTC)
+    db.add(
+        _gmail_message(
+            user_id=user.id,
+            external_id="gmail:weak",
+            sent_at=now - timedelta(hours=1),
+            classification=MessageClassification.follow_up_needed,
+            action_required=True,
+            priority="high",
+        )
+    )
+    db.add(
+        _gmail_message(
+            user_id=user.id,
+            external_id="gmail:strong",
+            sent_at=now - timedelta(hours=2),
+            classification=MessageClassification.needs_reply,
+            action_required=True,
+            priority="high",
+        )
+    )
+    db.commit()
+
+    out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert len(out.messages) == 1
+    assert out.messages[0].subject == "Subject gmail:strong"
 
 
 def test_needs_action_excludes_replied_and_old(db: Session, user: User) -> None:
@@ -215,7 +260,6 @@ def test_mark_undecided_restores_needs_action(db: Session, user: User) -> None:
         sent_at=now - timedelta(hours=1),
         classification=MessageClassification.needs_reply,
     )
-    msg.action_required = True
     db.add(msg)
     db.commit()
 

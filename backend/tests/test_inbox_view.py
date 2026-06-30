@@ -13,6 +13,7 @@ from app.services.inbox_view import (
     category_for_message,
     is_gmail_unread,
     message_needs_attention,
+    message_qualifies_for_needs_action_tab,
     start_of_today_utc,
     user_replied_message_ids,
 )
@@ -197,6 +198,75 @@ def test_effective_inbox_category_upgrades_human_fyi(db: Session, user: User) ->
         action_required=False,
     )
     assert effective_inbox_category(m) == "Needs Reply"
+
+
+def test_message_qualifies_for_needs_action_tab_requires_high_bar() -> None:
+    from app.db.enums import Priority
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_needs_attention,
+        message_qualifies_for_needs_action_tab,
+    )
+
+    base = dict(
+        user_id="u",
+        source="gmail",
+        external_id="hq",
+        sender="boss@corp.com",
+        recipients=[],
+        classification=MessageClassification.needs_reply,
+        action_required=True,
+        priority=Priority.high,
+        sender_classification="person",
+    )
+    m = Message(**base)
+    category = effective_inbox_category(m)
+    assert message_needs_attention(category=category, user_replied=False) is True
+    assert (
+        message_qualifies_for_needs_action_tab(
+            m, category=category, user_replied=False
+        )
+        is True
+    )
+
+    low_priority = Message(**{**base, "priority": Priority.medium})
+    cat = effective_inbox_category(low_priority)
+    assert (
+        message_qualifies_for_needs_action_tab(
+            low_priority, category=cat, user_replied=False
+        )
+        is False
+    )
+
+    follow_up = Message(
+        **{
+            **base,
+            "classification": MessageClassification.follow_up_needed,
+            "priority": Priority.high,
+        }
+    )
+    cat_fu = effective_inbox_category(follow_up)
+    assert (
+        message_qualifies_for_needs_action_tab(
+            follow_up, category=cat_fu, user_replied=False
+        )
+        is False
+    )
+
+    automated = Message(
+        **{
+            **base,
+            "sender_classification": "automated",
+        }
+    )
+    cat_auto = effective_inbox_category(automated)
+    assert (
+        message_qualifies_for_needs_action_tab(
+            automated, category=cat_auto, user_replied=False
+        )
+        is False
+    )
 
 
 def test_user_replied_message_ids(db: Session, user: User) -> None:

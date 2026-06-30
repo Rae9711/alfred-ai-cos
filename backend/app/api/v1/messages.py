@@ -33,7 +33,7 @@ from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
     mark_message_user_decided,
-    message_needs_attention,
+    message_qualifies_for_needs_action_tab,
     message_user_decided,
     needs_action_cutoff_utc,
     start_of_today_utc,
@@ -133,7 +133,8 @@ def list_inbox(
         if scope == "unread" and not is_unread:
             continue
         user_replied = m.id in replied_ids
-        if scope == "needs_action" and not message_needs_attention(
+        if scope == "needs_action" and not message_qualifies_for_needs_action_tab(
+            m,
             category=category,
             user_replied=user_replied,
             user_decided=message_user_decided(m),
