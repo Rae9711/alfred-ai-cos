@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import CommitmentStatus, SourceType
+from app.db.enums import CommitmentStatus, MessageClassification, SourceType
 from app.db.models import Commitment, Message, User
 from app.llm import get_llm
 from app.schemas.llm import ClassificationResult
@@ -226,6 +226,8 @@ def process_message(
     message.classification = classification.classification
     message.priority = classification.priority
     message.action_required = classification.action_required
+    if classification.classification == MessageClassification.needs_decision:
+        message.action_required = True
     # Persist the one-line reason as the body_summary surrogate for the slice.
     message.body_summary = classification.reason
 

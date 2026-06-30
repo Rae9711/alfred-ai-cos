@@ -280,6 +280,65 @@ def test_message_qualifies_for_needs_action_tab_requires_high_bar() -> None:
     )
 
 
+def test_needs_decision_qualifies_without_action_required() -> None:
+    from app.db.enums import Priority
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_qualifies_for_needs_action_tab,
+    )
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="decide",
+        sender="ops@corp.com",
+        recipients=[],
+        classification=MessageClassification.needs_decision,
+        action_required=False,
+        priority=Priority.medium,
+        sender_classification="person",
+    )
+    category = effective_inbox_category(m)
+    assert category == "Needs Decision"
+    assert (
+        message_qualifies_for_needs_action_tab(
+            m, category=category, user_replied=False
+        )
+        is True
+    )
+
+
+def test_meeting_scheduling_needs_decision_category_stays_strict() -> None:
+    """UI 'Needs Decision' from deadline/meeting still needs action + high priority."""
+    from app.db.enums import Priority
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_qualifies_for_needs_action_tab,
+    )
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="meet",
+        sender="cal@corp.com",
+        recipients=[],
+        classification=MessageClassification.meeting_scheduling,
+        action_required=False,
+        priority=Priority.medium,
+        sender_classification="person",
+    )
+    category = effective_inbox_category(m)
+    assert category == "Needs Decision"
+    assert (
+        message_qualifies_for_needs_action_tab(
+            m, category=category, user_replied=False
+        )
+        is False
+    )
+
+
 def test_user_replied_message_ids(db: Session, user: User) -> None:
     msg = Message(
         user_id=user.id,

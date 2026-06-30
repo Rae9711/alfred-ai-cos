@@ -113,6 +113,33 @@ def test_unread_scope_includes_email_excludes_sms(db: Session, user: User) -> No
     assert out.messages[0].source == "gmail"
 
 
+def test_needs_action_includes_decision_without_action_required(
+    db: Session, user: User
+) -> None:
+    """needs_decision in unread must also appear in 需处理 when action_required=false."""
+    from app.db.enums import Priority
+
+    now = datetime.now(UTC)
+    msg = _gmail_message(
+        user_id=user.id,
+        external_id="gmail:decide-unread",
+        sent_at=now - timedelta(hours=2),
+        classification=MessageClassification.needs_decision,
+        labels=["INBOX", "UNREAD", "CATEGORY_PERSONAL"],
+    )
+    msg.action_required = False
+    msg.priority = Priority.medium
+    db.add(msg)
+    db.commit()
+
+    unread = messages_mod.list_inbox(scope="unread", user=user, db=db)
+    needs = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert len(unread.messages) == 1
+    assert unread.messages[0].category == "Needs Decision"
+    assert len(needs.messages) == 1
+    assert needs.messages[0].id == msg.id
+
+
 def test_needs_action_includes_medium_priority_reply(db: Session, user: User) -> None:
     now = datetime.now(UTC)
     db.add(

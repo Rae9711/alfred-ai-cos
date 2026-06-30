@@ -366,7 +366,9 @@ def test_list_inbox_needs_action_scope_returns_reply_and_decision_in_window(
             snippet="Need your answer",
             sent_at=now - timedelta(days=3),
             classification=MessageClassification.needs_reply,
-            gmail_labels=["INBOX", "UNREAD"],
+            action_required=True,
+            gmail_labels=["INBOX", "UNREAD", "CATEGORY_PERSONAL"],
+            sender_classification="person",
         )
     )
     db.add(
@@ -379,7 +381,9 @@ def test_list_inbox_needs_action_scope_returns_reply_and_decision_in_window(
             snippet="Need a decision",
             sent_at=now - timedelta(days=10),
             classification=MessageClassification.needs_decision,
-            gmail_labels=["INBOX"],
+            action_required=False,
+            gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+            sender_classification="person",
         )
     )
     db.add(
