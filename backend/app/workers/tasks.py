@@ -44,11 +44,15 @@ def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
     try:
         result, processed, commitments = run_mail_sync(db, user_id)
         events = calendar.sync_calendar(db, user_id)
+        from app.services.habits import sync_user_habits
+
+        habits = sync_user_habits(db, user_id)
         return {
             "ingested": len(result.new_messages),
             "processed": processed,
             "commitments_found": commitments,
             "events_synced": len(events),
+            "habits_detected": habits,
             "initial_backfill": int(result.initial_backfill),
         }
     finally:
@@ -135,6 +139,40 @@ def dispatch_due_briefings() -> dict[str, int]:
     finally:
         db.close()
     return {"generated": generated, "pushed": pushed}
+
+
+@celery_app.task(name="albert.refresh_writing_styles")  # type: ignore[untyped-decorator]
+def refresh_writing_styles() -> int:
+    """Weekly beat: refresh writing_style from sent Gmail for connected users."""
+    from app.services.connected_accounts import list_user_ids_with_google
+    from app.services.writing_style import refresh_writing_style
+
+    db = SessionLocal()
+    refreshed = 0
+    try:
+        for user_id in list_user_ids_with_google(db):
+            user = db.get(User, user_id)
+            if user is None:
+                continue
+            try:
+                refresh_writing_style(db, user)
+                refreshed += 1
+            except Exception:
+                continue
+    finally:
+        db.close()
+    return refreshed
+
+
+@celery_app.task(name="albert.sync_user_habits")  # type: ignore[untyped-decorator]
+def sync_user_habits(user_id: str) -> int:
+    from app.services.habits import sync_user_habits as _sync
+
+    db = SessionLocal()
+    try:
+        return _sync(db, user_id)
+    finally:
+        db.close()
 
 
 @celery_app.task(name="albert.scan_notifications")  # type: ignore[untyped-decorator]

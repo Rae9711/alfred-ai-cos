@@ -93,6 +93,7 @@ export function HomeScreen() {
   const [composer, setComposer] = useState("");
   const [asking, setAsking] = useState(false);
   const [scheduleAction, setScheduleAction] = useState(false);
+  const [habitAction, setHabitAction] = useState(false);
 
   const [scheduleView, setScheduleView] = useState<ScheduleView>("day");
   const [selectedMonthDay, setSelectedMonthDay] = useState<Date | null>(null);
@@ -212,6 +213,8 @@ export function HomeScreen() {
   );
 
   const topScheduleProposal = todayData?.schedule_proposals?.[0] ?? null;
+  const topHabitSuggestion = todayData?.habit_suggestions?.[0] ?? null;
+  const weekAhead = todayData?.week_ahead ?? null;
   const proposalConflict = topScheduleProposal?.conflicts?.[0] ?? null;
 
   const formatScheduleWhen = (iso: string) =>
@@ -234,6 +237,8 @@ export function HomeScreen() {
           topScheduleProposal.title,
           formatScheduleWhen(topScheduleProposal.start_time),
         )
+    : topHabitSuggestion
+      ? topHabitSuggestion.prompt
     : nextMeeting
     ? t.home.nextScheduleReminder(
         formatMeetingTime(nextMeeting.start_time),
@@ -245,6 +250,8 @@ export function HomeScreen() {
 
   const butlerCta = topScheduleProposal
     ? null
+    : topHabitSuggestion
+      ? t.home.habitBlockCta
     : nextMeeting
     ? nextMeeting.prep_required
       ? t.home.viewPrep
@@ -287,6 +294,27 @@ export function HomeScreen() {
   };
 
   const onButlerPress = () => {
+    if (topHabitSuggestion) {
+      if (habitAction) return;
+      setHabitAction(true);
+      void (async () => {
+        try {
+          await api.schedulePlanningBlock({
+            title: topHabitSuggestion.activity,
+            start: topHabitSuggestion.suggested_start,
+            end: topHabitSuggestion.suggested_end,
+          });
+          showToast(t.home.habitBlockScheduled);
+          await api.sync({ calendarOnly: true }).catch(() => undefined);
+          await load(scheduleView);
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : t.home.habitBlockFailed);
+        } finally {
+          setHabitAction(false);
+        }
+      })();
+      return;
+    }
     if (!nextMeeting) return;
     if (nextMeeting.prep_required) {
       openSheet(<MeetingPrepSheet eventId={nextMeeting.id} />);
@@ -431,14 +459,24 @@ export function HomeScreen() {
             <Text style={styles.dayOverview}>{todayData.day_overview}</Text>
           ) : null}
           <View style={styles.proactiveCard}>
+            {weekAhead?.show_prominently ? (
+              <View style={styles.weekAheadBlock}>
+                <Text style={styles.weekAheadLabel}>{t.home.weekAheadLabel}</Text>
+                <Text style={styles.weekAheadText}>{weekAhead.summary}</Text>
+              </View>
+            ) : null}
             <Serif size={17} style={styles.proactiveText}>
               {butlerPrompt}
             </Serif>
+            {topHabitSuggestion && !topScheduleProposal ? (
+              <Text style={styles.habitPattern}>{topHabitSuggestion.pattern_summary}</Text>
+            ) : null}
             {butlerCta ? (
               <Btn
                 label={butlerCta}
                 onPress={onButlerPress}
                 style={styles.proactiveBtn}
+                disabled={habitAction}
               />
             ) : null}
             {topScheduleProposal ? (
@@ -622,6 +660,16 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   proactiveText: { color: colors.ink2, lineHeight: 24 },
+  habitPattern: { fontSize: 13, color: colors.ink4, fontStyle: "italic" },
+  weekAheadBlock: { gap: 4, paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.hair2 },
+  weekAheadLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  weekAheadText: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
   proactiveBtn: { alignSelf: "flex-start" },
   scheduleProposalActions: { gap: 10 },
   dismissProposal: { fontSize: 13, color: colors.ink4 },

@@ -70,6 +70,26 @@ export interface ScheduleProposal {
   conflicts?: ScheduleConflict[];
 }
 
+export interface HabitSuggestion {
+  habit_id: string;
+  activity: string;
+  pattern_summary: string;
+  prompt: string;
+  suggested_start: string;
+  suggested_end: string;
+  typical_days: number[];
+  confidence: number;
+}
+
+export interface WeekAhead {
+  summary: string;
+  meeting_count: number;
+  busiest_day: string | null;
+  pending_invites: number;
+  fuzzy_commitments: number;
+  show_prominently: boolean;
+}
+
 export interface TodayDashboard {
   summary: string;
   day_overview: string | null;
@@ -80,6 +100,8 @@ export interface TodayDashboard {
   suggestions: TimeBlockSuggestion[];
   quick_wins: QuickWin[];
   schedule_proposals: ScheduleProposal[];
+  habit_suggestions?: HabitSuggestion[];
+  week_ahead?: WeekAhead | null;
 }
 
 export interface UpcomingMeeting {

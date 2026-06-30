@@ -71,6 +71,26 @@ class ScheduleProposalOut(BaseModel):
     conflicts: list[ScheduleConflictOut] = []
 
 
+class HabitSuggestionOut(BaseModel):
+    habit_id: str
+    activity: str
+    pattern_summary: str
+    prompt: str
+    suggested_start: str
+    suggested_end: str
+    typical_days: list[int]
+    confidence: float
+
+
+class WeekAheadOut(BaseModel):
+    summary: str
+    meeting_count: int
+    busiest_day: str | None
+    pending_invites: int
+    fuzzy_commitments: int
+    show_prominently: bool = False
+
+
 class TodayDashboard(BaseModel):
     summary: str
     day_overview: str | None = None
@@ -81,3 +101,5 @@ class TodayDashboard(BaseModel):
     suggestions: list[TimeBlockSuggestion] = []
     quick_wins: list[QuickWin] = []
     schedule_proposals: list[ScheduleProposalOut] = []
+    habit_suggestions: list[HabitSuggestionOut] = []
+    week_ahead: WeekAheadOut | None = None

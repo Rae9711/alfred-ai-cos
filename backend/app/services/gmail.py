@@ -188,6 +188,17 @@ def list_message_ids(
     return ids
 
 
+def list_sent_message_ids(
+    token_payload: dict[str, Any], *, max_results: int = 20
+) -> list[str]:
+    """Recent sent mail (gmail.send scope), newest first."""
+    return list_message_ids(
+        token_payload,
+        label_ids=["SENT"],
+        max_results=max_results,
+    )
+
+
 def list_unread_primary_message_ids(
     token_payload: dict[str, Any], *, max_results: int = 200
 ) -> list[str]:

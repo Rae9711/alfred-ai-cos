@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 from app.db.models import CalendarEvent, Message
 from app.llm import get_llm
 from app.schemas.llm import MeetingContextSummary
-from app.services.inbox_view import start_of_today_utc
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 
@@ -51,9 +50,19 @@ def _events_between(
     return list(db.scalars(stmt))
 
 
-def today_events(db: Session, user_id: str, *, timezone: str | None) -> list[CalendarEvent]:
+def today_events(
+    db: Session,
+    user_id: str,
+    *,
+    timezone: str | None,
+    now: datetime | None = None,
+) -> list[CalendarEvent]:
     """All events on the user's local calendar day, including ones that already started."""
-    start_utc = start_of_today_utc(timezone)
+    now = now or datetime.now(UTC)
+    tz = _local_tz(timezone)
+    local_date = now.astimezone(tz).date()
+    start_local = datetime.combine(local_date, datetime.min.time(), tzinfo=tz)
+    start_utc = start_local.astimezone(UTC)
     return _events_between(db, user_id, start_utc=start_utc, end_utc=start_utc + timedelta(days=1))
 
 

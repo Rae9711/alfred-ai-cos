@@ -42,5 +42,10 @@ celery_app.conf.update(
             "task": "albert.poll_all_mailboxes",
             "schedule": settings.mail_poll_interval_seconds,
         },
+        # Refresh learned email writing style from Sent mail (weekly).
+        "refresh-writing-styles": {
+            "task": "albert.refresh_writing_styles",
+            "schedule": crontab(hour=3, minute=30, day_of_week="sun"),
+        },
     },
 )

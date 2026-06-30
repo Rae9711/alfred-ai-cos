@@ -20,6 +20,11 @@ from app.schemas.api import (
 )
 from app.services import learning
 from app.services import snooze as snooze_service
+from app.services.writing_style import (
+    format_writing_style_prompt,
+    get_writing_style,
+    maybe_refresh_writing_style,
+)
 
 router = APIRouter(prefix="/commitments", tags=["commitments"])
 
@@ -84,11 +89,14 @@ def draft_for_commitment(
         context_parts.append(f"Source (verbatim): {commitment.evidence}")
     context = "\n".join(context_parts)
 
+    maybe_refresh_writing_style(db, user)
+    style_prompt = format_writing_style_prompt(get_writing_style(user))
     result = get_llm().draft_reply(
         thread_context=context,
         instruction=payload.instruction,
         tone=payload.tone,
         user_name=user.name,
+        writing_style_prompt=style_prompt,
     )
 
     subject = result.subject or f"Re: {commitment.description}".strip()

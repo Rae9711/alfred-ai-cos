@@ -55,6 +55,10 @@ export const translations = {
       scheduleProposalConflict: (meeting: string) =>
         `Conflicts with ${meeting} — add anyway?`,
       replyConfirm: (who: string) => `Reply to ${who}: Sounds good`,
+      habitBlockCta: "Block time",
+      habitBlockScheduled: "Added to your calendar.",
+      habitBlockFailed: "Couldn't schedule — try again.",
+      weekAheadLabel: "Week ahead",
     },
     planning: {
       sectionLabel: "Planning",
@@ -370,6 +374,10 @@ export const translations = {
       scheduleProposalConflict: (meeting: string) =>
         `与「${meeting}」冲突，仍加入？`,
       replyConfirm: (who: string) => `回复 ${who}：好的`,
+      habitBlockCta: "预留时间",
+      habitBlockScheduled: "已加入日历。",
+      habitBlockFailed: "无法预约 — 请重试。",
+      weekAheadLabel: "下周预览",
     },
     planning: {
       sectionLabel: "时间块建议",

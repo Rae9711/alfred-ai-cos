@@ -17,6 +17,7 @@ from app.db.models import DraftReply, Message, User
 from app.llm import get_llm
 from app.services import extraction, sender_class
 from app.services.message_body import build_draft_context
+from app.services.writing_style import format_writing_style_prompt, get_writing_style
 
 logger = logging.getLogger(__name__)
 
@@ -112,11 +113,13 @@ def _auto_draft_reply(db: Session, user: User, message: Message) -> None:
     headers = message.headers or {}
     body = str(headers.get("sms_body") or message.snippet or "")
     context = build_draft_context(message=message, body=body)
+    style_prompt = format_writing_style_prompt(get_writing_style(user))
     result = get_llm().draft_reply(
         thread_context=context,
         instruction="Reply by SMS. Keep it short and natural for a text message.",
         tone="concise",
         user_name=user.name,
+        writing_style_prompt=style_prompt,
     )
     draft = DraftReply(
         user_id=user.id,

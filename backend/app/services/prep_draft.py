@@ -17,6 +17,11 @@ from app.db.enums import SourceType
 from app.db.models import Commitment, DraftReply, Message, User
 from app.llm import get_llm
 from app.services.message_body import build_draft_context, fetch_message_body
+from app.services.writing_style import (
+    format_writing_style_prompt,
+    get_writing_style,
+    maybe_refresh_writing_style,
+)
 
 
 def ensure_draft_for(db: Session, user: User, *, commitment: Commitment) -> str | None:
@@ -56,11 +61,14 @@ def ensure_draft_for(db: Session, user: User, *, commitment: Commitment) -> str 
         except Exception:
             body = (commitment.evidence or message.snippet or "").strip()
         context = build_draft_context(message=message, body=body)
+        maybe_refresh_writing_style(db, user)
+        style_prompt = format_writing_style_prompt(get_writing_style(user))
         result = get_llm().draft_reply(
             thread_context=context,
             instruction=None,
             tone="concise",
             user_name=user.name,
+            writing_style_prompt=style_prompt,
         )
     except Exception:
         # LLM hiccups happen. The notification still fires without a draft.

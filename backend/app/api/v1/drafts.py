@@ -16,6 +16,11 @@ from app.db.models import DraftReply, Message, User
 from app.llm import get_llm
 from app.schemas.api import DraftCreateRequest, DraftOut
 from app.services.message_body import build_draft_context, fetch_message_body
+from app.services.writing_style import (
+    format_writing_style_prompt,
+    get_writing_style,
+    maybe_refresh_writing_style,
+)
 
 router = APIRouter(prefix="/drafts", tags=["drafts"])
 
@@ -60,6 +65,8 @@ def create_draft(
         raise HTTPException(status_code=502, detail="Could not load email from Gmail") from exc
 
     context = build_draft_context(message=message, body=body, db=db)
+    maybe_refresh_writing_style(db, user)
+    style_prompt = format_writing_style_prompt(get_writing_style(user))
     result = get_llm().draft_reply(
         thread_context=context,
         instruction=payload.instruction,
@@ -67,6 +74,7 @@ def create_draft(
         user_name=user.name,
         current_draft=payload.current_draft_body,
         revision_history=payload.revision_history or None,
+        writing_style_prompt=style_prompt,
     )
 
     draft = DraftReply(

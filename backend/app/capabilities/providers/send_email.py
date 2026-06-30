@@ -23,6 +23,7 @@ from app.services import gmail, outbound_tracking
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
 from app.services.message_read import mark_message_read
+from app.services.writing_style import incorporate_sent_reply
 
 
 class SendEmailCapability:
@@ -58,6 +59,10 @@ class SendEmailCapability:
                 recipient=message.sender,
                 subject=draft.subject,
             )
+            try:
+                incorporate_sent_reply(db, user, draft.body)
+            except Exception:
+                pass
             return ExecutionResult(detail="Email sent (dev seed)", reversible=False)
 
         token = decrypt_token(account.token_ciphertext)
@@ -80,6 +85,10 @@ class SendEmailCapability:
             recipient=message.sender,
             subject=subject,
         )
+        try:
+            incorporate_sent_reply(db, user, draft.body)
+        except Exception:
+            pass
         try:
             mark_message_read(db, user, message)
         except Exception:

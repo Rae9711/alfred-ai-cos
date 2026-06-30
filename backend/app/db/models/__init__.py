@@ -20,6 +20,7 @@ from app.db.models.outbound_reply import OutboundReply
 from app.db.models.schedule_proposal import ScheduleProposal
 from app.db.models.task import Task
 from app.db.models.user import User
+from app.db.models.user_habit import UserHabit
 
 __all__ = [
     "ActionProposal",
@@ -38,4 +39,5 @@ __all__ = [
     "SpendLimit",
     "Task",
     "User",
+    "UserHabit",
 ]

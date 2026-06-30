@@ -290,6 +290,7 @@ class AnthropicLLMClient:
         user_name: str | None,
         current_draft: str | None = None,
         revision_history: list[str] | None = None,
+        writing_style_prompt: str | None = None,
     ) -> DraftResult:
         user_content = build_draft_user_content(
             thread_context=thread_context,
@@ -298,6 +299,7 @@ class AnthropicLLMClient:
             instruction=instruction,
             current_draft=current_draft,
             revision_history=revision_history,
+            writing_style_prompt=writing_style_prompt,
         )
         raw = self._structured(
             model=settings.llm_draft_model,

@@ -77,6 +77,7 @@ class LLMClient(Protocol):
         user_name: str | None,
         current_draft: str | None = None,
         revision_history: list[str] | None = None,
+        writing_style_prompt: str | None = None,
     ) -> DraftResult:
         """Draft a reply to an email thread in the requested tone (PRD 12.9).
 

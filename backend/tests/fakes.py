@@ -90,8 +90,9 @@ class FakeLLM:
         user_name: str | None,
         current_draft: str | None = None,
         revision_history: list[str] | None = None,
+        writing_style_prompt: str | None = None,
     ) -> DraftResult:
-        del current_draft, revision_history
+        del current_draft, revision_history, writing_style_prompt
         sig = f"\n{user_name}" if user_name else ""
         return DraftResult(subject="Re: test", body=f"[{tone}] drafted reply{sig}")
 

@@ -6,7 +6,7 @@ preparation."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,10 +21,12 @@ from app.schemas.today import (
     TodayPriority,
     WaitingItem,
 )
+from app.services.habits import build_habit_suggestions
 from app.services.meeting_prep import today_events, upcoming_events
 from app.services.planning import build_planning_suggestions
 from app.services.priority import build_context, score_commitment
 from app.services.schedule_proposal import find_proposal_conflicts, list_pending_proposals
+from app.services.week_ahead import build_week_ahead, is_week_boundary_prominent
 
 
 def build_day_overview(
@@ -178,6 +180,18 @@ def build_today(
         locale=locale,
     )
 
+    habit_suggestions = build_habit_suggestions(
+        db, user_id, today=today, locale=locale, now=datetime.now(UTC)
+    )
+
+    week_ahead = None
+    if user is not None and is_week_boundary_prominent(
+        datetime.now(UTC), timezone=user.timezone
+    ):
+        week_ahead = build_week_ahead(
+            db, user_id, today=today, locale=locale, now=datetime.now(UTC)
+        )
+
     summary = (
         f"You have {len(open_commitments)} open loop(s). "
         f"{len(top)} matter today. {len(waiting_on_user)} people are waiting on you. "
@@ -193,4 +207,6 @@ def build_today(
         suggestions=suggestions,
         quick_wins=quick_wins,
         schedule_proposals=schedule_proposals,
+        habit_suggestions=habit_suggestions,
+        week_ahead=week_ahead,
     )
