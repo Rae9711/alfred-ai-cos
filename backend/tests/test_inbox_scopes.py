@@ -87,7 +87,7 @@ def test_synced_scope_excludes_sms(db: Session, user: User) -> None:
     assert out.messages[0].source == "gmail"
 
 
-def test_unread_scope_includes_email_and_sms(db: Session, user: User) -> None:
+def test_unread_scope_includes_email_excludes_sms(db: Session, user: User) -> None:
     now = datetime.now(UTC)
     db.add(
         _gmail_message(
@@ -109,9 +109,8 @@ def test_unread_scope_includes_email_and_sms(db: Session, user: User) -> None:
     db.commit()
 
     out = messages_mod.list_inbox(scope="unread", user=user, db=db)
-    sources = {m.source for m in out.messages}
-    assert sources == {"gmail", "sms"}
-    assert len(out.messages) == 2
+    assert len(out.messages) == 1
+    assert out.messages[0].source == "gmail"
 
 
 def test_needs_action_excludes_low_confidence(db: Session, user: User) -> None:

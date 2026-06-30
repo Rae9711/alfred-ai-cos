@@ -44,14 +44,14 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
-  const [inboxScope, setInboxScope] = useState<InboxScope>("unread");
+  const [inboxScope, setInboxScope] = useState<InboxScope>("needs_action");
   const [inboxMailbox, setInboxMailbox] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const filterRef = useRef<{ scope: InboxScope; mailbox?: string }>({
-    scope: "unread",
+    scope: "needs_action",
   });
 
   const loadInbox = useCallback(
@@ -188,7 +188,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        await loadInbox("unread");
+        await loadInbox("needs_action");
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Couldn't load inbox");

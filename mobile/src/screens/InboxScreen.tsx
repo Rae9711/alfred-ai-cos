@@ -60,20 +60,20 @@ export function InboxScreen() {
     setInboxFilter,
   } = useMailbox();
   useSmsShareTip(items);
-  const [filter, setFilter] = useState("unread");
+  const [filter, setFilter] = useState("needs_action");
 
   const mailboxTabs = useMemo(
     () => [
+      { id: "needs_action", label: t.inbox.filters.needsAction },
       { id: "unread", label: t.inbox.filters.unread },
       { id: "all", label: t.inbox.filters.all },
       { id: "sms", label: t.inbox.filters.sms },
-      { id: "needs_action", label: t.inbox.filters.needsAction },
     ],
     [
+      t.inbox.filters.needsAction,
       t.inbox.filters.unread,
       t.inbox.filters.all,
       t.inbox.filters.sms,
-      t.inbox.filters.needsAction,
     ],
   );
 

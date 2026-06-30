@@ -118,7 +118,7 @@ def list_inbox(
             break
         if filter_account_id and scope != "sms" and m.connected_account_id != filter_account_id:
             continue
-        if scope == "synced" and m.source == "sms":
+        if scope in ("synced", "unread") and m.source == "sms":
             continue
         if scope != "sms" and m.source != "sms":
             if not message_in_primary_inbox(m):

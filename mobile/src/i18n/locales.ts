@@ -399,9 +399,9 @@ export const translations = {
       syncedJustNow: "刚刚同步",
       retry: "点击重试",
       filters: {
-        needsAction: "需要处理",
+        needsAction: "需处理",
         unread: "未读",
-        sms: "短信",
+        sms: "信息",
         all: "全部",
       },
       needsActionEmpty: "目前没有高置信度、需要您处理的事项。",
