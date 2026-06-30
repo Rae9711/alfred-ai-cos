@@ -129,6 +129,7 @@ export const translations = {
       readLabel: "Read",
       mailboxChip: "Mailbox",
       albertTake: "Albert's read",
+      openLink: "Open link",
     },
     ask: {
       alfred: "Alfred",
@@ -446,6 +447,7 @@ export const translations = {
       readLabel: "已读",
       mailboxChip: "邮箱",
       albertTake: "管家摘要",
+      openLink: "打开链接",
     },
     ask: {
       alfred: "管家",

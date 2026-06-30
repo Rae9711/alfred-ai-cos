@@ -22,6 +22,7 @@ import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
 import { useSmsShareTip } from "@/hooks/useSmsShareTip";
 import type { AppInboxItem } from "@/lib/inbox";
+import { MessageLinks } from "@/components/MessageLinks";
 import { MessageDetailSheet } from "@/screens/sheets/MessageDetailSheet";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
@@ -289,6 +290,7 @@ export function InboxScreen() {
               onProcessed={() => markAsProcessed(m.id)}
               onMarkRead={() => markAsRead(m.id)}
               onOpen={() => openMessage(m.id, "delegate")}
+              openLinkLabel={t.inbox.openLink}
               labels={{
                 handToAlfredReply: t.inbox.handToAlfredReply,
                 later: t.inbox.later,
@@ -319,6 +321,7 @@ export function InboxScreen() {
               onDecided={() => markAsDecided(m.id)}
               onLater={() => snoozeReminder(m.id)}
               onOpen={() => openMessage(m.id, "reply")}
+              openLinkLabel={t.inbox.openLink}
               labels={{
                 decided: t.inbox.markDecided,
                 later: t.inbox.later,
@@ -457,6 +460,7 @@ function InboxCard({
   onProcessed,
   onMarkRead,
   onOpen,
+  openLinkLabel,
   labels,
 }: {
   item: AppInboxItem;
@@ -466,6 +470,7 @@ function InboxCard({
   onProcessed: () => void;
   onMarkRead: () => void;
   onOpen: () => void;
+  openLinkLabel: string;
   labels: {
     handToAlfredReply: string;
     later: string;
@@ -498,6 +503,10 @@ function InboxCard({
             <Text style={styles.summaryLabel}>{labels.albertTake}</Text>
           ) : null}
           <Text style={styles.summary}>{item.summary}</Text>
+          <MessageLinks
+            parts={[item.take, item.summary, item.title]}
+            label={openLinkLabel}
+          />
           <View style={styles.tags}>
             {item.tags.map((tag) => (
               <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
@@ -539,6 +548,7 @@ function DecisionCard({
   onDecided,
   onLater,
   onOpen,
+  openLinkLabel,
   labels,
 }: {
   item: AppInboxItem;
@@ -546,6 +556,7 @@ function DecisionCard({
   onDecided: () => void;
   onLater: () => void;
   onOpen: () => void;
+  openLinkLabel: string;
   labels: {
     decided: string;
     later: string;
@@ -576,6 +587,10 @@ function DecisionCard({
             <Text style={styles.summaryLabel}>{labels.albertTake}</Text>
           ) : null}
           <Text style={styles.summary}>{item.summary}</Text>
+          <MessageLinks
+            parts={[item.take, item.summary, item.title]}
+            label={openLinkLabel}
+          />
           <View style={styles.tags}>
             {item.tags.map((tag) => (
               <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />

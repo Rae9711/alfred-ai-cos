@@ -41,6 +41,13 @@ _HIGH_CONFIDENCE_CLASSIFICATIONS = frozenset(
         MessageClassification.meeting_scheduling,
     }
 )
+# Reply/decision mail qualifies on action_required alone; scheduling/deadline stays stricter.
+_CORE_ACTION_CLASSIFICATIONS = frozenset(
+    {
+        MessageClassification.needs_reply,
+        MessageClassification.needs_decision,
+    }
+)
 _HIGH_PRIORITIES = frozenset({Priority.critical, Priority.high})
 _UNTRUSTED_SENDERS = frozenset({"automated", "bulk", "suspicious", "muted"})
 
@@ -207,13 +214,13 @@ def message_qualifies_for_needs_action_tab(
         return False
     if message.classification not in _HIGH_CONFIDENCE_CLASSIFICATIONS:
         return False
-    if not message.action_required:
-        return False
-    if message.priority not in _HIGH_PRIORITIES:
-        return False
     if (message.sender_classification or "") in _UNTRUSTED_SENDERS:
         return False
-    return True
+    if message.classification in _CORE_ACTION_CLASSIFICATIONS:
+        return bool(message.action_required)
+    if not message.action_required:
+        return False
+    return message.priority in _HIGH_PRIORITIES
 
 
 def needs_action_message_ids(

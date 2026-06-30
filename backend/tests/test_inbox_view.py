@@ -230,11 +230,22 @@ def test_message_qualifies_for_needs_action_tab_requires_high_bar() -> None:
         is True
     )
 
-    low_priority = Message(**{**base, "priority": Priority.medium})
-    cat = effective_inbox_category(low_priority)
+    medium_priority = Message(**{**base, "priority": Priority.medium})
+    cat = effective_inbox_category(medium_priority)
     assert (
         message_qualifies_for_needs_action_tab(
-            low_priority, category=cat, user_replied=False
+            medium_priority, category=cat, user_replied=False
+        )
+        is True
+    )
+
+    low_priority_no_action = Message(
+        **{**base, "priority": Priority.low, "action_required": False}
+    )
+    cat_low = effective_inbox_category(low_priority_no_action)
+    assert (
+        message_qualifies_for_needs_action_tab(
+            low_priority_no_action, category=cat_low, user_replied=False
         )
         is False
     )

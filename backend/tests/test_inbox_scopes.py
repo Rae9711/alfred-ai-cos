@@ -113,6 +113,25 @@ def test_unread_scope_includes_email_excludes_sms(db: Session, user: User) -> No
     assert out.messages[0].source == "gmail"
 
 
+def test_needs_action_includes_medium_priority_reply(db: Session, user: User) -> None:
+    now = datetime.now(UTC)
+    db.add(
+        _gmail_message(
+            user_id=user.id,
+            external_id="gmail:medium",
+            sent_at=now - timedelta(hours=1),
+            classification=MessageClassification.needs_reply,
+            action_required=True,
+            priority="medium",
+        )
+    )
+    db.commit()
+
+    out = messages_mod.list_inbox(scope="needs_action", user=user, db=db)
+    assert len(out.messages) == 1
+    assert out.messages[0].category == "Needs Reply"
+
+
 def test_needs_action_excludes_low_confidence(db: Session, user: User) -> None:
     now = datetime.now(UTC)
     db.add(

@@ -12,6 +12,7 @@ import {
 
 import { api } from "@/api/client";
 import { Btn } from "@/components/ui";
+import { MessageLinks } from "@/components/MessageLinks";
 import { useLocale } from "@/context/LocaleContext";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -109,6 +110,10 @@ export function MessageDetailSheet({
               <Text style={styles.summaryText}>{summary}</Text>
             </View>
           ) : null}
+          <MessageLinks
+            parts={[summary, body, subject]}
+            label={t.inbox.openLink}
+          />
           <Text style={styles.body}>{body}</Text>
         </ScrollView>
       )}
