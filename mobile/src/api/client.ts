@@ -16,6 +16,8 @@ import type {
   Commitment,
   CommitmentDraft,
   CommitmentStatus,
+  ComposeDraft,
+  ComposeDraftCreateRequest,
   Draft,
   DraftCreateRequest,
   InboxView,
@@ -269,6 +271,15 @@ export const api = {
   // Propose SENDING a stored draft (level 3, gmail.send). Pair with approveAction.
   proposeSendDraft: (draftId: string) =>
     request<ActionProposal>(`/actions/propose-send-draft/${draftId}`, {
+      method: "POST",
+    }),
+  composeDraft: (body: ComposeDraftCreateRequest) =>
+    request<ComposeDraft>("/compose/draft", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  proposeSendCompose: (composeDraftId: string) =>
+    request<ActionProposal>(`/actions/propose-send-compose/${composeDraftId}`, {
       method: "POST",
     }),
   approveAction: (actionId: string, confirm = false) =>

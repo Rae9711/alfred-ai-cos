@@ -9,6 +9,11 @@ from app.db.enums import Provider
 from app.db.models import ConnectedAccount, Message
 
 
+def get_primary_google_account(db: Session, user_id: str) -> ConnectedAccount | None:
+    accounts = list_google_accounts(db, user_id)
+    return accounts[0] if accounts else None
+
+
 def list_google_accounts(db: Session, user_id: str) -> list[ConnectedAccount]:
     return list(
         db.scalars(

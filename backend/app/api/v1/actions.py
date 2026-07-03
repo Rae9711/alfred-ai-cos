@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.enums import ActionStatus, ActionType
-from app.db.models import ActionProposal, DraftReply, User
+from app.db.models import ActionProposal, ComposeDraft, DraftReply, User
 from app.schemas.api import ActionProposalOut, ProposeActionRequest
 from app.services import execution
 from app.services.actions import propose_action_internal
@@ -102,6 +102,26 @@ def propose_send_draft(
         target={"draft_reply_id": draft.id},
         proposed_content=draft.body,
         reason="Send this reply from your Gmail account.",
+    )
+
+
+@router.post("/propose-send-compose/{compose_draft_id}", response_model=ActionProposalOut)
+def propose_send_compose(
+    compose_draft_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ActionProposal:
+    """Propose sending a new outbound email drafted from Ask (level 3, gmail.send)."""
+    draft = db.get(ComposeDraft, compose_draft_id)
+    if draft is None or draft.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return _propose(
+        db,
+        user,
+        action_type=ActionType.send_email,
+        target={"compose_draft_id": draft.id},
+        proposed_content=draft.body,
+        reason=f"Send this email to {draft.recipient_email} from your Gmail account.",
     )
 
 

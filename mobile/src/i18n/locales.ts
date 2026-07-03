@@ -189,6 +189,29 @@ export const translations = {
         `Here's your draft for ${name}. Open Messages when you're ready.`,
       openInMessages: "Open in Messages",
     },
+    emailCompose: {
+      permissionDenied:
+        "I need Contacts access to find who you mean. Enable it in Settings → Albert → Contacts, then try again.",
+      askEmail: (name: string) =>
+        `I couldn't find an email for “${name}” in your contacts. What's their email address?`,
+      askWho: "Who should I email?",
+      askEmailInvalid: "That doesn't look like an email address — try again.",
+      pickTitle: "Choose contact",
+      pickSubtitle: "Several people matched — which one?",
+      emailTitle: "Email address",
+      emailSubtitle: (name: string) => `No email for “${name}”. What's their address?`,
+      emailPlaceholder: "name@example.com",
+      emailContinue: "Continue",
+      askBody: (name: string) =>
+        `Got it — ${name}. What should the email say?`,
+      drafting: "Drafting your email…",
+      ready: (name: string) =>
+        `Here's your draft for ${name}. Review it, then tap Send from Gmail.`,
+      sendFromGmail: "Send from Gmail",
+      sending: "Sending…",
+      sent: "Sent from Gmail.",
+      sendFailed: "Couldn't send — try again.",
+    },
     settings: {
       you: "You",
       language: "Language",
@@ -319,13 +342,17 @@ export const translations = {
         examples: ["text Mom: see you tomorrow"],
       },
       {
+        label: "Email someone",
+        examples: ["email Leo about dinner tomorrow"],
+      },
+      {
         label: "Reminder",
         examples: ["Remind me tomorrow to pay rent"],
       },
     ],
     freeChat: {
       seed:
-        "I can check or book your calendar and draft a text by name — you tap Send in Messages. Tap an example below, or open a thread from Inbox to draft a reply.",
+        "I can check or book your calendar, draft a text or email by name — you confirm before anything sends. Tap an example below, or open a thread from Inbox to draft a reply.",
       fallback: "Something went wrong — try again in a moment.",
       legacyRefusal:
         "I can check or book your calendar, draft a text by name, or help reply from Inbox.",
@@ -508,6 +535,28 @@ export const translations = {
       ready: (name: string) => `已为 ${name} 起草短信，准备好后在「信息」中发送。`,
       openInMessages: "在「信息」中发送",
     },
+    emailCompose: {
+      permissionDenied:
+        "需要通讯录权限才能找到联系人。请在 设置 → Albert → 通讯录 中开启后重试。",
+      askEmail: (name: string) =>
+        `通讯录里没有找到「${name}」的邮箱。请告诉我邮箱地址？`,
+      askWho: "要给谁发邮件？",
+      askEmailInvalid: "这不像有效的邮箱地址，请再试一次。",
+      pickTitle: "选择联系人",
+      pickSubtitle: "匹配到多位联系人 — 选哪一个？",
+      emailTitle: "邮箱地址",
+      emailSubtitle: (name: string) => `没有找到「${name}」的邮箱。地址是？`,
+      emailPlaceholder: "name@example.com",
+      emailContinue: "继续",
+      askBody: (name: string) => `好的 — ${name}。邮件里要写什么？`,
+      drafting: "正在起草邮件…",
+      ready: (name: string) =>
+        `这是给 ${name} 的邮件草稿。确认后点「从 Gmail 发送」。`,
+      sendFromGmail: "从 Gmail 发送",
+      sending: "发送中…",
+      sent: "已从 Gmail 发送。",
+      sendFailed: "发送失败，请重试。",
+    },
     settings: {
       you: "我的",
       language: "语言",
@@ -635,13 +684,17 @@ export const translations = {
         examples: ["给 Mom 发：明天见"],
       },
       {
+        label: "发邮件",
+        examples: ["给 Leo 发一封明天一起吃饭的邮件"],
+      },
+      {
         label: "提醒",
         examples: ["明天提醒我交房租"],
       },
     ],
     freeChat: {
       seed:
-        "可以查/订日历、按姓名起草短信 — 发送需在「信息」里确认。点下面的例子试试，或从收件箱进入起草回复。",
+        "可以查/订日历、按姓名起草短信或邮件 — 发送前需要你确认。点下面的例子试试，或从收件箱进入起草回复。",
       fallback: "出了点问题，请稍后再试。",
       legacyRefusal: "我可以查/订日历、按姓名起草短信，或从收件箱回复。",
     },

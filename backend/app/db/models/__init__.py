@@ -12,6 +12,7 @@ from app.db.models.briefing import DailyBriefing
 from app.db.models.calendar_event import CalendarEvent
 from app.db.models.capability import AuditLog, SpendLimit
 from app.db.models.commitment import Commitment
+from app.db.models.compose_draft import ComposeDraft
 from app.db.models.connected_account import ConnectedAccount
 from app.db.models.draft_reply import DraftReply
 from app.db.models.message import Message
@@ -27,6 +28,7 @@ __all__ = [
     "AuditLog",
     "CalendarEvent",
     "Commitment",
+    "ComposeDraft",
     "ConnectedAccount",
     "DailyBriefing",
     "Device",

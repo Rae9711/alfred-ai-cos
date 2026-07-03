@@ -24,13 +24,21 @@ import { type ChatMessage } from "@/data/demo";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
+import { EmailComposeSheet } from "@/screens/sheets/EmailComposeSheet";
 import { SmsComposeSheet } from "@/screens/sheets/SmsComposeSheet";
 import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
 import {
   requestContactsPermission,
   searchContactsByName,
+  searchContactsEmailByName,
   type ContactMatch,
+  type EmailContactMatch,
 } from "@/lib/contacts";
+import {
+  normalizeEmailInput,
+  parseEmailComposeIntent,
+  parseEmailComposeStarter,
+} from "@/lib/emailComposeIntent";
 import {
   normalizePhoneInput,
   parseSmsComposeIntent,
@@ -54,6 +62,14 @@ type TaskMessage = {
 
 type FreeMsg = ChatMessage & {
   smsDraft?: { name: string; phone: string; body: string };
+  emailDraft?: {
+    composeId: string;
+    name: string;
+    email: string;
+    subject: string;
+    body: string;
+    sending?: boolean;
+  };
 };
 
 type AwaitingSmsBody = {
@@ -61,12 +77,26 @@ type AwaitingSmsBody = {
   phone: string;
 };
 
+type AwaitingEmailBody = {
+  displayName: string;
+  email: string;
+};
+
 type AwaitingSmsPhone = {
   displayName: string;
   bodyHint: string | null;
 };
 
+type AwaitingEmailAddress = {
+  displayName: string;
+  bodyHint: string | null;
+};
+
 type AwaitingSmsRecipient = {
+  bodyHint: string | null;
+};
+
+type AwaitingEmailRecipient = {
   bodyHint: string | null;
 };
 
@@ -93,6 +123,13 @@ export function AskScreen() {
   );
   const [awaitingSmsRecipient, setAwaitingSmsRecipient] =
     useState<AwaitingSmsRecipient | null>(null);
+  const [awaitingEmailBody, setAwaitingEmailBody] = useState<AwaitingEmailBody | null>(
+    null,
+  );
+  const [awaitingEmailAddress, setAwaitingEmailAddress] =
+    useState<AwaitingEmailAddress | null>(null);
+  const [awaitingEmailRecipient, setAwaitingEmailRecipient] =
+    useState<AwaitingEmailRecipient | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   const voice = useVoiceCapture((r) => {
@@ -185,6 +222,189 @@ export function AskScreen() {
       scrollRef.current?.scrollToEnd({ animated: true });
     },
     [t.smsCompose],
+  );
+
+  const draftEmail = useCallback(
+    (displayName: string, email: string, intent: string) => {
+      setThinkingBoth(true);
+      setFreeChat((c) => [
+        ...c,
+        { role: "alfred", text: t.emailCompose.drafting, ts: "now" },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
+      void (async () => {
+        try {
+          const draft = await api.composeDraft({
+            recipient_email: email,
+            recipient_name: displayName,
+            intent,
+          });
+          setFreeChat((c) => {
+            const withoutDrafting = c.filter(
+              (m) => !(m.role === "alfred" && m.text === t.emailCompose.drafting),
+            );
+            return [
+              ...withoutDrafting,
+              {
+                role: "alfred",
+                text: t.emailCompose.ready(displayName),
+                ts: "now",
+                emailDraft: {
+                  composeId: draft.id,
+                  name: displayName,
+                  email: draft.recipient_email,
+                  subject: draft.subject,
+                  body: draft.body,
+                },
+              },
+            ];
+          });
+        } catch (e) {
+          setFreeChat((c) => {
+            const withoutDrafting = c.filter(
+              (m) => !(m.role === "alfred" && m.text === t.emailCompose.drafting),
+            );
+            return [
+              ...withoutDrafting,
+              {
+                role: "alfred",
+                text:
+                  e instanceof Error ? e.message : t.freeChat.fallback,
+                ts: "now",
+              },
+            ];
+          });
+        } finally {
+          setThinkingBoth(false);
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      })();
+    },
+    [setThinkingBoth, t.emailCompose, t.freeChat.fallback],
+  );
+
+  const resolveEmailRecipient = useCallback(
+    (displayName: string, email: string, bodyHint: string | null) => {
+      if (bodyHint) {
+        draftEmail(displayName, email, bodyHint);
+        return;
+      }
+      setAwaitingEmailBody({ displayName, email });
+      setFreeChat((c) => [
+        ...c,
+        { role: "alfred", text: t.emailCompose.askBody(displayName), ts: "now" },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
+    },
+    [draftEmail, t.emailCompose],
+  );
+
+  const startEmailCompose = useCallback(
+    (recipientName: string, bodyHint: string | null) => {
+      setThinkingBoth(true);
+      scrollRef.current?.scrollToEnd({ animated: true });
+      void (async () => {
+        try {
+          const granted = await requestContactsPermission();
+          if (!granted) {
+            setFreeChat((c) => [
+              ...c,
+              { role: "alfred", text: t.emailCompose.permissionDenied, ts: "now" },
+            ]);
+            return;
+          }
+          const matches = await searchContactsEmailByName(recipientName);
+          if (matches.length === 0) {
+            setAwaitingEmailAddress({ displayName: recipientName, bodyHint });
+            setFreeChat((c) => [
+              ...c,
+              {
+                role: "alfred",
+                text: t.emailCompose.askEmail(recipientName),
+                ts: "now",
+              },
+            ]);
+            return;
+          }
+          if (matches.length === 1) {
+            const only = matches[0]!;
+            resolveEmailRecipient(only.name, only.email, bodyHint);
+            return;
+          }
+          openSheet(
+            <EmailComposeSheet
+              mode="pick"
+              matches={matches}
+              onSelect={(m: EmailContactMatch) =>
+                resolveEmailRecipient(m.name, m.email, bodyHint)
+              }
+            />,
+          );
+        } catch (e) {
+          setFreeChat((c) => [
+            ...c,
+            {
+              role: "alfred",
+              text:
+                e instanceof Error ? e.message : t.freeChat.fallback,
+              ts: "now",
+            },
+          ]);
+        } finally {
+          setThinkingBoth(false);
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }
+      })();
+    },
+    [
+      openSheet,
+      resolveEmailRecipient,
+      setThinkingBoth,
+      t.emailCompose,
+      t.freeChat.fallback,
+    ],
+  );
+
+  const sendEmailDraft = useCallback(
+    (composeId: string) => {
+      setFreeChat((c) =>
+        c.map((m) =>
+          m.emailDraft?.composeId === composeId
+            ? { ...m, emailDraft: { ...m.emailDraft, sending: true } }
+            : m,
+        ),
+      );
+      void (async () => {
+        try {
+          const proposal = await api.proposeSendCompose(composeId);
+          await api.approveAction(proposal.id);
+          showToast(t.emailCompose.sent);
+          setFreeChat((c) =>
+            c.map((m) =>
+              m.emailDraft?.composeId === composeId
+                ? {
+                    ...m,
+                    text: t.emailCompose.sent,
+                    emailDraft: { ...m.emailDraft, sending: false },
+                  }
+                : m,
+            ),
+          );
+        } catch (e) {
+          showToast(
+            e instanceof Error ? e.message : t.emailCompose.sendFailed,
+          );
+          setFreeChat((c) =>
+            c.map((m) =>
+              m.emailDraft?.composeId === composeId
+                ? { ...m, emailDraft: { ...m.emailDraft, sending: false } }
+                : m,
+            ),
+          );
+        }
+      })();
+    },
+    [showToast, t.emailCompose],
   );
 
   const resolveSmsRecipient = useCallback(
@@ -284,6 +504,13 @@ export function AskScreen() {
         return;
       }
 
+      if (awaitingEmailBody) {
+        const { displayName, email } = awaitingEmailBody;
+        setAwaitingEmailBody(null);
+        draftEmail(displayName, email, q);
+        return;
+      }
+
       if (awaitingSmsPhone) {
         const phone = normalizePhoneInput(q);
         if (!phone) {
@@ -300,10 +527,49 @@ export function AskScreen() {
         return;
       }
 
+      if (awaitingEmailAddress) {
+        const email = normalizeEmailInput(q);
+        if (!email) {
+          setFreeChat((c) => [
+            ...c,
+            { role: "alfred", text: t.emailCompose.askEmailInvalid, ts: "now" },
+          ]);
+          scrollRef.current?.scrollToEnd({ animated: true });
+          return;
+        }
+        const { displayName, bodyHint } = awaitingEmailAddress;
+        setAwaitingEmailAddress(null);
+        resolveEmailRecipient(displayName, email, bodyHint);
+        return;
+      }
+
       if (awaitingSmsRecipient) {
         const { bodyHint } = awaitingSmsRecipient;
         setAwaitingSmsRecipient(null);
         startSmsCompose(q, bodyHint);
+        return;
+      }
+
+      if (awaitingEmailRecipient) {
+        const { bodyHint } = awaitingEmailRecipient;
+        setAwaitingEmailRecipient(null);
+        startEmailCompose(q, bodyHint);
+        return;
+      }
+
+      const emailIntent = parseEmailComposeIntent(q);
+      if (emailIntent) {
+        startEmailCompose(emailIntent.recipientName, emailIntent.bodyHint);
+        return;
+      }
+
+      if (parseEmailComposeStarter(q)) {
+        setAwaitingEmailRecipient({ bodyHint: null });
+        setFreeChat((c) => [
+          ...c,
+          { role: "alfred", text: t.emailCompose.askWho, ts: "now" },
+        ]);
+        scrollRef.current?.scrollToEnd({ animated: true });
         return;
       }
 
@@ -352,13 +618,20 @@ export function AskScreen() {
     },
     [
       appendSmsDraft,
+      awaitingEmailAddress,
+      awaitingEmailBody,
+      awaitingEmailRecipient,
       awaitingSmsBody,
       awaitingSmsPhone,
       awaitingSmsRecipient,
+      draftEmail,
+      resolveEmailRecipient,
       resolveSmsRecipient,
+      startEmailCompose,
       startSmsCompose,
       thinking,
       setThinkingBoth,
+      t.emailCompose,
       t.freeChat.fallback,
       t.smsCompose,
     ],
@@ -604,7 +877,10 @@ export function AskScreen() {
               openSmsCompose(phone, body);
               showToast(t.ask.smsOpened);
             }}
+            onSendEmail={(composeId) => sendEmailDraft(composeId)}
             openLabel={t.smsCompose.openInMessages}
+            sendEmailLabel={t.emailCompose.sendFromGmail}
+            sendingEmailLabel={t.emailCompose.sending}
           />
         ))}
         {thinking ? (
@@ -652,12 +928,20 @@ export function AskScreen() {
             placeholder={
               awaitingSmsPhone
                 ? t.smsCompose.phonePlaceholder
-                : t.ask.freePlaceholder
+                : awaitingEmailAddress
+                  ? t.emailCompose.emailPlaceholder
+                  : t.ask.freePlaceholder
             }
             placeholderTextColor={inputPlaceholder}
             style={styles.composerInput}
             multiline
-            keyboardType={awaitingSmsPhone ? "phone-pad" : "default"}
+            keyboardType={
+              awaitingSmsPhone
+                ? "phone-pad"
+                : awaitingEmailAddress
+                  ? "email-address"
+                  : "default"
+            }
             onSubmitEditing={() => sendFree(input)}
           />
           <Pressable
@@ -735,11 +1019,17 @@ function EmailSourceCard({
 function FreeBubble({
   msg,
   onOpenSms,
+  onSendEmail,
   openLabel,
+  sendEmailLabel,
+  sendingEmailLabel,
 }: {
   msg: FreeMsg;
   onOpenSms?: (phone: string, body: string) => void;
+  onSendEmail?: (composeId: string) => void;
   openLabel: string;
+  sendEmailLabel: string;
+  sendingEmailLabel: string;
 }) {
   const isAlf = msg.role === "alfred";
   return (
@@ -760,6 +1050,22 @@ function FreeBubble({
                 onPress={() =>
                   onOpenSms?.(msg.smsDraft!.phone, msg.smsDraft!.body)
                 }
+              />
+            </View>
+          ) : null}
+          {msg.emailDraft ? (
+            <View style={styles.smsDraftCard}>
+              <Text style={styles.smsDraftTo}>
+                {msg.emailDraft.name} · {msg.emailDraft.email}
+              </Text>
+              <Text style={styles.emailDraftSubject}>{msg.emailDraft.subject}</Text>
+              <Text style={styles.smsDraftBody}>{msg.emailDraft.body}</Text>
+              <Btn
+                label={
+                  msg.emailDraft.sending ? sendingEmailLabel : sendEmailLabel
+                }
+                onPress={() => onSendEmail?.(msg.emailDraft!.composeId)}
+                disabled={msg.emailDraft.sending}
               />
             </View>
           ) : null}
@@ -935,6 +1241,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   smsDraftTo: { fontSize: 13, color: colors.ink3 },
+  emailDraftSubject: { fontSize: 14, fontWeight: "600", color: colors.ink },
   smsDraftBody: { fontSize: 15, lineHeight: 22, color: colors.ink2 },
   userBubble: {
     backgroundColor: colors.ink,

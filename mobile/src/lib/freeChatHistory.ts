@@ -12,6 +12,14 @@ export type PersistedFreeMsg = {
   text: string;
   ts: string;
   smsDraft?: { name: string; phone: string; body: string };
+  emailDraft?: {
+    composeId: string;
+    name: string;
+    email: string;
+    subject: string;
+    body: string;
+    sending?: boolean;
+  };
 };
 
 const STORAGE_KEY = "albert.ask.freeChat.v1";

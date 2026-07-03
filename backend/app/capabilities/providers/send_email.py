@@ -18,9 +18,9 @@ from app.capabilities.base import (
     ExecutionResult,
 )
 from app.db.enums import ActionType, RiskLevel
-from app.db.models import DraftReply, Message, User
+from app.db.models import ComposeDraft, DraftReply, Message, User
 from app.services import gmail, outbound_tracking
-from app.services.connected_accounts import get_google_account_for_message
+from app.services.connected_accounts import get_google_account, get_google_account_for_message
 from app.services.crypto import decrypt_token
 from app.services.inbox_resolution import resolve_derivatives_for_message
 from app.services.message_read import mark_message_read
@@ -37,12 +37,23 @@ class SendEmailCapability:
         )
 
     def validate(self, db: Session, user: User, payload: dict[str, Any]) -> None:
+        compose_id = payload.get("compose_draft_id")
+        if compose_id:
+            draft = db.get(ComposeDraft, compose_id)
+            if draft is None or draft.user_id != user.id:
+                raise CapabilityError("Draft not found")
+            return
+
         draft_id = payload.get("draft_reply_id")
         draft = db.get(DraftReply, draft_id) if draft_id else None
         if draft is None or draft.user_id != user.id:
             raise CapabilityError("Draft not found")
 
     def execute(self, db: Session, user: User, payload: dict[str, Any]) -> ExecutionResult:
+        compose_id = payload.get("compose_draft_id")
+        if compose_id:
+            return self._execute_compose(db, user, compose_id)
+
         draft = db.get(DraftReply, payload["draft_reply_id"])
         if draft is None or draft.user_id != user.id:
             raise CapabilityError("Draft no longer exists")
@@ -99,6 +110,47 @@ class SendEmailCapability:
         # Sending is not reversible (it left the user's mailbox).
         return ExecutionResult(
             detail=f"Sent to {message.sender}",
+            reversible=False,
+            data={"gmail_message_id": sent.get("id")},
+        )
+
+    def _execute_compose(self, db: Session, user: User, compose_id: str) -> ExecutionResult:
+        draft = db.get(ComposeDraft, compose_id)
+        if draft is None or draft.user_id != user.id:
+            raise CapabilityError("Draft no longer exists")
+        account = get_google_account(db, user.id, draft.connected_account_id)
+        if account is None:
+            raise CapabilityError("Missing connected Gmail account")
+
+        recipient = draft.recipient_email
+        subject = draft.subject
+
+        if account.scopes == ["seed"]:
+            try:
+                incorporate_sent_reply(db, user, draft.body)
+            except Exception:
+                pass
+            return ExecutionResult(
+                detail=f"Email sent to {recipient} (dev seed)",
+                reversible=False,
+            )
+
+        token = decrypt_token(account.token_ciphertext)
+        if draft.gmail_draft_id:
+            sent = gmail.send_draft(token, draft.gmail_draft_id)
+        else:
+            sent = gmail.send_message(
+                token,
+                to=recipient,
+                subject=subject,
+                body=draft.body,
+            )
+        try:
+            incorporate_sent_reply(db, user, draft.body)
+        except Exception:
+            pass
+        return ExecutionResult(
+            detail=f"Sent to {recipient}",
             reversible=False,
             data={"gmail_message_id": sent.get("id")},
         )

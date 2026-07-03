@@ -7,6 +7,12 @@ export type ContactMatch = {
   phone: string;
 };
 
+export type EmailContactMatch = {
+  id: string;
+  name: string;
+  email: string;
+};
+
 export type ContactsPermissionStatus =
   | "granted"
   | "denied"
@@ -45,6 +51,14 @@ function pickPhone(numbers: Contacts.PhoneNumber[]): string | null {
   const raw = (mobile ?? numbers[0])?.number?.trim();
   if (!raw) return null;
   return raw.replace(/[^\d+]/g, "") || null;
+}
+
+function pickEmail(addresses: Contacts.EmailAddress[]): string | null {
+  const work = addresses.find((n) => n.label?.toLowerCase() === "work");
+  const home = addresses.find((n) => n.label?.toLowerCase() === "home");
+  const raw = (work ?? home ?? addresses[0])?.email?.trim();
+  if (!raw || !raw.includes("@")) return null;
+  return raw.toLowerCase();
 }
 
 function nameMatches(query: string, contact: Contacts.Contact): boolean {
@@ -114,6 +128,40 @@ export async function searchContactsByName(name: string): Promise<ContactMatch[]
       id: contact.id ?? key,
       name: displayName(contact),
       phone,
+    });
+  }
+
+  return matches.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function searchContactsEmailByName(
+  name: string,
+): Promise<EmailContactMatch[]> {
+  const Contacts = await loadContactsModule();
+  const { data } = await Contacts.getContactsAsync({
+    fields: [
+      Contacts.Fields.Emails,
+      Contacts.Fields.FirstName,
+      Contacts.Fields.LastName,
+      Contacts.Fields.Name,
+      Contacts.Fields.Nickname,
+    ],
+  });
+
+  const matches: EmailContactMatch[] = [];
+  const seen = new Set<string>();
+
+  for (const contact of data) {
+    if (!nameMatches(name, contact)) continue;
+    const email = pickEmail(contact.emails ?? []);
+    if (!email) continue;
+    const key = `${contact.id}:${email}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push({
+      id: contact.id ?? key,
+      name: displayName(contact),
+      email,
     });
   }
 

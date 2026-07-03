@@ -10,6 +10,7 @@ from app.api.v1 import (
     briefings,
     capture,
     commitments,
+    compose,
     dev,
     drafts,
     inbox,
@@ -35,6 +36,7 @@ api_router.include_router(today.router)
 api_router.include_router(schedule_proposals.router)
 api_router.include_router(commitments.router)
 api_router.include_router(drafts.router)
+api_router.include_router(compose.router)
 api_router.include_router(actions.router)
 api_router.include_router(meetings.router)
 api_router.include_router(messages.router)

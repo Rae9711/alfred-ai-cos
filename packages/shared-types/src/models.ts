@@ -313,6 +313,23 @@ export interface DraftCreateRequest {
   revision_history?: string[];
 }
 
+export interface ComposeDraftCreateRequest {
+  recipient_email: string;
+  recipient_name?: string | null;
+  intent: string;
+  tone?: string;
+}
+
+export interface ComposeDraft {
+  id: string;
+  recipient_email: string;
+  recipient_name: string | null;
+  subject: string;
+  body: string;
+  tone: string;
+  gmail_draft_id: string | null;
+}
+
 export interface ActionProposal {
   id: string;
   action_type: string;

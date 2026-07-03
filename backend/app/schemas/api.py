@@ -79,6 +79,25 @@ class DraftOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ComposeDraftCreateRequest(BaseModel):
+    recipient_email: str
+    recipient_name: str | None = None
+    intent: str
+    tone: str = "concise"
+
+
+class ComposeDraftOut(BaseModel):
+    id: str
+    recipient_email: str
+    recipient_name: str | None
+    subject: str
+    body: str
+    tone: str
+    gmail_draft_id: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class InboxMessageOut(BaseModel):
     """One inbox message for the Inbox screen. `category` collapses the backend's
     fine-grained MessageClassification into the four UI buckets; `take` is the
