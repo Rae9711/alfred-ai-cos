@@ -14,7 +14,7 @@ import { api } from "@/api/client";
 import { Btn } from "@/components/ui";
 import { MessageLinks } from "@/components/MessageLinks";
 import { useLocale } from "@/context/LocaleContext";
-import { normalizeSmsBody } from "@/lib/smsBody";
+import { enrichSmsDetailFields } from "@/lib/smsSenderDisplay";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type Props = {
@@ -54,13 +54,14 @@ export function MessageDetailSheet({
       try {
         const detail = await api.getMessage(messageId);
         if (cancelled) return;
-        setSubject(detail.subject?.trim() || (detail.source === "sms" ? t.sms.messageLabel : "(No subject)"));
-        setSender(detail.sender);
-        setSummary(detail.take?.trim() || null);
-        const bodyText = normalizeSmsBody(
-          detail.body?.trim() || detail.snippet?.trim() || "",
+        const enriched = await enrichSmsDetailFields(detail);
+        setSubject(
+          enriched.subject ||
+            (detail.source === "sms" ? t.sms.messageLabel : "(No subject)"),
         );
-        setBody(bodyText);
+        setSender(enriched.sender);
+        setSummary(enriched.summary);
+        setBody(enriched.body);
         setIsSms(detail.source === "sms");
       } catch (e) {
         if (!cancelled) {

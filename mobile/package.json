@@ -13,7 +13,8 @@
     "device:ios": "bash scripts/standalone-ios.sh device",
     "build:ios": "bash scripts/standalone-ios.sh build",
     "install:ios": "bash scripts/standalone-ios.sh install",
-    "update:preview": "bash scripts/standalone-ios.sh update",
+    "update:preview": "bash scripts/standalone-ios.sh update preview",
+    "update:production": "bash scripts/standalone-ios.sh update production",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run && node --test scripts/dev-api-proxy.test.mjs"

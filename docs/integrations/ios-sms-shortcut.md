@@ -64,7 +64,7 @@ After import, open **Shortcuts → Albert SMS Forward** and confirm:
 
 | Check | Expected |
 | ----- | -------- |
-| **Dictionary** action | Three keys: `body`, `text`, `shortcut_input` — each mapped to **Shortcut Input** |
+| **Dictionary** action | Five keys: `body`, `text`, `shortcut_input` (Shortcut Input), plus `from_number` / `from_name` from Get Details of Messages |
 | **Get Contents of URL** | Method **POST**, request body **JSON**, URL `…/inbox/sms` |
 | Headers | **Content-Type** `application/json` and **X-Sms-Token** with your token |
 
@@ -79,8 +79,9 @@ Messages** may show a toast instead of pre-filling the recipient unless you add
 | Step       | Action ID                         | Purpose                                      |
 | ---------- | --------------------------------- | -------------------------------------------- |
 | 1 (import) | `is.workflow.actions.gettext`     | Prompt for X-Sms-Token                       |
-| 2          | `is.workflow.actions.dictionary`  | JSON payload (`body`, `text`, `shortcut_input` → Shortcut Input) |
-| 3          | `is.workflow.actions.downloadurl` | POST to Albert webhook                       |
+| 2–3        | `is.workflow.actions.properties.messages` | Sender phone + name (best-effort)            |
+| 4          | `is.workflow.actions.dictionary`  | JSON payload (`body`, `text`, `shortcut_input`, `from_number`, `from_name`) |
+| 5          | `is.workflow.actions.downloadurl` | POST to Albert webhook                       |
 
 ### iOS automation: empty Shortcut Input
 

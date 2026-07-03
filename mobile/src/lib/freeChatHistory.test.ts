@@ -14,10 +14,12 @@ vi.mock("./secureStorage", () => ({
   deleteSecureItem: vi.fn(async (key: string) => {
     store.delete(key);
   }),
+  AFTER_FIRST_UNLOCK_OPTS: { keychainAccessible: "afterFirstUnlock" },
 }));
 
 import {
   clearFreeChatHistory,
+  hasPersistableFreeChatHistory,
   loadFreeChatHistory,
   saveFreeChatHistory,
   subscribeFreeChatCleared,
@@ -41,6 +43,14 @@ describe("freeChatHistory", () => {
     ];
     await saveFreeChatHistory(messages);
     expect(await loadFreeChatHistory()).toEqual(messages);
+  });
+
+  it("does not persist seed-only greeting", async () => {
+    await saveFreeChatHistory([{ role: "alfred", text: "Hi", ts: "now" }]);
+    expect(store.has(STORAGE_KEY)).toBe(false);
+    expect(hasPersistableFreeChatHistory([{ role: "alfred", text: "Hi", ts: "now" }])).toBe(
+      false,
+    );
   });
 
   it("recovers from corrupt JSON", async () => {

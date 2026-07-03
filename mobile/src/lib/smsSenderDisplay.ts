@@ -28,6 +28,18 @@ export function resolveSmsSenderDisplay(
   return label;
 }
 
+/** Prefer inbox-enriched sender over API "Unknown sender". */
+export function mergeSmsSenderDisplay(
+  enrichedSender: string | undefined,
+  apiSender: string,
+): string {
+  const api = apiSender.trim();
+  if (enrichedSender && isUnknownSmsSender(api)) {
+    return enrichedSender;
+  }
+  return api;
+}
+
 function normalizeSmsItem(item: AppInboxItem): AppInboxItem {
   if (item.source !== "sms") return item;
   return {
@@ -36,6 +48,56 @@ function normalizeSmsItem(item: AppInboxItem): AppInboxItem {
     summary: normalizeSmsBody(item.summary),
     take: item.take ? normalizeSmsBody(item.take) : item.take,
   };
+}
+
+export type SmsDetailFields = {
+  sender: string;
+  subject: string;
+  summary: string | null;
+  body: string;
+  replyPhone: string | null;
+};
+
+/** Normalize SMS body fields and resolve sender from device contacts. */
+export async function enrichSmsDetailFields(
+  detail: {
+    sender: string;
+    subject?: string | null;
+    snippet?: string | null;
+    take?: string | null;
+    body?: string | null;
+    reply_phone?: string | null;
+    source?: string | null;
+  },
+  opts?: { preferSender?: string },
+): Promise<SmsDetailFields> {
+  const isSms = detail.source === "sms";
+  const replyPhone = detail.reply_phone?.trim() || null;
+  const body = normalizeSmsBody(
+    detail.body?.trim() || detail.snippet?.trim() || "",
+  );
+  const summary = detail.take?.trim()
+    ? normalizeSmsBody(detail.take.trim())
+    : null;
+  const subject =
+    detail.subject?.trim() ||
+    (isSms ? normalizeSmsBody(detail.snippet?.trim() || "") : "") ||
+    "Text message";
+
+  let sender = detail.sender.trim();
+  if (isSms) {
+    sender = mergeSmsSenderDisplay(opts?.preferSender, sender);
+    if (replyPhone && isUnknownSmsSender(sender)) {
+      try {
+        const phoneNames = await loadContactNamesByPhone();
+        sender = resolveSmsSenderDisplay(sender, replyPhone, phoneNames);
+      } catch {
+        // Contacts unavailable — keep API label.
+      }
+    }
+  }
+
+  return { sender, subject, summary, body, replyPhone };
 }
 
 /** Resolve contact names for SMS rows and unwrap JSON bodies for display. */

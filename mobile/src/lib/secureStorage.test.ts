@@ -10,6 +10,7 @@ const secureStoreMock = {
   getItemAsync: vi.fn<(k: string) => Promise<string | null>>(),
   setItemAsync: vi.fn<(k: string, v: string) => Promise<void>>(),
   deleteItemAsync: vi.fn<(k: string) => Promise<void>>(),
+  AFTER_FIRST_UNLOCK: "afterFirstUnlock",
 };
 vi.mock("expo-secure-store", () => secureStoreMock);
 
@@ -55,14 +56,14 @@ describe("native path (Platform.OS === ios)", () => {
     secureStoreMock.getItemAsync.mockResolvedValueOnce("native-value");
     const { readSecureItem } = await importSut();
     await expect(readSecureItem("jwt")).resolves.toBe("native-value");
-    expect(secureStoreMock.getItemAsync).toHaveBeenCalledWith("jwt");
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledWith("jwt", undefined);
   });
 
   it("writes through SecureStore.setItemAsync", async () => {
     secureStoreMock.setItemAsync.mockResolvedValueOnce(undefined);
     const { writeSecureItem } = await importSut();
     await writeSecureItem("jwt", "abc.def");
-    expect(secureStoreMock.setItemAsync).toHaveBeenCalledWith("jwt", "abc.def");
+    expect(secureStoreMock.setItemAsync).toHaveBeenCalledWith("jwt", "abc.def", undefined);
   });
 
   it("deletes through SecureStore.deleteItemAsync", async () => {
@@ -91,7 +92,7 @@ describe("android path (Platform.OS === android)", () => {
     secureStoreMock.getItemAsync.mockResolvedValueOnce("droid");
     const { readSecureItem } = await importSut();
     await expect(readSecureItem("jwt")).resolves.toBe("droid");
-    expect(secureStoreMock.getItemAsync).toHaveBeenCalledWith("jwt");
+    expect(secureStoreMock.getItemAsync).toHaveBeenCalledWith("jwt", undefined);
   });
 });
 

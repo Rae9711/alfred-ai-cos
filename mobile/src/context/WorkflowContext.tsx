@@ -18,6 +18,7 @@ import {
   getWorkflowProactive,
   type WorkflowDraft,
 } from "@/data/workflowDemo";
+import { enrichSmsDetailFields } from "@/lib/smsSenderDisplay";
 
 export type TabKey = "today" | "inbox" | "ask" | "settings";
 
@@ -129,16 +130,22 @@ export function WorkflowProvider({
 
         if (detailResult.status === "fulfilled") {
           const detail = detailResult.value;
+          const enriched = await enrichSmsDetailFields(detail, {
+            preferSender: item?.sender,
+          });
           setThread((current) =>
             current?.messageId === messageId
               ? {
                   ...current,
                   source: detail.source === "sms" ? "sms" : "email",
-                  replyPhone: detail.reply_phone?.trim() || current.replyPhone,
-                  sender: detail.sender,
-                  subject: detail.subject?.trim() || current.subject,
-                  summary: detail.take?.trim() || current.summary,
-                  body: detail.body,
+                  replyPhone: enriched.replyPhone || current.replyPhone,
+                  sender: enriched.sender,
+                  subject:
+                    detail.source === "sms"
+                      ? enriched.subject
+                      : detail.subject?.trim() || current.subject,
+                  summary: enriched.summary || current.summary,
+                  body: enriched.body,
                   bodyLoading: false,
                 }
               : current,
@@ -206,18 +213,24 @@ export function WorkflowProvider({
       void (async () => {
         try {
           const detail = await api.getMessage(messageId);
+          const enriched = await enrichSmsDetailFields(detail, {
+            preferSender: item?.sender,
+          });
           setThread((current) =>
             current?.messageId === messageId
               ? {
                   ...current,
                   source: detail.source === "sms" ? "sms" : "email",
-                  replyPhone: detail.reply_phone?.trim() || current.replyPhone,
-                  sender: detail.sender,
-                  subject: detail.subject?.trim()
-                    ? `Re: ${detail.subject.trim()}`
-                    : current.draft.subject,
-                  summary: detail.take?.trim() || current.summary,
-                  body: detail.body,
+                  replyPhone: enriched.replyPhone || current.replyPhone,
+                  sender: enriched.sender,
+                  subject:
+                    detail.source === "sms"
+                      ? enriched.subject
+                      : detail.subject?.trim()
+                        ? `Re: ${detail.subject.trim()}`
+                        : current.draft.subject,
+                  summary: enriched.summary || current.summary,
+                  body: enriched.body,
                   bodyLoading: false,
                 }
               : current,

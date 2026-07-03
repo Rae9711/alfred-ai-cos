@@ -165,11 +165,12 @@ case "$MODE" in
     ;;
 
   update)
-    MSG="${2:-mobile update $(date +%Y-%m-%d)}"
+    BRANCH="${2:-preview}"
+    MSG="${3:-mobile update $(date +%Y-%m-%d)}"
     echo ""
-    echo "── Publishing JS update to preview channel"
+    echo "── Publishing JS update to ${BRANCH} channel"
     echo ""
-    run_eas update --branch preview -m "$MSG"
+    run_eas update --branch "$BRANCH" -m "$MSG"
     exit $?
     ;;
 

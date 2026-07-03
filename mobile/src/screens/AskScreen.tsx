@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -47,10 +48,13 @@ import {
 } from "@/lib/smsComposeIntent";
 import { openSmsCompose } from "@/lib/sms";
 import {
-  loadFreeChatHistory,
+  hasPersistableFreeChatHistory,
+  loadFreeChatHistoryWithRetry,
   saveFreeChatHistory,
   subscribeFreeChatCleared,
+  type PersistedFreeMsg,
 } from "@/lib/freeChatHistory";
+import { normalizeSmsBody } from "@/lib/smsBody";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, fonts, layout, radius } from "@/theme/theme";
@@ -132,6 +136,11 @@ export function AskScreen() {
   const [awaitingEmailRecipient, setAwaitingEmailRecipient] =
     useState<AwaitingEmailRecipient | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const freeChatRef = useRef<FreeMsg[]>([]);
+  const persistFreeChat = useCallback((messages: PersistedFreeMsg[]) => {
+    if (!hasPersistableFreeChatHistory(messages)) return;
+    void saveFreeChatHistory(messages);
+  }, []);
 
   const voice = useVoiceCapture((r) => {
     const q = r.tasks.map((t) => t.title).join("; ");
@@ -143,12 +152,16 @@ export function AskScreen() {
     [t.freeChat.seed],
   );
 
+  useEffect(() => {
+    freeChatRef.current = freeChat;
+  }, [freeChat]);
+
   // Hydrate free chat from device storage on mount (tab switches unmount AskScreen).
   useEffect(() => {
     let cancelled = false;
     const seed = t.freeChat.seed;
     void (async () => {
-      const stored = await loadFreeChatHistory();
+      const stored = await loadFreeChatHistoryWithRetry();
       if (cancelled) return;
       setFreeChat(
         stored && stored.length > 0
@@ -159,8 +172,9 @@ export function AskScreen() {
     })();
     return () => {
       cancelled = true;
+      persistFreeChat(freeChatRef.current);
     };
-  }, [t.freeChat.seed]);
+  }, [t.freeChat.seed, persistFreeChat]);
 
   // When locale changes, refresh the lone seed greeting — keep real conversation.
   useEffect(() => {
@@ -174,8 +188,18 @@ export function AskScreen() {
   // Persist free chat (not email task threads).
   useEffect(() => {
     if (!freeChatHydrated || thread) return;
-    void saveFreeChatHistory(freeChat);
-  }, [freeChat, freeChatHydrated, thread]);
+    persistFreeChat(freeChat);
+  }, [freeChat, freeChatHydrated, thread, persistFreeChat]);
+
+  // Flush on background — process kill may skip React effect cleanup.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "background" || state === "inactive") {
+        persistFreeChat(freeChatRef.current);
+      }
+    });
+    return () => sub.remove();
+  }, [persistFreeChat]);
 
   useEffect(() => {
     return subscribeFreeChatCleared(() => {
@@ -1049,7 +1073,7 @@ function EmailSourceCard({
               <Text style={styles.emailSummaryText}>{summary}</Text>
             </View>
           ) : null}
-          <Text style={styles.emailBody}>{body}</Text>
+          <Text style={styles.emailBody}>{normalizeSmsBody(body)}</Text>
         </>
       )}
     </View>
