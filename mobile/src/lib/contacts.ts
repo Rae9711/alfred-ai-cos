@@ -1,6 +1,12 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
 import type * as Contacts from "expo-contacts";
 
+import {
+  pickAutoContact,
+  scoreContactNameMatch,
+  type NameScored,
+} from "@/lib/contactNameMatch";
+
 export type ContactMatch = {
   id: string;
   name: string;
@@ -61,23 +67,6 @@ function pickEmail(addresses: Contacts.EmailAddress[]): string | null {
   return raw.toLowerCase();
 }
 
-function nameMatches(query: string, contact: Contacts.Contact): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return false;
-  const candidates = [
-    contact.name,
-    contact.firstName,
-    contact.lastName,
-    contact.nickname,
-    [contact.firstName, contact.lastName].filter(Boolean).join(" "),
-  ]
-    .filter(Boolean)
-    .map((s) => s!.toLowerCase());
-  return candidates.some(
-    (c) => c.includes(q) || q.includes(c) || c.replace(/\s/g, "").includes(q.replace(/\s/g, "")),
-  );
-}
-
 export async function getContactsPermissionStatus(): Promise<ContactsPermissionStatus> {
   if (!isContactsNativeAvailable()) return "unavailable";
   try {
@@ -102,7 +91,9 @@ export async function requestContactsPermission(): Promise<boolean> {
   }
 }
 
-export async function searchContactsByName(name: string): Promise<ContactMatch[]> {
+export async function searchContactsByName(
+  name: string,
+): Promise<NameScored<ContactMatch>[]> {
   const Contacts = await loadContactsModule();
   const { data } = await Contacts.getContactsAsync({
     fields: [
@@ -114,11 +105,12 @@ export async function searchContactsByName(name: string): Promise<ContactMatch[]
     ],
   });
 
-  const matches: ContactMatch[] = [];
+  const matches: NameScored<ContactMatch>[] = [];
   const seen = new Set<string>();
 
   for (const contact of data) {
-    if (!nameMatches(name, contact)) continue;
+    const score = scoreContactNameMatch(name, contact);
+    if (score < 50) continue;
     const phone = pickPhone(contact.phoneNumbers ?? []);
     if (!phone) continue;
     const key = `${contact.id}:${phone}`;
@@ -128,15 +120,16 @@ export async function searchContactsByName(name: string): Promise<ContactMatch[]
       id: contact.id ?? key,
       name: displayName(contact),
       phone,
+      score,
     });
   }
 
-  return matches.sort((a, b) => a.name.localeCompare(b.name));
+  return matches.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }
 
 export async function searchContactsEmailByName(
   name: string,
-): Promise<EmailContactMatch[]> {
+): Promise<NameScored<EmailContactMatch>[]> {
   const Contacts = await loadContactsModule();
   const { data } = await Contacts.getContactsAsync({
     fields: [
@@ -148,11 +141,12 @@ export async function searchContactsEmailByName(
     ],
   });
 
-  const matches: EmailContactMatch[] = [];
+  const matches: NameScored<EmailContactMatch>[] = [];
   const seen = new Set<string>();
 
   for (const contact of data) {
-    if (!nameMatches(name, contact)) continue;
+    const score = scoreContactNameMatch(name, contact);
+    if (score < 50) continue;
     const email = pickEmail(contact.emails ?? []);
     if (!email) continue;
     const key = `${contact.id}:${email}`;
@@ -162,8 +156,36 @@ export async function searchContactsEmailByName(
       id: contact.id ?? key,
       name: displayName(contact),
       email,
+      score,
     });
   }
 
-  return matches.sort((a, b) => a.name.localeCompare(b.name));
+  return matches.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+}
+
+export { pickAutoContact, scoreContactNameMatch } from "@/lib/contactNameMatch";
+
+/** Last-10-digit suffix → contact display name for SMS sender resolution. */
+export async function loadContactNamesByPhone(): Promise<Map<string, string>> {
+  const Contacts = await loadContactsModule();
+  const { data } = await Contacts.getContactsAsync({
+    fields: [
+      Contacts.Fields.PhoneNumbers,
+      Contacts.Fields.FirstName,
+      Contacts.Fields.LastName,
+      Contacts.Fields.Name,
+    ],
+  });
+
+  const map = new Map<string, string>();
+  for (const contact of data) {
+    const name = displayName(contact);
+    for (const entry of contact.phoneNumbers ?? []) {
+      const digits = (entry.number ?? "").replace(/\D/g, "");
+      const suffix = digits.slice(-10);
+      if (suffix.length < 7) continue;
+      if (!map.has(suffix)) map.set(suffix, name);
+    }
+  }
+  return map;
 }

@@ -28,6 +28,7 @@ import { EmailComposeSheet } from "@/screens/sheets/EmailComposeSheet";
 import { SmsComposeSheet } from "@/screens/sheets/SmsComposeSheet";
 import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
 import {
+  pickAutoContact,
   requestContactsPermission,
   searchContactsByName,
   searchContactsEmailByName,
@@ -285,6 +286,15 @@ export function AskScreen() {
 
   const resolveEmailRecipient = useCallback(
     (displayName: string, email: string, bodyHint: string | null) => {
+      setFreeChat((c) => [
+        ...c,
+        {
+          role: "alfred",
+          text: t.emailCompose.foundContact(displayName, email),
+          ts: "now",
+        },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
       if (bodyHint) {
         draftEmail(displayName, email, bodyHint);
         return;
@@ -314,6 +324,11 @@ export function AskScreen() {
             return;
           }
           const matches = await searchContactsEmailByName(recipientName);
+          const auto = pickAutoContact(matches);
+          if (auto) {
+            resolveEmailRecipient(auto.name, auto.email, bodyHint);
+            return;
+          }
           if (matches.length === 0) {
             setAwaitingEmailAddress({ displayName: recipientName, bodyHint });
             setFreeChat((c) => [
@@ -326,11 +341,10 @@ export function AskScreen() {
             ]);
             return;
           }
-          if (matches.length === 1) {
-            const only = matches[0]!;
-            resolveEmailRecipient(only.name, only.email, bodyHint);
-            return;
-          }
+          setFreeChat((c) => [
+            ...c,
+            { role: "alfred", text: t.emailCompose.pickContact, ts: "now" },
+          ]);
           openSheet(
             <EmailComposeSheet
               mode="pick"
@@ -408,7 +422,16 @@ export function AskScreen() {
   );
 
   const resolveSmsRecipient = useCallback(
-  (displayName: string, phone: string, bodyHint: string | null) => {
+    (displayName: string, phone: string, bodyHint: string | null) => {
+      setFreeChat((c) => [
+        ...c,
+        {
+          role: "alfred",
+          text: t.smsCompose.foundContact(displayName, phone),
+          ts: "now",
+        },
+      ]);
+      scrollRef.current?.scrollToEnd({ animated: true });
       if (bodyHint) {
         appendSmsDraft(displayName, phone, bodyHint);
         return;
@@ -438,6 +461,11 @@ export function AskScreen() {
             return;
           }
           const matches = await searchContactsByName(recipientName);
+          const auto = pickAutoContact(matches);
+          if (auto) {
+            resolveSmsRecipient(auto.name, auto.phone, bodyHint);
+            return;
+          }
           if (matches.length === 0) {
             setAwaitingSmsPhone({ displayName: recipientName, bodyHint });
             setFreeChat((c) => [
@@ -450,11 +478,10 @@ export function AskScreen() {
             ]);
             return;
           }
-          if (matches.length === 1) {
-            const only = matches[0]!;
-            resolveSmsRecipient(only.name, only.phone, bodyHint);
-            return;
-          }
+          setFreeChat((c) => [
+            ...c,
+            { role: "alfred", text: t.smsCompose.pickContact, ts: "now" },
+          ]);
           openSheet(
             <SmsComposeSheet
               mode="pick"
@@ -546,6 +573,11 @@ export function AskScreen() {
       if (awaitingSmsRecipient) {
         const { bodyHint } = awaitingSmsRecipient;
         setAwaitingSmsRecipient(null);
+        const reparsed = parseSmsComposeIntent(q);
+        if (reparsed) {
+          startSmsCompose(reparsed.recipientName, reparsed.bodyHint ?? bodyHint);
+          return;
+        }
         startSmsCompose(q, bodyHint);
         return;
       }
@@ -553,6 +585,14 @@ export function AskScreen() {
       if (awaitingEmailRecipient) {
         const { bodyHint } = awaitingEmailRecipient;
         setAwaitingEmailRecipient(null);
+        const reparsed = parseEmailComposeIntent(q);
+        if (reparsed) {
+          startEmailCompose(
+            reparsed.recipientName,
+            reparsed.bodyHint ?? bodyHint,
+          );
+          return;
+        }
         startEmailCompose(q, bodyHint);
         return;
       }

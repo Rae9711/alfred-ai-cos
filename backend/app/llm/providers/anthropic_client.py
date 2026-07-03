@@ -128,6 +128,14 @@ _DRAFT_SYSTEM = (
     "draft, keep what already works and apply every user note from the conversation — "
     "do not drop earlier preferences when a new note arrives."
 )
+_COMPOSE_DRAFT_SYSTEM = (
+    "You draft brand-new outbound emails (not replies to an existing thread). "
+    "The user told you exactly who to email and what they want to say. "
+    "Open with a natural greeting using the recipient's first name. "
+    "The subject and body must be about the user's request — do not invent unrelated "
+    "topics or facts. Keep the tone requested. Sign off as the user when a name is "
+    "given; otherwise omit the signature line."
+)
 _CAPTURE_SYSTEM = (
     "You are Albert's capture agent. The user dumped a messy note (typed or transcribed "
     "speech). Split it into distinct, actionable tasks with concise titles. Resolve "
@@ -306,6 +314,39 @@ class AnthropicLLMClient:
             system=_DRAFT_SYSTEM,
             user_content=user_content,
             tool=_tool_for(DraftResult, "record_draft", "Record the drafted reply."),
+        )
+        return DraftResult.model_validate(raw)
+
+    def draft_compose_email(
+        self,
+        *,
+        recipient_name: str,
+        recipient_email: str,
+        intent: str,
+        tone: str,
+        user_name: str | None = None,
+        writing_style_prompt: str | None = None,
+    ) -> DraftResult:
+        first_name = recipient_name.strip().split()[0] if recipient_name.strip() else recipient_name
+        name_line = (
+            f"\nSign off as: {user_name}"
+            if user_name
+            else "\nOmit the signature line."
+        )
+        style_line = f"\n\n{writing_style_prompt}" if writing_style_prompt else ""
+        user_content = (
+            f"Tone: {tone}{name_line}{style_line}\n\n"
+            f"Recipient: {recipient_name} <{recipient_email}>\n"
+            f"Greet them as: {first_name}\n\n"
+            f"The user wants this email to say:\n{intent.strip()}\n\n"
+            "Write a short subject line and a complete email body. "
+            "Do not use a Re: subject prefix."
+        )
+        raw = self._structured(
+            model=settings.llm_draft_model,
+            system=_COMPOSE_DRAFT_SYSTEM,
+            user_content=user_content,
+            tool=_tool_for(DraftResult, "record_compose_draft", "Record the outbound email."),
         )
         return DraftResult.model_validate(raw)
 

@@ -196,6 +196,35 @@ def test_sms_in_coerces_ios_shortcut_payload(raw: dict, expected_phone: str) -> 
     assert parsed.body in ("Hello", "Fallback text")
 
 
+def test_sms_in_unwraps_stringified_json_body() -> None:
+    from app.api.v1.inbox import SmsIn
+
+    parsed = SmsIn.model_validate(
+        {
+            "body": (
+                '{"body":"Ray, what did you dream about?",'
+                '"text":"Ray, what did you dream about?",'
+                '"shortcut_input":"Ray, what did you dream about?"}'
+            )
+        }
+    )
+    assert parsed.body == "Ray, what did you dream about?"
+
+
+def test_sms_in_extracts_name_from_sender_dict() -> None:
+    from app.api.v1.inbox import SmsIn
+
+    parsed = SmsIn.model_validate(
+        {
+            "sender": {"phone": "+15551234567", "name": "Ray"},
+            "text": "Hi",
+        }
+    )
+    assert parsed.from_number == "+15551234567"
+    assert parsed.from_name == "Ray"
+    assert parsed.body == "Hi"
+
+
 def test_sms_webhook_rejects_empty_json_body(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -30,17 +30,10 @@ def create_compose_draft(
     display = (recipient_name or recipient_email).strip()
     maybe_refresh_writing_style(db, user)
     style_prompt = format_writing_style_prompt(get_writing_style(user))
-    thread_context = (
-        "NEW OUTBOUND EMAIL (not a reply to an existing thread)\n"
-        f"To: {display} <{recipient_email.strip()}>\n"
-        f"What the user wants to say: {intent.strip()}\n"
-    )
-    result = get_llm().draft_reply(
-        thread_context=thread_context,
-        instruction=(
-            "Write a brand-new email from scratch. Do not use a Re: subject line. "
-            "Keep it natural and match what the user asked for."
-        ),
+    result = get_llm().draft_compose_email(
+        recipient_name=display,
+        recipient_email=recipient_email.strip(),
+        intent=intent.strip(),
         tone=tone,
         user_name=user.name,
         writing_style_prompt=style_prompt,

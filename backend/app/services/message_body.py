@@ -9,6 +9,7 @@ from app.db.models import Message
 from app.services import gmail
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
+from app.services.sms_body import normalize_sms_body_text
 
 # Keep draft context within a reasonable token budget.
 _MAX_BODY_CHARS = 12_000
@@ -20,7 +21,9 @@ def fetch_message_body(db: Session, message: Message) -> str:
     """Return the full plain-text body for one stored message."""
     if message.source == "sms":
         headers = message.headers or {}
-        body = str(headers.get("sms_body") or message.snippet or "").strip()
+        body = normalize_sms_body_text(
+            str(headers.get("sms_body") or message.snippet or "")
+        )
         if not body:
             raise ValueError("Missing SMS body")
         return body

@@ -27,6 +27,7 @@ from app.core.config import get_settings
 from app.db.base import get_db
 from app.schemas.api import SmsIngestOut
 from app.services import forward_inbox, sms_inbox
+from app.services.sms_body import normalize_sms_body_text
 from app.services.sms_inbox import UNKNOWN_SMS_SENDER, resolve_sms_sender_phone
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ def _coerce_body(value: Any) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
-        stripped = value.strip()
+        stripped = normalize_sms_body_text(value)
         return stripped or None
     if isinstance(value, dict):
         for key in (
@@ -232,18 +233,25 @@ class SmsIn(BaseModel):
     def normalize_ios_shortcut_payload(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
-        phone = _coerce_phone(_lookup(data, _FROM_ALIASES))
+        from_raw = _lookup(data, _FROM_ALIASES)
+        phone = _coerce_phone(from_raw)
         body = _coerce_body(_lookup(data, _BODY_ALIASES))
         if not body:
             body = _fallback_body(data, phone)
+        from_name = _coerce_optional_str(_lookup(data, _NAME_ALIASES))
+        if not from_name and isinstance(from_raw, dict):
+            for key in ("name", "fullName", "givenName", "displayName", "firstName"):
+                from_name = _coerce_optional_str(from_raw.get(key))
+                if from_name:
+                    break
         backfill_raw = data.get("backfill")
         backfill = backfill_raw is True or (
             isinstance(backfill_raw, str) and backfill_raw.strip().lower() in {"1", "true", "yes"}
         )
         return {
             "from_number": resolve_sms_sender_phone(phone) if phone else UNKNOWN_SMS_SENDER,
-            "body": body,
-            "from_name": _coerce_optional_str(_lookup(data, _NAME_ALIASES)),
+            "body": normalize_sms_body_text(body) if body else body,
+            "from_name": from_name,
             "message_id": _coerce_optional_str(data.get("message_id") or data.get("messageId")),
             "received_at": data.get("received_at") or data.get("receivedAt"),
             "backfill": backfill,

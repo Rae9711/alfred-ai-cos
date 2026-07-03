@@ -187,6 +187,9 @@ export const translations = {
         `Got it — ${name}. What should the message say?`,
       ready: (name: string) =>
         `Here's your draft for ${name}. Open Messages when you're ready.`,
+      foundContact: (name: string, phone: string) =>
+        `I'll text ${name} (${phone}).`,
+      pickContact: "I found a few matches — pick the right person.",
       openInMessages: "Open in Messages",
     },
     emailCompose: {
@@ -196,6 +199,9 @@ export const translations = {
         `I couldn't find an email for “${name}” in your contacts. What's their email address?`,
       askWho: "Who should I email?",
       askEmailInvalid: "That doesn't look like an email address — try again.",
+      foundContact: (name: string, email: string) =>
+        `I'll email ${name} (${email}).`,
+      pickContact: "I found a few matches — pick the right person.",
       pickTitle: "Choose contact",
       pickSubtitle: "Several people matched — which one?",
       emailTitle: "Email address",
@@ -533,6 +539,9 @@ export const translations = {
       phoneContinue: "继续",
       askBody: (name: string) => `好的，${name}。短信内容是什么？`,
       ready: (name: string) => `已为 ${name} 起草短信，准备好后在「信息」中发送。`,
+      foundContact: (name: string, phone: string) =>
+        `将发给 ${name}（${phone}）。`,
+      pickContact: "找到几位匹配 — 请选对联系人。",
       openInMessages: "在「信息」中发送",
     },
     emailCompose: {
@@ -542,6 +551,9 @@ export const translations = {
         `通讯录里没有找到「${name}」的邮箱。请告诉我邮箱地址？`,
       askWho: "要给谁发邮件？",
       askEmailInvalid: "这不像有效的邮箱地址，请再试一次。",
+      foundContact: (name: string, email: string) =>
+        `将发给 ${name}（${email}）。`,
+      pickContact: "找到几位匹配 — 请选对联系人。",
       pickTitle: "选择联系人",
       pickSubtitle: "匹配到多位联系人 — 选哪一个？",
       emailTitle: "邮箱地址",

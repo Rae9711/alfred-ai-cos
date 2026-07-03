@@ -17,6 +17,7 @@ from app.db.models import DraftReply, Message, User
 from app.llm import get_llm
 from app.services import extraction, sender_class
 from app.services.message_body import build_draft_context
+from app.services.sms_body import normalize_sms_body_text
 from app.services.writing_style import format_writing_style_prompt, get_writing_style
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ def ingest_sms(
 ) -> SmsIngestResult:
     """Create a Message from a forwarded SMS and run classification + optional draft."""
     phone = resolve_sms_sender_phone(from_number)
-    text = (body or "").strip()
+    text = normalize_sms_body_text(body or "")
     if not text:
         raise ValueError("SMS body is required")
 

@@ -61,6 +61,10 @@ describe("parseEmailComposeIntent", () => {
       recipientName: "Leo",
       bodyHint: "明天开会",
     });
+    expect(parseEmailComposeIntent("给leo发邮件明天一起吃饭")).toEqual({
+      recipientName: "leo",
+      bodyHint: "明天一起吃饭",
+    });
   });
 
   it("parses without body hint", () => {

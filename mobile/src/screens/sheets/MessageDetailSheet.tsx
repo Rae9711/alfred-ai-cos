@@ -14,6 +14,7 @@ import { api } from "@/api/client";
 import { Btn } from "@/components/ui";
 import { MessageLinks } from "@/components/MessageLinks";
 import { useLocale } from "@/context/LocaleContext";
+import { normalizeSmsBody } from "@/lib/smsBody";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type Props = {
@@ -56,7 +57,9 @@ export function MessageDetailSheet({
         setSubject(detail.subject?.trim() || (detail.source === "sms" ? t.sms.messageLabel : "(No subject)"));
         setSender(detail.sender);
         setSummary(detail.take?.trim() || null);
-        const bodyText = detail.body?.trim() || detail.snippet?.trim() || "";
+        const bodyText = normalizeSmsBody(
+          detail.body?.trim() || detail.snippet?.trim() || "",
+        );
         setBody(bodyText);
         setIsSms(detail.source === "sms");
       } catch (e) {

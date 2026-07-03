@@ -28,6 +28,11 @@ const PATTERNS: RegExp[] = [
     `^给\\s*(.+?)\\s*${VERB}${QUANTIFIER}${EMAIL_NOUN}(?:件)?\\s*${SEP}\\s*(.+)$`,
     "iu",
   ),
+  // 给 X 发/写 邮件 BODY（无逗号/说，直接跟内容）
+  new RegExp(
+    `^给\\s*(.+?)\\s*${VERB}${QUANTIFIER}${EMAIL_NOUN}(?:件)?\\s*(.+)$`,
+    "iu",
+  ),
   // 给 X 发/写 邮件 (no body)
   new RegExp(
     `^给\\s*(.+?)\\s*${VERB}${QUANTIFIER}${EMAIL_NOUN}(?:件)?\\s*$`,
@@ -87,7 +92,7 @@ function cleanName(raw: string): string {
 
 function cleanBody(raw: string | undefined): string | null {
   if (raw == null) return null;
-  const t = raw.trim();
+  const t = raw.trim().replace(/^[，,：:\s]+/, "");
   return t.length > 0 ? t : null;
 }
 

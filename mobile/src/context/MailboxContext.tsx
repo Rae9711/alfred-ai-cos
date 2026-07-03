@@ -23,6 +23,7 @@ import {
   scopeToTab,
   tabToScope,
 } from "@/lib/inbox";
+import { enrichInboxMessages } from "@/lib/smsSenderDisplay";
 
 export type InboxScope = InboxApiScope | "today";
 export type InboxFilter = InboxTabId | "email" | string;
@@ -78,7 +79,11 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
 
       if (seq !== loadSeqRef.current) return;
 
-      setItems(view.messages.map(mapInboxMessage));
+      const mapped = view.messages.map(mapInboxMessage);
+      const enriched = await enrichInboxMessages(mapped, view.messages);
+      if (seq !== loadSeqRef.current) return;
+
+      setItems(enriched);
       setMailboxes(view.mailboxes ?? []);
       setInboxScope(scope);
       setInboxFilterState(scopeToTab(scope));

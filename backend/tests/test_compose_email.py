@@ -46,7 +46,7 @@ def test_create_compose_draft(db: Session, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert draft.recipient_email == "leo@example.com"
     assert draft.subject
-    assert draft.body
+    assert "dinner tomorrow" in draft.body.lower()
 
 
 def test_send_compose_seed(db: Session) -> None:

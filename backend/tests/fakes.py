@@ -96,6 +96,22 @@ class FakeLLM:
         sig = f"\n{user_name}" if user_name else ""
         return DraftResult(subject="Re: test", body=f"[{tone}] drafted reply{sig}")
 
+    def draft_compose_email(
+        self,
+        *,
+        recipient_name: str,
+        recipient_email: str,
+        intent: str,
+        tone: str,
+        user_name: str | None = None,
+        writing_style_prompt: str | None = None,
+    ) -> DraftResult:
+        del recipient_email, user_name, writing_style_prompt
+        return DraftResult(
+            subject=f"Plans with {recipient_name}",
+            body=f"Hi {recipient_name.split()[0]},\n\n{intent}\n\n",
+        )
+
     def generate_daily_briefing(self, *, today_payload: dict) -> str:
         self.briefing_calls.append(today_payload)
         return "Good morning. 1 thing matters today."

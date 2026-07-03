@@ -1,5 +1,7 @@
 /** JSON body for POST /api/v1/inbox/sms — matches iOS Shortcut Dictionary keys. */
 
+import { normalizeSmsBody } from "@/lib/smsBody";
+
 export type SmsForwardPayload = {
   body: string;
   text: string;
@@ -12,7 +14,7 @@ export function buildSmsForwardPayload(
   text: string,
   opts?: { backfill?: boolean; fromNumber?: string },
 ): SmsForwardPayload {
-  const trimmed = text.trim();
+  const trimmed = normalizeSmsBody(text.trim());
   const payload: SmsForwardPayload = {
     body: trimmed,
     text: trimmed,

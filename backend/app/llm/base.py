@@ -85,6 +85,19 @@ class LLMClient(Protocol):
         honoring the full revision history, not just the latest note."""
         ...
 
+    def draft_compose_email(
+        self,
+        *,
+        recipient_name: str,
+        recipient_email: str,
+        intent: str,
+        tone: str,
+        user_name: str | None = None,
+        writing_style_prompt: str | None = None,
+    ) -> DraftResult:
+        """Draft a brand-new outbound email from the user's stated intent."""
+        ...
+
     def generate_daily_briefing(self, *, today_payload: dict[str, Any]) -> str:
         """Produce a short morning briefing from the Today payload (PRD 12.7)."""
         ...
