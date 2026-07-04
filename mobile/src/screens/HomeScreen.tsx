@@ -1,6 +1,6 @@
 // Home — greeting, next-schedule reminder, today's schedule, composer.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,10 +17,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
-import {
-  COMPANION_HOME_TAP_THINKING_MS,
-  CompanionAvatar,
-} from "@/components/CompanionAvatar";
+import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -98,8 +95,6 @@ export function HomeScreen() {
   const [asking, setAsking] = useState(false);
   const [scheduleAction, setScheduleAction] = useState(false);
   const [habitAction, setHabitAction] = useState(false);
-  const [avatarTapFlash, setAvatarTapFlash] = useState(false);
-  const avatarTapPending = useRef(false);
 
   const [scheduleView, setScheduleView] = useState<ScheduleView>("day");
   const [selectedMonthDay, setSelectedMonthDay] = useState<Date | null>(null);
@@ -442,17 +437,6 @@ export function HomeScreen() {
   const displayName =
     firstNameOf(me?.name) ?? me?.email.split("@")[0] ?? "there";
 
-  const onAvatarPress = useCallback(() => {
-    if (avatarTapPending.current) return;
-    avatarTapPending.current = true;
-    setAvatarTapFlash(true);
-    setTimeout(() => {
-      router.push("/capture");
-      setAvatarTapFlash(false);
-      avatarTapPending.current = false;
-    }, COMPANION_HOME_TAP_THINKING_MS);
-  }, [router]);
-
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -515,23 +499,6 @@ export function HomeScreen() {
             <Ic.Arrow size={16} color={colors.warn} />
           </Pressable>
         ) : null}
-
-        <View style={styles.interactionZone}>
-          <Serif size={30} style={styles.interactionTitle}>
-            {t.capture.idleTitlePlain}{" "}
-            <SerifEm>{t.capture.idleTitleEm}</SerifEm>.
-          </Serif>
-          <View style={styles.avatarRow}>
-            <CompanionAvatar
-              size={160}
-              level={meta.level}
-              color={meta.color}
-              state={avatarTapFlash ? "thinking" : state}
-              onPress={onAvatarPress}
-              accessibilityLabel={t.a11y.captureHome}
-            />
-          </View>
-        </View>
 
         <View style={styles.butlerBlock}>
           <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
@@ -735,14 +702,7 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1 },
   searchBtn: { paddingTop: 8 },
-  interactionZone: {
-    alignItems: "center",
-    marginTop: spacing.lg,
-    gap: spacing.sm,
-  },
-  interactionTitle: { textAlign: "center" },
   butlerBlock: { marginTop: spacing.lg, gap: 8 },
-  avatarRow: { alignItems: "center" },
   butlerLabel: {
     fontFamily: fonts.mono,
     fontSize: 10,

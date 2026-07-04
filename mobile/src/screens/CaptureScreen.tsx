@@ -26,6 +26,10 @@ import type { CaptureResponse } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
+import {
+  COMPANION_HOME_TAP_THINKING_MS,
+  CompanionAvatar,
+} from "@/components/CompanionAvatar";
 import { Ic, AlfMark } from "@/components/icons";
 import {
   Btn,
@@ -36,6 +40,7 @@ import {
   SerifEm,
   inputPlaceholder,
 } from "@/components/ui";
+import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { buildCaptureAcknowledgment } from "@/lib/captureAck";
 import { colors, fonts, layout } from "@/theme/theme";
@@ -156,6 +161,21 @@ function IdleState({
   onSubmitText: () => void;
 }) {
   const { t } = useLocale();
+  const { meta, state } = useCompanionAvatar();
+  const [avatarTapFlash, setAvatarTapFlash] = useState(false);
+  const avatarTapPending = useRef(false);
+
+  const onAvatarPress = useCallback(() => {
+    if (avatarTapPending.current) return;
+    avatarTapPending.current = true;
+    setAvatarTapFlash(true);
+    setTimeout(() => {
+      onStartVoice();
+      setAvatarTapFlash(false);
+      avatarTapPending.current = false;
+    }, COMPANION_HOME_TAP_THINKING_MS);
+  }, [onStartVoice]);
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -167,8 +187,20 @@ function IdleState({
           {t.capture.idleTitlePlain}{" "}
           <SerifEm>{t.capture.idleTitleEm}</SerifEm>.
         </Serif>
-        <Text style={styles.idleSub}>{t.capture.idleSub}</Text>
       </View>
+
+      <View style={styles.avatarRow}>
+        <CompanionAvatar
+          size={160}
+          level={meta.level}
+          color={meta.color}
+          state={avatarTapFlash ? "thinking" : state}
+          onPress={onAvatarPress}
+          accessibilityLabel={t.a11y.captureHome}
+        />
+      </View>
+
+      <Text style={styles.idleSub}>{t.capture.idleSub}</Text>
 
       <UnifiedComposer
         text={text}
@@ -485,9 +517,17 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   idleContent: { paddingHorizontal: layout.padX, paddingBottom: 24 },
-  idleTitle: { paddingVertical: 16 },
-  idleHeading: { maxWidth: 300, lineHeight: 32 },
-  idleSub: { color: colors.ink3, marginTop: 8, fontSize: 14, lineHeight: 21 },
+  idleTitle: { paddingTop: 16, paddingBottom: 8, alignItems: "center" },
+  idleHeading: { maxWidth: 300, lineHeight: 32, textAlign: "center" },
+  avatarRow: { alignItems: "center", marginVertical: 8 },
+  idleSub: {
+    color: colors.ink3,
+    marginTop: 4,
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
 
   composer: { gap: 10 },
   composerInputRow: {
