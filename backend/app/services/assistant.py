@@ -186,6 +186,14 @@ def _fallback_reminder_from_text(text: str, *, now: datetime) -> tuple[str, date
         title = re.sub(r"^(明天|后天|今天|今日)", "", title).strip(" ：:，,")
         if title:
             return (title.rstrip("。．.!"), due)
+    if re.search(r"(?i)\bremind me\b", stripped):
+        title = re.sub(r"(?i)^.*?remind me(?:\s+to|\s+about|\s+that)?\s*", "", stripped).strip()
+        if title:
+            return (title.rstrip("。．.!"), now.date())
+    if "提醒" in stripped:
+        title = re.sub(r"^.*提醒(?:我|一下)?", "", stripped).strip(" ：:，,")
+        if title:
+            return (title.rstrip("。．.!"), now.date())
     return None
 
 

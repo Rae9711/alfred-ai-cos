@@ -455,7 +455,7 @@ function ParsedState({
           leading={<Ic.Refresh size={12} color={colors.ink2} />}
         />
         <Btn
-          label={t.capture.addToToday(tasks.length)}
+          label={t.capture.done}
           kind="accent"
           onPress={onDone}
           style={styles.addBtn}

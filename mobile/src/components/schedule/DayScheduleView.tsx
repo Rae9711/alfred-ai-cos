@@ -6,7 +6,8 @@ import {
   eventDurationMinutes,
   formatMonthDay,
   minutesFromMidnight,
-  timelineHours,
+  timelineHoursForItems,
+  type ScheduleTimelineItem,
 } from "@/lib/schedule";
 import { colors, fonts, radius, spacing } from "@/theme/theme";
 
@@ -23,12 +24,16 @@ function formatTime(iso: string | null): string {
 
 export function DayScheduleView({
   day,
-  meetings,
+  items,
   onEventPress,
+  onTaskPress,
+  emptyText = "Nothing on the calendar for today.",
 }: {
   day: Date;
-  meetings: UpcomingMeeting[];
+  items: ScheduleTimelineItem[];
   onEventPress: (event: UpcomingMeeting) => void;
+  onTaskPress?: (taskId: string) => void;
+  emptyText?: string;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const isToday = useMemo(() => {
@@ -41,8 +46,8 @@ export function DayScheduleView({
   }, [day]);
 
   const { startHour, endHour } = useMemo(
-    () => timelineHours(meetings),
-    [meetings],
+    () => timelineHoursForItems(items),
+    [items],
   );
   const hours = useMemo(
     () => Array.from({ length: endHour - startHour }, (_, i) => startHour + i),
@@ -62,8 +67,8 @@ export function DayScheduleView({
     return () => clearTimeout(t);
   }, [isToday, nowTop]);
 
-  if (!meetings.length) {
-    return <Text style={styles.empty}>Nothing on the calendar for today.</Text>;
+  if (!items.length) {
+    return <Text style={styles.empty}>{emptyText}</Text>;
   }
 
   return (
@@ -94,39 +99,48 @@ export function DayScheduleView({
             </View>
           ) : null}
 
-          {meetings.map((event) => {
+          {items.map((item) => {
             const top =
-              ((minutesFromMidnight(event.start_time) - startHour * 60) / 60) *
+              ((minutesFromMidnight(item.start_time) - startHour * 60) / 60) *
               HOUR_HEIGHT;
             const height = Math.max(
               28,
-              (eventDurationMinutes(event.start_time, event.end_time) / 60) *
+              (eventDurationMinutes(item.start_time, item.end_time) / 60) *
                 HOUR_HEIGHT -
                 2,
             );
             const past =
-              event.start_time != null &&
-              new Date(event.start_time).getTime() < Date.now();
+              item.start_time != null &&
+              new Date(item.start_time).getTime() < Date.now();
+            const isTask = item.kind === "task";
             return (
               <Pressable
-                key={event.id}
-                onPress={() => onEventPress(event)}
+                key={item.id}
+                onPress={() => {
+                  if (isTask && item.task && onTaskPress) {
+                    onTaskPress(item.task.id);
+                    return;
+                  }
+                  if (item.event) onEventPress(item.event);
+                }}
                 style={({ pressed }) => [
                   styles.eventBlock,
+                  isTask && styles.taskBlock,
                   { top: Math.max(0, top), height },
                   past && styles.eventPast,
                   pressed && styles.eventPressed,
                 ]}
               >
-                <Text style={styles.eventTime} numberOfLines={1}>
-                  {formatTime(event.start_time)}
+                <Text style={[styles.eventTime, isTask && styles.taskTime]} numberOfLines={1}>
+                  {formatTime(item.start_time)}
+                  {isTask ? " · Reminder" : ""}
                 </Text>
-                <Text style={styles.eventTitle} numberOfLines={2}>
-                  {event.title ?? "Meeting"}
+                <Text style={[styles.eventTitle, isTask && styles.taskTitle]} numberOfLines={2}>
+                  {item.title}
                 </Text>
-                {event.location?.trim() ? (
+                {!isTask && item.location?.trim() ? (
                   <Text style={styles.eventLocation} numberOfLines={1}>
-                    {event.location.trim()}
+                    {item.location.trim()}
                   </Text>
                 ) : null}
               </Pressable>
@@ -208,6 +222,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     zIndex: 1,
   },
+  taskBlock: {
+    backgroundColor: colors.paper,
+    borderLeftColor: colors.ink3,
+    borderStyle: "dashed",
+  },
   eventPast: { opacity: 0.6 },
   eventPressed: { opacity: 0.85 },
   eventTime: {
@@ -215,12 +234,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.accentInk,
   },
+  taskTime: { color: colors.ink3 },
   eventTitle: {
     fontSize: 13,
     fontWeight: "600",
     color: colors.ink,
     lineHeight: 17,
   },
+  taskTitle: { fontWeight: "500" },
   eventLocation: {
     fontSize: 11,
     color: colors.ink3,

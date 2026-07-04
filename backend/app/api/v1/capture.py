@@ -25,7 +25,11 @@ def capture(
     db: Session = Depends(get_db),
 ) -> CaptureResponse:
     tasks, project = capture_service.capture_text(
-        db, user.id, text=payload.text, reference_date=datetime.now(UTC).date()
+        db,
+        user.id,
+        text=payload.text,
+        reference_date=datetime.now(UTC).date(),
+        timezone=user.timezone,
     )
     return CaptureResponse(
         tasks=[TaskOut.model_validate(t) for t in tasks], detected_project=project
@@ -58,6 +62,7 @@ async def capture_voice(
         text=transcript,
         reference_date=datetime.now(UTC).date(),
         source_type=SourceType.voice,
+        timezone=user.timezone,
     )
     return CaptureResponse(
         tasks=[TaskOut.model_validate(t) for t in tasks], detected_project=project

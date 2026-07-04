@@ -13,7 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
 
 import { api } from "@/api/client";
@@ -34,6 +34,7 @@ import { WeekScheduleView } from "@/components/schedule/WeekScheduleView";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import {
   type ScheduleView,
+  buildDayTimelineItems,
 } from "@/lib/schedule";
 import { greetingForLocale } from "@/i18n/locales";
 import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
@@ -151,6 +152,13 @@ export function HomeScreen() {
     };
   }, [load, scheduleView]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (loading) return;
+      void load(scheduleView);
+    }, [load, loading, scheduleView]),
+  );
+
   const onScheduleViewChange = (view: ScheduleView) => {
     setScheduleView(view);
     setSelectedMonthDay(null);
@@ -182,6 +190,10 @@ export function HomeScreen() {
   }, [load, scheduleView, syncAndRefresh, showToast]);
 
   const today = useMemo(() => new Date(), []);
+  const dayTimelineItems = useMemo(
+    () => buildDayTimelineItems(meetings, reminders, today),
+    [meetings, reminders, today],
+  );
   const openMeeting = useCallback(
     (item: UpcomingMeeting) => {
       openSheet(
@@ -401,12 +413,21 @@ export function HomeScreen() {
           await cancelLocalTaskReminder(task.id);
           setReminders((rows) => rows.filter((r) => r.id !== task.id));
           showToast(`Done: ${task.title}`);
+          await load(scheduleView);
         } catch (e) {
           showToast(e instanceof Error ? e.message : t.home.askFailed);
         }
       })();
     },
-    [showToast, t.home.askFailed],
+    [load, scheduleView, showToast, t.home.askFailed],
+  );
+
+  const onTimelineTaskPress = useCallback(
+    (taskId: string) => {
+      const task = reminders.find((row) => row.id === taskId);
+      if (task) completeReminder(task);
+    },
+    [completeReminder, reminders],
   );
 
   const displayName =
@@ -592,11 +613,13 @@ export function HomeScreen() {
         </View>
 
         {scheduleView === "day" ? (
-          meetings.length > 0 ? (
+          dayTimelineItems.length > 0 ? (
             <DayScheduleView
               day={today}
-              meetings={meetings}
+              items={dayTimelineItems}
               onEventPress={openMeeting}
+              onTaskPress={onTimelineTaskPress}
+              emptyText={t.home.scheduleEmpty}
             />
           ) : (
             <Text style={styles.scheduleEmpty}>{t.home.scheduleEmpty}</Text>

@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDayTimelineItems,
   buildMonthGrid,
   groupMeetingsByDate,
   localDateKeyFromDate,
   meetingsForDay,
   minutesFromMidnight,
+  tasksForDay,
   timelineHours,
+  timelineHoursForItems,
   weekDaysMondayFirst,
 } from "./schedule";
 
@@ -96,5 +99,43 @@ describe("schedule helpers", () => {
     ]);
     expect(range.endHour).toBeGreaterThan(range.startHour);
     expect(minutesFromMidnight("2026-06-29T15:30:00.000Z")).toBeGreaterThan(0);
+  });
+
+  it("includes tasks with remind_at on the day timeline", () => {
+    const day = new Date(2026, 5, 29);
+    const tasks = tasksForDay(
+      [
+        {
+          id: "t1",
+          title: "Email Daniel",
+          remind_at: "2026-06-29T14:00:00.000Z",
+          due_date: "2026-06-29",
+          status: "open",
+          priority: "medium",
+          source_type: "manual",
+          description: null,
+          source_id: null,
+        },
+        {
+          id: "t2",
+          title: "Later",
+          remind_at: "2026-06-30T14:00:00.000Z",
+          due_date: "2026-06-30",
+          status: "open",
+          priority: "medium",
+          source_type: "manual",
+          description: null,
+          source_id: null,
+        },
+      ],
+      day,
+    );
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]!.title).toBe("Email Daniel");
+
+    const items = buildDayTimelineItems([], tasks, day);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.kind).toBe("task");
+    expect(timelineHoursForItems(items).startHour).toBeGreaterThan(0);
   });
 });

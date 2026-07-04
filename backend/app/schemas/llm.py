@@ -3,7 +3,7 @@ shapes every provider implementation must produce (PRD 14.3)."""
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -70,6 +70,10 @@ class MeetingContextSummary(BaseModel):
 class ParsedTask(BaseModel):
     title: str = Field(description="A concise, actionable task title.")
     due_date: date | None = None
+    remind_at: datetime | None = Field(
+        default=None,
+        description="When to remind the user, as ISO 8601 with timezone offset.",
+    )
     priority: Priority = Priority.medium
 
 

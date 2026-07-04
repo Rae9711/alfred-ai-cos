@@ -1,6 +1,17 @@
-import type { UpcomingMeeting } from "@albert/shared-types";
+import type { Task, UpcomingMeeting } from "@albert/shared-types";
 
 export type ScheduleView = "day" | "week" | "month";
+
+export type ScheduleTimelineItem = {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string | null;
+  kind: "event" | "task";
+  location?: string | null;
+  task?: Task;
+  event?: UpcomingMeeting;
+};
 
 /** Stable local calendar date key (YYYY-MM-DD). */
 export function dateKey(iso: string | null): string {
@@ -104,6 +115,82 @@ export function meetingsForDay(
         new Date(a.start_time ?? 0).getTime() -
         new Date(b.start_time ?? 0).getTime(),
     );
+}
+
+/** Open tasks with remind_at or due_date on the given local day. */
+export function tasksForDay(tasks: Task[], day: Date): Task[] {
+  const key = localDateKeyFromDate(day);
+  return tasks
+    .filter((task) => {
+      if (task.remind_at && dateKey(task.remind_at) === key) return true;
+      if (task.due_date === key) return true;
+      return false;
+    })
+    .sort((a, b) => {
+      const aTime = a.remind_at
+        ? new Date(a.remind_at).getTime()
+        : new Date(`${a.due_date}T09:00:00`).getTime();
+      const bTime = b.remind_at
+        ? new Date(b.remind_at).getTime()
+        : new Date(`${b.due_date}T09:00:00`).getTime();
+      return aTime - bTime;
+    });
+}
+
+export function buildDayTimelineItems(
+  meetings: UpcomingMeeting[],
+  tasks: Task[],
+  day: Date,
+): ScheduleTimelineItem[] {
+  const dayMeetings = meetingsForDay(meetings, day);
+  const dayTasks = tasksForDay(tasks, day);
+  const items: ScheduleTimelineItem[] = [
+    ...dayMeetings.map((event) => ({
+      id: `event-${event.id}`,
+      title: event.title ?? "Meeting",
+      start_time: event.start_time!,
+      end_time: event.end_time,
+      kind: "event" as const,
+      location: event.location,
+      event,
+    })),
+    ...dayTasks.map((task) => {
+      const startIso =
+        task.remind_at ?? `${task.due_date}T09:00:00`;
+      const start = new Date(startIso);
+      const end = new Date(start.getTime() + 30 * 60_000);
+      return {
+        id: `task-${task.id}`,
+        title: task.title,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        kind: "task" as const,
+        task,
+      };
+    }),
+  ];
+  return items.sort(
+    (a, b) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+  );
+}
+
+/** Timeline hour range for mixed calendar events and task reminders. */
+export function timelineHoursForItems(
+  items: Pick<ScheduleTimelineItem, "start_time" | "end_time">[],
+): { startHour: number; endHour: number } {
+  if (!items.length) return { startHour: 7, endHour: 21 };
+  let minM = 24 * 60;
+  let maxM = 0;
+  for (const item of items) {
+    const start = minutesFromMidnight(item.start_time);
+    const end = start + eventDurationMinutes(item.start_time, item.end_time);
+    minM = Math.min(minM, start);
+    maxM = Math.max(maxM, end);
+  }
+  const startHour = Math.max(6, Math.floor(minM / 60) - 1);
+  const endHour = Math.min(23, Math.ceil(maxM / 60) + 1);
+  return { startHour, endHour: Math.max(startHour + 1, endHour) };
 }
 
 export function minutesFromMidnight(iso: string | null): number {

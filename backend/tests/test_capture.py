@@ -1,6 +1,6 @@
 """Capture service tests against SQLite + a fake LLM."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from tests.fakes import FakeLLM
 
 TODAY = date(2026, 5, 21)
 TOMORROW = date(2026, 5, 22)
+REMIND_AT = datetime(2026, 5, 21, 14, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -60,3 +61,51 @@ def test_capture_empty_creates_nothing(
     assert tasks == []
     assert project is None
     assert db.query(Task).count() == 0
+
+
+def test_capture_persists_remind_at(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(
+        capture_tasks=[
+            ParsedTask(
+                title="Email Daniel",
+                due_date=TODAY,
+                remind_at=REMIND_AT,
+                priority=Priority.medium,
+            )
+        ],
+    )
+    _patch(monkeypatch, fake)
+
+    tasks, _ = capture_service.capture_text(
+        db,
+        user.id,
+        text="remind me to email Daniel today",
+        reference_date=TODAY,
+        timezone="UTC",
+    )
+    assert len(tasks) == 1
+    assert tasks[0].remind_at == REMIND_AT
+    assert tasks[0].due_date == TODAY
+
+
+def test_capture_reminder_without_date_defaults_to_today(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(
+        capture_tasks=[ParsedTask(title="给 Daniel 发邮件", priority=Priority.medium)],
+    )
+    _patch(monkeypatch, fake)
+
+    tasks, _ = capture_service.capture_text(
+        db,
+        user.id,
+        text="提醒我给daniel发邮件",
+        reference_date=TODAY,
+        timezone="UTC",
+    )
+    assert len(tasks) == 1
+    assert tasks[0].due_date == TODAY
+    assert tasks[0].remind_at is not None
+    assert tasks[0].remind_at.date() == TODAY

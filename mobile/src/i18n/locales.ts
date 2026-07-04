@@ -377,8 +377,7 @@ export const translations = {
           ? `Two items for ${project} — "${first}" and one more.`
           : `${n} items for ${project} — starting with "${first}".`,
       resultSection: "What I've noted",
-      addToToday: (n: number) =>
-        n === 1 ? "Add to Today" : `Add ${n} to Today`,
+      done: "Done",
       redo: "Try again",
     },
     a11y: {
@@ -775,7 +774,7 @@ export const translations = {
           ? `${project} 下有两项 — 「${first}」还有一项。`
           : `${project} 下有 ${n} 项 — 首先是「${first}」。`,
       resultSection: "我已记下",
-      addToToday: (n: number) => (n === 1 ? "加入今日" : `加入今日（${n} 项）`),
+      done: "完成",
       redo: "重来",
     },
     a11y: {

@@ -141,7 +141,12 @@ _CAPTURE_SYSTEM = (
     "speech). Split it into distinct, actionable tasks with concise titles. Resolve "
     "relative dates ('tomorrow', 'Friday', 'next week') against the reference date as "
     "absolute YYYY-MM-DD. Infer priority from urgency words. If the note clearly belongs "
-    "to one project, set detected_project. Do not invent tasks the user did not imply."
+    "to one project, set detected_project. Do not invent tasks the user did not imply.\n"
+    "When the note asks for a reminder ('remind me to…', '提醒我…'), title should be the "
+    "action itself (e.g. 'Email Daniel', not 'Remind me to email Daniel'). Set remind_at "
+    "as ISO 8601 with timezone for when to nudge the user. If they give a date but no "
+    "time, use 9:00 local on that date. If they ask to be reminded with no date, use "
+    "9:00 local today (reference date). Also set due_date when a calendar day is implied."
 )
 _INTERPRET_SYSTEM = (
     "You are Albert's assistant agent. Read one free-text request and decide what to do.\n"
