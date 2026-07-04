@@ -1,4 +1,4 @@
-// Alfred robot mascot — react-native-svg port of the 3D reference character.
+// Alfred robot mascot — react-native-svg port of the 3D mascot reference.
 // Public API: ButlerSvg (Today / Ask / Capture) and CloudHomeSvg (center tab slot).
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -18,19 +18,17 @@ import Svg, {
 
 import type { AvatarState } from "@/lib/agentMeta";
 
-/** Robot mascot palette — matched to docs/assets/alfred-mascot-reference.png */
+/** Mascot palette — white body, black screen, blue accents, pink blush. */
 export const BUTLER_SHEET = {
-  body: "#FAFAFA",
-  bodyStroke: "#E4E4E4",
-  face: "#141414",
+  white: "#F8FAFF",
+  bodyShade: "#D8E2EE",
+  screen: "#121212",
+  blush: "#F5A8B8",
+  antenna: "#1A1A1A",
   sky: "#4787F7",
-  glow: "#BFE0FF",
-  blush: "#FFB8CC",
-  cream: "#F9F4E8",
-  navy: "#0B102D",
 } as const;
 
-const ARC_EYE = BUTLER_SHEET.glow;
+const GLOW_BLUE = "#BFE0FF";
 
 type ButlerSvgProps = {
   size: number;
@@ -46,13 +44,12 @@ type CloudHomeSvgProps = {
   state: AvatarState;
 };
 
-/** Full robot character — Today header, Ask dock, Capture hero (160px). */
+/** Full robot character — Today header, Ask dock, Capture hero. */
 export function ButlerSvg({ size, color, level, state }: ButlerSvgProps) {
   const uid = useId().replace(/:/g, "");
   const eyeGrad = `eye-${uid}`;
-  const height = Math.round(size * 1.12);
+  const height = Math.round(size * 1.07);
   const dim = state === "sleep" ? 0.85 : 1;
-  const showDetails = size >= 120;
 
   const hover = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -78,20 +75,14 @@ export function ButlerSvg({ size, color, level, state }: ButlerSvgProps) {
 
   return (
     <Animated.View style={{ transform: [{ translateY: hover }], opacity: dim }}>
-      <Svg width={size} height={height} viewBox="0 0 240 270">
-        <RobotBody
-          color={color}
-          level={level}
-          state={state}
-          eyeGrad={eyeGrad}
-          showDetails={showDetails}
-        />
+      <Svg width={size} height={height} viewBox="0 0 240 256">
+        <RobotBody color={color} level={level} state={state} eyeGrad={eyeGrad} />
       </Svg>
     </Animated.View>
   );
 }
 
-/** Compact robot bust for the center tab — replaces the cloud cottage. */
+/** Cloud cottage — center tab slot; robot peeks out when occupied. */
 export function CloudHomeSvg({
   size,
   color,
@@ -99,15 +90,15 @@ export function CloudHomeSvg({
   state,
 }: CloudHomeSvgProps) {
   const uid = useId().replace(/:/g, "");
-  const eyeGrad = `heye-${uid}`;
   const glowGrad = `hglow-${uid}`;
+  const eyeGrad = `heye-${uid}`;
 
   const hover = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(hover, {
-          toValue: -2,
+          toValue: -3,
           duration: state === "thinking" ? 2200 : 4400,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
@@ -126,61 +117,84 @@ export function CloudHomeSvg({
 
   return (
     <Animated.View style={{ transform: [{ translateY: hover }] }}>
-      <Svg width={size} height={size} viewBox="0 0 120 120">
+      <Svg width={size} height={size} viewBox="0 0 120 104">
         <Defs>
-          <RadialGradient id={glowGrad} cx="0.5" cy="0.55" r="0.75">
-            <Stop offset="0" stopColor={color} stopOpacity="0.35" />
-            <Stop offset="1" stopColor={color} stopOpacity="0.02" />
+          <RadialGradient id={glowGrad} cx="0.5" cy="0.6" r="0.8">
+            <Stop offset="0" stopColor={color} stopOpacity="0.55" />
+            <Stop offset="1" stopColor={color} stopOpacity="0.05" />
           </RadialGradient>
           <RadialGradient id={eyeGrad} cx="0.38" cy="0.32" r="0.85">
             <Stop offset="0" stopColor="#D9F2FF" />
             <Stop offset="0.55" stopColor="#8CC0FB" />
-            <Stop offset="1" stopColor={BUTLER_SHEET.sky} />
+            <Stop offset="1" stopColor={color} />
           </RadialGradient>
         </Defs>
-        <Ellipse cx="60" cy="112" rx="28" ry="4" fill="#19171A" opacity="0.10" />
+        <Ellipse
+          cx="60"
+          cy="99"
+          rx="30"
+          ry="4.5"
+          fill="#19171A"
+          opacity="0.10"
+        />
         <G>
-          {!occupied ? (
-            <Ellipse cx="60" cy="68" rx="38" ry="38" fill={`url(#${glowGrad})`} />
-          ) : null}
-          <HeartAntenna cx={60} cy={18} color={color} scale={0.55} />
+          <Line
+            x1="90"
+            y1="34"
+            x2="90"
+            y2="12"
+            stroke={BUTLER_SHEET.bodyShade}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          <Path d="M90 12 L106 17 L90 22 Z" fill={color} />
+          <Circle
+            cx="36"
+            cy="62"
+            r="22"
+            fill={BUTLER_SHEET.white}
+            stroke={BUTLER_SHEET.bodyShade}
+            strokeWidth="1.5"
+          />
+          <Circle
+            cx="86"
+            cy="60"
+            r="24"
+            fill={BUTLER_SHEET.white}
+            stroke={BUTLER_SHEET.bodyShade}
+            strokeWidth="1.5"
+          />
           <Circle
             cx="60"
-            cy="58"
-            r="34"
-            fill={BUTLER_SHEET.body}
-            stroke={BUTLER_SHEET.bodyStroke}
+            cy="44"
+            r="26"
+            fill={BUTLER_SHEET.white}
+            stroke={BUTLER_SHEET.bodyShade}
             strokeWidth="1.5"
           />
           <Rect
-            x="36"
-            y="46"
-            width="48"
-            height="32"
-            rx="14"
-            fill={occupied ? BUTLER_SHEET.face : BUTLER_SHEET.navy}
-            opacity={occupied ? 1 : 0.85}
+            x="20"
+            y="56"
+            width="80"
+            height="30"
+            rx="15"
+            fill={BUTLER_SHEET.white}
           />
+          <Circle cx="30" cy="66" r="5" fill={BUTLER_SHEET.screen} />
+          <Circle cx="30" cy="66" r="2" fill={color} opacity="0.85" />
+          <Circle cx="92" cy="66" r="5" fill={BUTLER_SHEET.screen} />
+          <Circle cx="92" cy="66" r="2" fill={color} opacity="0.85" />
           {occupied ? (
-            <>
-              <RobotEyes
-                state={state}
-                eyeGrad={eyeGrad}
-                leftCx={46}
-                rightCx={74}
-                cy={62}
-                scale={0.42}
-              />
-              <BlushCheeks leftX={38} rightX={68} cy={72} scale={0.38} />
-            </>
+            <HomeDoorOccupied color={color} state={state} eyeGrad={eyeGrad} />
           ) : (
-            <G opacity={0.55}>
-              <Circle cx="48" cy="60" r="2.2" fill={color} />
-              <Circle cx="72" cy="60" r="2.2" fill={color} />
-              <Circle cx="60" cy="68" r="1.6" fill={color} opacity="0.7" />
-            </G>
+            <HomeDoorAway color={color} glowGrad={glowGrad} />
           )}
-          <BowTie cx={60} cy={88} color={color} scale={0.55} />
+          <Path
+            d="M22 86 Q60 92 98 86"
+            stroke={BUTLER_SHEET.bodyShade}
+            strokeWidth="1.5"
+            fill="none"
+          />
           {state === "thinking" ? <HomeThinkingBits color={color} /> : null}
         </G>
       </Svg>
@@ -188,95 +202,146 @@ export function CloudHomeSvg({
   );
 }
 
-function HeartAntenna({
-  cx,
-  cy,
+function HomeDoorAway({
   color,
-  scale = 1,
+  glowGrad,
 }: {
-  cx: number;
-  cy: number;
   color: string;
-  scale?: number;
+  glowGrad: string;
 }) {
-  const s = scale;
   return (
     <G>
+      <Path
+        d="M40 86 L40 64 Q60 44 80 64 L80 86 Z"
+        fill={BUTLER_SHEET.screen}
+      />
+      <Ellipse
+        cx="60"
+        cy="72"
+        rx="14"
+        ry="12"
+        fill={`url(#${glowGrad})`}
+      />
+      <Circle cx="55" cy="62" r="1.6" fill={color} opacity="0.8" />
+      <Circle cx="64" cy="56" r="1.2" fill={color} opacity="0.6" />
+      <Circle cx="61" cy="66" r="1" fill="#FFFFFF" opacity="0.7" />
+    </G>
+  );
+}
+
+function HomeDoorOccupied({
+  color,
+  state,
+  eyeGrad,
+}: {
+  color: string;
+  state: AvatarState;
+  eyeGrad: string;
+}) {
+  return (
+    <G>
+      <Path
+        d="M40 86 L40 64 Q60 44 80 64 L80 86 Z"
+        fill={BUTLER_SHEET.screen}
+      />
+      {/* Robot head peeking out */}
+      <Circle
+        cx="60"
+        cy="48"
+        r="14"
+        fill={BUTLER_SHEET.white}
+        stroke={BUTLER_SHEET.bodyShade}
+        strokeWidth="1"
+      />
       <Line
-        x1={cx}
-        y1={cy + 8 * s}
-        x2={cx}
-        y2={cy + 22 * s}
-        stroke={BUTLER_SHEET.face}
-        strokeWidth={2.2 * s}
+        x1="60"
+        y1="36"
+        x2="60"
+        y2="30"
+        stroke={BUTLER_SHEET.antenna}
+        strokeWidth="1.5"
         strokeLinecap="round"
       />
       <Path
-        d={`M ${cx} ${cy + 6 * s} C ${cx - 5 * s} ${cy - 2 * s}, ${cx - 9 * s} ${cy + 4 * s}, ${cx} ${cy + 10 * s} C ${cx + 9 * s} ${cy + 4 * s}, ${cx + 5 * s} ${cy - 2 * s}, ${cx} ${cy + 6 * s} Z`}
+        d="M60 28 C58 26 62 24 60 22 C58 24 62 26 60 28 Z"
+        fill={color}
+      />
+      <Rect
+        x="50"
+        y="44"
+        width="20"
+        height="14"
+        rx="5"
+        fill={BUTLER_SHEET.screen}
+      />
+      <PeekEyes state={state} eyeGrad={eyeGrad} />
+      <Path
+        d="M54 58 Q60 62 66 58 L64 56 L56 56 Z"
         fill={color}
       />
     </G>
   );
 }
 
-function BowTie({
-  cx,
-  cy,
-  color,
-  scale = 1,
+function PeekEyes({
+  state,
+  eyeGrad,
 }: {
-  cx: number;
-  cy: number;
-  color: string;
-  scale?: number;
+  state: AvatarState;
+  eyeGrad: string;
 }) {
-  const s = scale;
+  if (state === "success") {
+    return (
+      <G>
+        <Path
+          d="M52 50 Q55 47 58 50"
+          stroke={GLOW_BLUE}
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M62 50 Q65 47 68 50"
+          stroke={GLOW_BLUE}
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </G>
+    );
+  }
+  if (state === "sleep") {
+    return (
+      <G>
+        <Path
+          d="M52 50 Q55 52 58 50"
+          stroke="#5E7CB8"
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M62 50 Q65 52 68 50"
+          stroke="#5E7CB8"
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </G>
+    );
+  }
+  if (state === "thinking") {
+    return (
+      <G>
+        <Circle cx="54" cy="49" r="3" fill={`url(#${eyeGrad})`} />
+        <Circle cx="66" cy="49" r="3" fill={`url(#${eyeGrad})`} />
+      </G>
+    );
+  }
   return (
     <G>
-      <Path
-        d={`M ${cx - 14 * s} ${cy} Q ${cx - 18 * s} ${cy - 6 * s} ${cx - 8 * s} ${cy - 4 * s} L ${cx} ${cy} L ${cx - 8 * s} ${cy + 4 * s} Q ${cx - 18 * s} ${cy + 6 * s} ${cx - 14 * s} ${cy} Z`}
-        fill={color}
-      />
-      <Path
-        d={`M ${cx + 14 * s} ${cy} Q ${cx + 18 * s} ${cy - 6 * s} ${cx + 8 * s} ${cy - 4 * s} L ${cx} ${cy} L ${cx + 8 * s} ${cy + 4 * s} Q ${cx + 18 * s} ${cy + 6 * s} ${cx + 14 * s} ${cy} Z`}
-        fill={color}
-      />
-      <Circle cx={cx} cy={cy} r={3.2 * s} fill={color} />
-    </G>
-  );
-}
-
-function BlushCheeks({
-  leftX,
-  rightX,
-  cy,
-  scale = 1,
-}: {
-  leftX: number;
-  rightX: number;
-  cy: number;
-  scale?: number;
-}) {
-  const s = scale;
-  const stroke = 1.8 * s;
-  const lines = (ox: number) =>
-    [0, 1, 2].map((i) => (
-      <Line
-        key={`${ox}-${i}`}
-        x1={ox + i * 2.5 * s}
-        y1={cy + i * 2 * s}
-        x2={ox + (i + 1) * 2.5 * s}
-        y2={cy + (i + 1) * 2 * s}
-        stroke={BUTLER_SHEET.blush}
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        opacity={0.85}
-      />
-    ));
-  return (
-    <G>
-      {lines(leftX)}
-      {lines(rightX)}
+      <Circle cx="55" cy="50" r="3" fill={`url(#${eyeGrad})`} />
+      <Circle cx="65" cy="50" r="3" fill={`url(#${eyeGrad})`} />
     </G>
   );
 }
@@ -286,13 +351,11 @@ function RobotBody({
   level,
   state,
   eyeGrad,
-  showDetails,
 }: {
   color: string;
   level: number;
   state: AvatarState;
   eyeGrad: string;
-  showDetails: boolean;
 }) {
   return (
     <>
@@ -300,187 +363,279 @@ function RobotBody({
         <RadialGradient id={eyeGrad} cx="0.38" cy="0.32" r="0.85">
           <Stop offset="0" stopColor="#D9F2FF" />
           <Stop offset="0.55" stopColor="#8CC0FB" />
-          <Stop offset="1" stopColor={BUTLER_SHEET.sky} />
+          <Stop offset="1" stopColor={color} />
         </RadialGradient>
       </Defs>
-      <Ellipse cx="120" cy="258" rx="52" ry="8" fill="#19171A" opacity="0.10" />
-
-      {level >= 5 ? (
-        <Ellipse
-          cx="120"
-          cy="210"
-          rx="78"
-          ry="13"
-          stroke={color}
-          strokeOpacity="0.32"
-          strokeWidth="2.5"
-          fill="none"
-        />
-      ) : null}
-      {level >= 10 ? (
-        <>
+      <Ellipse
+        cx="120"
+        cy="246"
+        rx="44"
+        ry="8"
+        fill="#19171A"
+        opacity="0.10"
+      />
+      <G>
+        {level >= 5 ? (
           <Ellipse
             cx="120"
-            cy="210"
-            rx="94"
-            ry="18"
+            cy="208"
+            rx="78"
+            ry="13"
             stroke={color}
-            strokeOpacity="0.45"
-            strokeWidth="2"
+            strokeOpacity="0.32"
+            strokeWidth="2.5"
             fill="none"
           />
-          <Circle cx="36" cy="64" r="3" fill={color} opacity="0.7" />
-          <Circle cx="208" cy="88" r="2.6" fill={color} opacity="0.7" />
-        </>
-      ) : null}
+        ) : null}
+        {level >= 10 ? (
+          <>
+            <Ellipse
+              cx="120"
+              cy="208"
+              rx="94"
+              ry="18"
+              stroke={color}
+              strokeOpacity="0.45"
+              strokeWidth="2"
+              fill="none"
+            />
+            <Circle cx="36" cy="64" r="3" fill={color} opacity="0.7" />
+            <Circle cx="208" cy="88" r="2.6" fill={color} opacity="0.7" />
+            <Circle cx="198" cy="40" r="2" fill={color} opacity="0.55" />
+          </>
+        ) : null}
 
-      {showDetails ? (
-        <G>
-          <Rect
-            x="148"
-            y="188"
-            width="52"
-            height="38"
-            rx="6"
-            fill={color}
-          />
-          <Rect
-            x="152"
-            y="192"
-            width="44"
-            height="30"
-            rx="4"
-            fill={BUTLER_SHEET.cream}
-          />
-          <Path
-            d="M160 206 L160 198 L168 202 Z"
-            fill={color}
-            opacity="0.35"
-          />
-          <Path
-            d="M132 200 L148 188 L152 192 L136 204 Z"
-            fill={BUTLER_SHEET.body}
-            stroke={BUTLER_SHEET.bodyStroke}
-            strokeWidth="1.2"
-          />
-          <Line
-            x1="144"
-            y1="196"
-            x2="154"
-            y2="186"
-            stroke={BUTLER_SHEET.face}
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-          <Path
-            d="M178 72 C178 62 188 58 196 64 C204 70 202 82 192 86 C186 72 182 68 178 72 Z"
-            fill={color}
-            opacity="0.92"
-          />
-          <Path
-            d="M186 68 C190 64 194 66 196 72 C194 76 188 76 186 68 Z"
-            fill="#FFFFFF"
-            opacity="0.85"
-          />
-        </G>
-      ) : null}
-
-      <Ellipse
-        cx="68"
-        cy="218"
-        rx="14"
-        ry="18"
-        fill={BUTLER_SHEET.body}
-        stroke={BUTLER_SHEET.bodyStroke}
-        strokeWidth="1.5"
-      />
-      <Ellipse
-        cx="172"
-        cy="218"
-        rx="14"
-        ry="18"
-        fill={BUTLER_SHEET.body}
-        stroke={BUTLER_SHEET.bodyStroke}
-        strokeWidth="1.5"
-      />
-
-      <Rect
-        x="72"
-        y="168"
-        width="96"
-        height="78"
-        rx="32"
-        fill={BUTLER_SHEET.body}
-        stroke={BUTLER_SHEET.bodyStroke}
-        strokeWidth="1.5"
-      />
-
-      <HeartAntenna cx={120} cy={28} color={color} scale={1} />
-
-      <Circle
-        cx="120"
-        cy="108"
-        r="58"
-        fill={BUTLER_SHEET.body}
-        stroke={BUTLER_SHEET.bodyStroke}
-        strokeWidth="1.5"
-      />
-
-      <Rect
-        x="68"
-        y="88"
-        width="104"
-        height="58"
-        rx="26"
-        fill={BUTLER_SHEET.face}
-      />
-      <Ellipse cx="96" cy="98" rx="22" ry="8" fill="#FFFFFF" opacity="0.08" />
-
-      <RobotEyes
-        state={state}
-        eyeGrad={eyeGrad}
-        leftCx={92}
-        rightCx={148}
-        cy={112}
-        scale={1}
-      />
-      <BlushCheeks leftX={78} rightX={152} cy={132} scale={1} />
-      <BowTie cx={120} cy={162} color={color} scale={1} />
-
-      {state === "thinking" ? <ThinkingBits color={color} /> : null}
-      {state === "success" ? <ApprovedCheck /> : null}
-      {state === "error" ? (
-        <Path
-          d="M176 76 q7 12 0 17 q-7 -5 0 -17"
-          fill={BUTLER_SHEET.glow}
-          opacity="0.9"
+        {/* Legs */}
+        <Ellipse
+          cx="102"
+          cy="222"
+          rx="14"
+          ry="10"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
         />
-      ) : null}
-      {state === "sleep" ? (
-        <SvgText
-          x="184"
-          y="44"
-          fontSize="17"
+        <Ellipse
+          cx="138"
+          cy="222"
+          rx="14"
+          ry="10"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
+        />
+
+        {/* Arms */}
+        <Ellipse
+          cx="68"
+          cy="178"
+          rx="12"
+          ry="18"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
+        />
+        <Ellipse
+          cx="172"
+          cy="178"
+          rx="12"
+          ry="18"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
+        />
+
+        {/* Torso */}
+        <Rect
+          x="86"
+          y="148"
+          width="68"
+          height="58"
+          rx="28"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
+        />
+        <Path
+          d="M92 168 Q120 176 148 168"
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1"
+          fill="none"
+          opacity="0.5"
+        />
+
+        {/* Bow tie */}
+        <Path
+          d="M104 148 Q96 142 88 148 Q96 154 104 148 Z"
           fill={color}
-          opacity="0.65"
-          fontStyle="italic"
-        >
-          z z Z
-        </SvgText>
-      ) : null}
+        />
+        <Path
+          d="M136 148 Q144 142 152 148 Q144 154 136 148 Z"
+          fill={color}
+        />
+        <Circle cx="120" cy="148" r="5" fill={color} />
+        <Rect
+          x="117"
+          y="145"
+          width="6"
+          height="6"
+          rx="2"
+          fill="#FFFFFF"
+          opacity="0.25"
+        />
+
+        {/* Head */}
+        <Circle
+          cx="120"
+          cy="88"
+          r="58"
+          fill={BUTLER_SHEET.white}
+          stroke={BUTLER_SHEET.bodyShade}
+          strokeWidth="1.5"
+        />
+        <Ellipse
+          cx="98"
+          cy="72"
+          rx="18"
+          ry="12"
+          fill="#FFFFFF"
+          opacity="0.35"
+        />
+
+        {/* Antenna + heart */}
+        <Line
+          x1="120"
+          y1="32"
+          x2="120"
+          y2="10"
+          stroke={BUTLER_SHEET.antenna}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M120 8 C117 4 112 6 112 10 C112 14 120 18 120 18 C120 18 128 14 128 10 C128 6 123 4 120 8 Z"
+          fill={color}
+        />
+
+        {/* Face screen */}
+        <Rect
+          x="72"
+          y="68"
+          width="96"
+          height="72"
+          rx="18"
+          fill={BUTLER_SHEET.screen}
+        />
+        <Ellipse
+          cx="120"
+          cy="78"
+          rx="32"
+          ry="8"
+          fill="#FFFFFF"
+          opacity="0.06"
+        />
+
+        <RobotFace state={state} color={color} eyeGrad={eyeGrad} />
+
+        {state === "thinking" ? <ThinkingBits color={color} /> : null}
+        {state === "success" ? <ApprovedCheck /> : null}
+        {state === "error" ? (
+          <Path
+            d="M176 76 q7 12 0 17 q-7 -5 0 -17"
+            fill="#BFE6FF"
+            opacity="0.9"
+          />
+        ) : null}
+        {state === "sleep" ? (
+          <SvgText
+            x="184"
+            y="44"
+            fontSize="17"
+            fill={color}
+            opacity="0.65"
+            fontStyle="italic"
+          >
+            z z Z
+          </SvgText>
+        ) : null}
+      </G>
     </>
   );
 }
 
-function GlossyEye({
+function BlushMarks({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <G opacity="0.85">
+      <Line
+        x1="78"
+        y1="108"
+        x2="84"
+        y2="114"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Line
+        x1="82"
+        y1="106"
+        x2="88"
+        y2="112"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Line
+        x1="86"
+        y1="104"
+        x2="92"
+        y2="110"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Line
+        x1="148"
+        y1="108"
+        x2="154"
+        y2="114"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Line
+        x1="152"
+        y1="106"
+        x2="158"
+        y2="112"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Line
+        x1="156"
+        y1="104"
+        x2="162"
+        y2="110"
+        stroke={BUTLER_SHEET.blush}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </G>
+  );
+}
+
+function GlowEye({
   cx,
   cy,
   r,
+  color,
   eyeGrad,
 }: {
   cx: number;
   cy: number;
   r: number;
+  color: string;
   eyeGrad: string;
 }) {
   return (
@@ -490,7 +645,7 @@ function GlossyEye({
         cy={cy}
         rx={r + 5}
         ry={r + 5}
-        fill={BUTLER_SHEET.sky}
+        fill={color}
         opacity="0.22"
       />
       <Circle cx={cx} cy={cy} r={r} fill={`url(#${eyeGrad})`} />
@@ -505,24 +660,16 @@ function GlossyEye({
   );
 }
 
-function RobotEyes({
+function RobotFace({
   state,
+  color,
   eyeGrad,
-  leftCx,
-  rightCx,
-  cy,
-  scale,
 }: {
   state: AvatarState;
+  color: string;
   eyeGrad: string;
-  leftCx: number;
-  rightCx: number;
-  cy: number;
-  scale: number;
 }) {
   const [blink, setBlink] = useState(false);
-  const sw = 5.5 * scale;
-  const r = 10 * scale;
 
   useEffect(() => {
     if (state !== "idle") {
@@ -540,120 +687,169 @@ function RobotEyes({
     return (
       <G>
         <Line
-          x1={leftCx - 12 * scale}
-          y1={cy}
-          x2={leftCx + 12 * scale}
-          y2={cy}
-          stroke={ARC_EYE}
-          strokeWidth={sw}
+          x1="88"
+          y1="98"
+          x2="108"
+          y2="98"
+          stroke={color}
+          strokeWidth="3"
           strokeLinecap="round"
         />
         <Line
-          x1={rightCx - 12 * scale}
-          y1={cy}
-          x2={rightCx + 12 * scale}
-          y2={cy}
-          stroke={ARC_EYE}
-          strokeWidth={sw}
+          x1="132"
+          y1="98"
+          x2="152"
+          y2="98"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <Path
+          d="M112 118 Q120 124 128 118"
+          stroke={color}
+          strokeWidth="3"
+          fill="none"
           strokeLinecap="round"
         />
       </G>
     );
   }
 
-  const arc = (cx: number, d: string) => (
-    <Path
-      d={d}
-      stroke={ARC_EYE}
-      strokeWidth={sw + 1}
-      fill="none"
-      strokeLinecap="round"
-    />
-  );
-
   switch (state) {
     case "focused":
       return (
         <G>
-          <GlossyEye cx={leftCx} cy={cy - 2 * scale} r={r - 1} eyeGrad={eyeGrad} />
-          <GlossyEye cx={rightCx} cy={cy - 2 * scale} r={r - 1} eyeGrad={eyeGrad} />
+          <GlowEye cx={98} cy={96} r={9} color={color} eyeGrad={eyeGrad} />
+          <GlowEye cx={142} cy={96} r={9} color={color} eyeGrad={eyeGrad} />
           <Line
-            x1={leftCx - 14 * scale}
-            y1={cy - 4 * scale}
-            x2={leftCx + 14 * scale}
-            y2={cy - 4 * scale}
-            stroke={BUTLER_SHEET.face}
-            strokeWidth={2.5 * scale}
+            x1="86"
+            y1="96"
+            x2="110"
+            y2="96"
+            stroke={BUTLER_SHEET.screen}
+            strokeWidth="2"
           />
           <Line
-            x1={rightCx - 14 * scale}
-            y1={cy - 4 * scale}
-            x2={rightCx + 14 * scale}
-            y2={cy - 4 * scale}
-            stroke={BUTLER_SHEET.face}
-            strokeWidth={2.5 * scale}
+            x1="130"
+            y1="96"
+            x2="154"
+            y2="96"
+            stroke={BUTLER_SHEET.screen}
+            strokeWidth="2"
+          />
+          <Path
+            d="M114 118 L126 118"
+            stroke={color}
+            strokeWidth="3"
+            strokeLinecap="round"
           />
         </G>
       );
     case "thinking":
       return (
         <G>
-          <GlossyEye cx={leftCx} cy={cy - 3 * scale} r={r - 1} eyeGrad={eyeGrad} />
-          <GlossyEye cx={rightCx} cy={cy - 3 * scale} r={r - 1} eyeGrad={eyeGrad} />
+          <GlowEye cx={96} cy={92} r={10} color={color} eyeGrad={eyeGrad} />
+          <GlowEye cx={144} cy={92} r={10} color={color} eyeGrad={eyeGrad} />
+          <Path
+            d="M112 118 Q120 112 128 118"
+            stroke={color}
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
         </G>
       );
     case "success":
       return (
         <G>
-          {arc(
-            leftCx,
-            `M ${leftCx - 14 * scale} ${cy + 2 * scale} Q ${leftCx} ${cy - 12 * scale} ${leftCx + 14 * scale} ${cy + 2 * scale}`,
-          )}
-          {arc(
-            rightCx,
-            `M ${rightCx - 14 * scale} ${cy + 2 * scale} Q ${rightCx} ${cy - 12 * scale} ${rightCx + 14 * scale} ${cy + 2 * scale}`,
-          )}
           <Path
-            d={`M ${rightCx + 18 * scale} ${cy - 18 * scale} Q ${rightCx + 28 * scale} ${cy - 28 * scale} ${rightCx + 36 * scale} ${cy - 16 * scale}`}
-            stroke={ARC_EYE}
-            strokeWidth={3 * scale}
+            d="M86 100 Q98 86 110 100"
+            stroke={GLOW_BLUE}
+            strokeWidth="6"
             fill="none"
             strokeLinecap="round"
-            opacity="0.7"
           />
+          <Path
+            d="M130 100 Q142 86 154 100"
+            stroke={GLOW_BLUE}
+            strokeWidth="6"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M108 122 Q120 132 132 122"
+            stroke={color}
+            strokeWidth="4"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <BlushMarks show />
         </G>
       );
     case "error":
       return (
         <G>
-          {arc(
-            leftCx,
-            `M ${leftCx - 14 * scale} ${cy - 6 * scale} Q ${leftCx} ${cy + 8 * scale} ${leftCx + 14 * scale} ${cy - 6 * scale}`,
-          )}
-          {arc(
-            rightCx,
-            `M ${rightCx - 14 * scale} ${cy - 6 * scale} Q ${rightCx} ${cy + 8 * scale} ${rightCx + 14 * scale} ${cy - 6 * scale}`,
-          )}
+          <Path
+            d="M86 94 Q98 106 110 94"
+            stroke={GLOW_BLUE}
+            strokeWidth="5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M130 94 Q142 106 154 94"
+            stroke={GLOW_BLUE}
+            strokeWidth="5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M112 122 Q120 116 128 122"
+            stroke={color}
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
         </G>
       );
     case "sleep":
       return (
         <G>
-          {arc(
-            leftCx,
-            `M ${leftCx - 12 * scale} ${cy + 2 * scale} Q ${leftCx} ${cy + 10 * scale} ${leftCx + 12 * scale} ${cy + 2 * scale}`,
-          )}
-          {arc(
-            rightCx,
-            `M ${rightCx - 12 * scale} ${cy + 2 * scale} Q ${rightCx} ${cy + 10 * scale} ${rightCx + 12 * scale} ${cy + 2 * scale}`,
-          )}
+          <Path
+            d="M88 98 Q98 106 108 98"
+            stroke="#5E7CB8"
+            strokeWidth="4.5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M132 98 Q142 106 152 98"
+            stroke="#5E7CB8"
+            strokeWidth="4.5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M114 120 L126 120"
+            stroke="#5E7CB8"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
         </G>
       );
     default:
       return (
         <G>
-          <GlossyEye cx={leftCx} cy={cy} r={r} eyeGrad={eyeGrad} />
-          <GlossyEye cx={rightCx} cy={cy} r={r} eyeGrad={eyeGrad} />
+          <GlowEye cx={98} cy={98} r={10} color={color} eyeGrad={eyeGrad} />
+          <GlowEye cx={142} cy={98} r={10} color={color} eyeGrad={eyeGrad} />
+          <Path
+            d="M110 120 Q120 126 130 120"
+            stroke={color}
+            strokeWidth="3.5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <BlushMarks show />
         </G>
       );
   }
@@ -662,9 +858,24 @@ function RobotEyes({
 function HomeThinkingBits({ color }: { color: string }) {
   return (
     <G>
-      <Path d="M78 18 L74 8" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      <Path d="M88 14 L88 6" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      <Path d="M98 18 L102 8" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
+      <Path
+        d="M78 18 L74 8"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M88 14 L88 6"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M98 18 L102 8"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
     </G>
   );
 }
@@ -672,9 +883,24 @@ function HomeThinkingBits({ color }: { color: string }) {
 function ThinkingBits({ color }: { color: string }) {
   return (
     <G>
-      <Path d="M168 34 L160 16" stroke={color} strokeWidth="4" strokeLinecap="round" />
-      <Path d="M182 38 L182 20" stroke={color} strokeWidth="4" strokeLinecap="round" />
-      <Path d="M195 46 L204 30" stroke={color} strokeWidth="4" strokeLinecap="round" />
+      <Path
+        d="M168 34 L160 16"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M182 38 L182 20"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M195 46 L204 30"
+        stroke={color}
+        strokeWidth="4"
+        strokeLinecap="round"
+      />
       <Circle
         cx="120"
         cy="130"

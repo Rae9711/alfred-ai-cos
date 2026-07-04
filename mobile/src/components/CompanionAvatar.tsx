@@ -43,7 +43,7 @@ export type CompanionAvatarProps = {
 };
 
 /**
- * Floating companion avatar: butler + optional speech bubble.
+ * Floating companion avatar: robot mascot + optional speech bubble.
  * Wrap in a positioned parent (absolute top-right, bottom-right, etc.).
  */
 export function CompanionAvatar({
