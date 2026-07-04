@@ -44,10 +44,12 @@ type CompanionAvatarApi = {
   setPlacement: (p: AvatarPlacement) => void;
   /** Ask screen toggles this while api.ask is in flight. */
   setThinking: (v: boolean) => void;
-  /** Grant XP for an agent event and refresh meta. */
+  /** Grant XP for an agent event and refresh meta. Resolves with whether this
+   * event crossed a level threshold, so callers can surface that (toast text,
+   * accessibility announcement) — see T-D4/T-D5 in the avatar design doc. */
   recordEvent: (
     eventType: Parameters<typeof recordCompanionEvent>[0],
-  ) => Promise<void>;
+  ) => Promise<{ leveledUp: boolean; level: number }>;
   /** Persist a tint-color change and refresh meta (future settings sheet). */
   setColor: (color: string) => Promise<void>;
   /** Briefly override the placement-derived mood with a real backend outcome
@@ -110,6 +112,7 @@ export function CompanionAvatarProvider({ children }: { children: ReactNode }) {
   >(async (eventType) => {
     const result = await recordCompanionEvent(eventType);
     setMeta(result.meta);
+    return { leveledUp: result.leveledUp, level: result.meta.level };
   }, []);
 
   // REVISION (stale-UI bug fix): the original PR exposed updateCompanionColor as

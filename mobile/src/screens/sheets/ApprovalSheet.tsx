@@ -37,6 +37,13 @@ import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 type Tone = "concise" | "warm" | "formal";
 
+// Toast stays the primary surface for a level-up (T-D4) — appended to the
+// action's own confirmation rather than replacing it, so the real
+// confirmation is never evicted by the secondary "leveled up" news.
+function withLevelUp(base: string, leveledUp: boolean, level: number): string {
+  return leveledUp ? `${base} Leveled up to Lv. ${level}!` : base;
+}
+
 export function ApprovalSheet({
   messageId,
   commitmentId,
@@ -122,8 +129,8 @@ export function ApprovalSheet({
     try {
       if (draftId) {
         const proposal = await api.proposeDraftToGmail(draftId);
-        await approveAction(proposal.id);
-        showToast("Saved to your Gmail drafts.");
+        const { leveledUp, level } = await approveAction(proposal.id);
+        showToast(withLevelUp("Saved to your Gmail drafts.", leveledUp, level));
       } else {
         showToast("Draft saved.");
       }
@@ -144,8 +151,8 @@ export function ApprovalSheet({
     setError(null);
     try {
       const proposal = await api.proposeSendDraft(draftId);
-      await approveAction(proposal.id);
-      showToast("Sent.");
+      const { leveledUp, level } = await approveAction(proposal.id);
+      showToast(withLevelUp("Sent.", leveledUp, level));
       closeSheet();
       onDone?.();
     } catch (e) {

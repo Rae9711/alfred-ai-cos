@@ -35,6 +35,14 @@ vi.mock("@/api/client", () => ({
   api: { approveAction: approveActionMock },
 }));
 
+const { announceMock } = vi.hoisted(() => ({
+  announceMock: vi.fn(),
+}));
+
+vi.mock("@/lib/a11y", () => ({
+  announceForAccessibility: announceMock,
+}));
+
 import {
   CompanionAvatarProvider,
   useCompanionAvatar,
@@ -48,6 +56,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 beforeEach(() => {
   store.clear();
   approveActionMock.mockReset();
+  announceMock.mockReset();
 });
 
 describe("useApproveAction", () => {
@@ -59,12 +68,43 @@ describe("useApproveAction", () => {
     );
     expect(result.current.avatar.meta.xp).toBe(0);
 
+    let resolved: Awaited<ReturnType<typeof result.current.approve.approveAction>>;
     await act(async () => {
-      await result.current.approve.approveAction("a1", true);
+      resolved = await result.current.approve.approveAction("a1", true);
     });
 
     expect(approveActionMock).toHaveBeenCalledWith("a1", true);
     expect(result.current.avatar.meta.xp).toBe(40); // task_completed base XP
+    expect(resolved!).toEqual({
+      proposal: { id: "a1", status: "approved" },
+      leveledUp: false,
+      level: 1,
+    });
+    expect(announceMock).not.toHaveBeenCalled();
+  });
+
+  it("announces the level-up for screen readers when a threshold is crossed", async () => {
+    approveActionMock.mockResolvedValue({ id: "a1", status: "approved" });
+    const { result } = renderHook(
+      () => ({ approve: useApproveAction(), avatar: useCompanionAvatar() }),
+      { wrapper },
+    );
+
+    // 40 XP per approval; level 2 starts at 80 — the second approval crosses it.
+    await act(async () => {
+      await result.current.approve.approveAction("a1");
+    });
+    expect(announceMock).not.toHaveBeenCalled();
+
+    let resolved: Awaited<ReturnType<typeof result.current.approve.approveAction>>;
+    await act(async () => {
+      resolved = await result.current.approve.approveAction("a2");
+    });
+
+    expect(resolved!.leveledUp).toBe(true);
+    expect(resolved!.level).toBe(2);
+    expect(result.current.avatar.meta.level).toBe(2);
+    expect(announceMock).toHaveBeenCalledWith("Leveled up to level 2");
   });
 
   it("flashes the error mood and grants no XP when the server rejects", async () => {

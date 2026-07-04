@@ -100,6 +100,27 @@ describe("recordEvent", () => {
     expect(result.current.meta.xp).toBe(5);
     expect(JSON.parse(store.get(META_KEY)!).xp).toBe(5);
   });
+
+  it("resolves leveledUp: false when the event doesn't cross a level threshold", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    let resolved: Awaited<ReturnType<typeof result.current.recordEvent>>;
+    await act(async () => {
+      resolved = await result.current.recordEvent("agent_message_sent");
+    });
+    expect(resolved!).toEqual({ leveledUp: false, level: 1 });
+  });
+
+  it("resolves leveledUp: true with the new level when a threshold is crossed", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    // 40 XP per task_completed; level 2 starts at 80 — the 2nd call crosses it.
+    await act(() => result.current.recordEvent("task_completed"));
+    let resolved: Awaited<ReturnType<typeof result.current.recordEvent>>;
+    await act(async () => {
+      resolved = await result.current.recordEvent("task_completed");
+    });
+    expect(resolved!).toEqual({ leveledUp: true, level: 2 });
+    expect(result.current.meta.level).toBe(2);
+  });
 });
 
 describe("setColor", () => {
