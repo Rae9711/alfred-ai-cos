@@ -120,7 +120,7 @@ def test_build_sms_install_urls() -> None:
         "url=https%3A%2F%2Falfredaitech.com%2Fapi%2Fv1%2Fintegrations"
         "%2Fios%2FAlbert-SMS-Forward.shortcut"
     ) in import_url
-    assert "name=Albert" in import_url and "Forward" in import_url
+    assert "name=Alfred" in import_url and "Forward" in import_url
 
 
 def test_build_sms_share_shortcut_posts_shared_message() -> None:

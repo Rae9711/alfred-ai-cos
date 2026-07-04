@@ -74,7 +74,7 @@ export function ConnectScreen({ onConnected }: Props) {
     <View style={styles.screen}>
       <Eyebrow>阿福 · Your chief of staff</Eyebrow>
       <Serif size={52} style={styles.title}>
-        Albert
+        Alfred
       </Serif>
       <Serif size={22} color={colors.ink2} style={styles.tagline}>
         Connect Gmail and Calendar. I'll find what matters, what you're

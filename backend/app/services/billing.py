@@ -20,7 +20,7 @@ SubscriptionStatus = Literal["inactive", "trialing", "active", "past_due", "canc
 _PLAN_CATALOG: list[dict[str, Any]] = [
     {
         "id": "pro_monthly",
-        "name": "Albert Pro",
+        "name": "Alfred Pro",
         "price_label": "$12/mo",
         "price_minor": 1200,
         "currency": "usd",
@@ -60,7 +60,7 @@ def get_subscription(user: User) -> dict[str, Any]:
     if plan_id == "free":
         plan_name = "Free"
     else:
-        plan_name = str(catalog.get(plan_id, {}).get("name") or "Albert Pro")
+        plan_name = str(catalog.get(plan_id, {}).get("name") or "Alfred Pro")
 
     renews_at = _parse_iso(prefs.get("subscription_renews_at"))
     trial_ends_at = _parse_iso(prefs.get("subscription_trial_ends_at"))

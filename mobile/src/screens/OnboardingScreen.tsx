@@ -43,7 +43,7 @@ const QUESTIONS: Question[] = [
   },
   {
     key: "optimize_for",
-    prompt: "What should Albert optimize for?",
+    prompt: "What should Alfred optimize for?",
     options: [
       { value: "deadlines", label: "Never miss deadlines" },
       { value: "priorities", label: "Clear daily priorities" },
@@ -87,12 +87,12 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <ScreenHeader
         eyebrow="Welcome"
-        title="Set up Albert"
-        subtitle="A few quick questions so Albert knows what matters to you."
+        title="Set up Alfred"
+        subtitle="A few quick questions so Alfred knows what matters to you."
       />
 
       <View style={styles.block}>
-        <Text style={styles.prompt}>What should Albert call you?</Text>
+        <Text style={styles.prompt}>What should Alfred call you?</Text>
         <TextInput
           style={inputStyle}
           placeholder="Your name (used to sign drafts)"
@@ -132,9 +132,9 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
 
       {Platform.OS === "ios" ? (
         <View style={styles.block}>
-          <Text style={styles.prompt}>Forward texts to Albert</Text>
+          <Text style={styles.prompt}>Forward texts to Alfred</Text>
           <Text style={styles.hint}>
-            Install the SMS shortcut so Albert can read your text threads. Paste
+            Install the SMS shortcut so Alfred can read your text threads. Paste
             your token when Shortcuts asks.
           </Text>
           <View style={styles.options}>
@@ -164,7 +164,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
 
       <View style={styles.ctaWrap}>
         <Btn
-          label={saving ? "Saving…" : "Start using Albert"}
+          label={saving ? "Saving…" : "Start using Alfred"}
           kind="accent"
           onPress={() => void submit()}
           disabled={!allAnswered || saving}

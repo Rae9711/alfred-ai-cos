@@ -184,7 +184,7 @@ export function ApprovalSheet({
             </>
           ) : (
             <>
-              <Text style={styles.willStrong}>Albert saves this draft</Text> for
+              <Text style={styles.willStrong}>Alfred saves this draft</Text> for
               you to review. Nothing is sent.
             </>
           )}

@@ -35,7 +35,7 @@ def test_subscription_reads_preferences(user: User) -> None:
     sub = billing.get_subscription(user)
     assert sub["plan_id"] == "pro_monthly"
     assert sub["status"] == "active"
-    assert sub["plan_name"] == "Albert Pro"
+    assert sub["plan_name"] == "Alfred Pro"
     assert sub["renews_at"] is not None
 
 

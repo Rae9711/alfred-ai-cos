@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-SHORTCUT_NAME = "Albert SMS Forward"
+SHORTCUT_NAME = "Alfred SMS Forward"
 SHORTCUT_FILENAME = "Albert-SMS-Forward.shortcut"
-SHARE_SHORTCUT_NAME = "Albert SMS Share"
+SHARE_SHORTCUT_NAME = "Alfred SMS Share"
 SHARE_SHORTCUT_FILENAME = "Albert-SMS-Share.shortcut"
 # Legacy filename — still served so old install links resolve.
 LEGACY_BACKFILL_SHORTCUT_FILENAME = "Albert-SMS-Backfill.shortcut"
@@ -196,17 +196,17 @@ def _token_prompt_action() -> tuple[dict[str, Any], dict[str, Any], list[dict[st
         "WFWorkflowActionParameters": {
             "UUID": token_uuid,
             "WFTextActionText": "",
-            "CustomOutputName": "Albert Token",
+            "CustomOutputName": "Alfred Token",
         },
     }
-    token_header_value = _attachment(token_uuid, "Albert Token")
+    token_header_value = _attachment(token_uuid, "Alfred Token")
     import_questions = [
         {
             "ActionIndex": 0,
             "Category": "Parameter",
             "DefaultValue": "",
             "ParameterKey": "WFTextActionText",
-            "Text": "Paste your X-Sms-Token from Albert → You → SMS forwarding:",
+            "Text": "Paste your X-Sms-Token from Alfred → You → SMS forwarding:",
         }
     ]
     return token_action, token_header_value, import_questions

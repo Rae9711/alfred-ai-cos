@@ -34,14 +34,14 @@ export function isContactsNativeAvailable(): boolean {
 async function loadContactsModule(): Promise<typeof Contacts> {
   if (!isContactsNativeAvailable()) {
     throw new Error(
-      "Contacts is not available in this build — reinstall Albert from TestFlight or rebuild the app.",
+      "Contacts is not available in this build — reinstall Alfred from TestFlight or rebuild the app.",
     );
   }
   try {
     return await import("expo-contacts");
   } catch {
     throw new Error(
-      "Contacts is not available in this build — reinstall Albert from TestFlight or rebuild the app.",
+      "Contacts is not available in this build — reinstall Alfred from TestFlight or rebuild the app.",
     );
   }
 }

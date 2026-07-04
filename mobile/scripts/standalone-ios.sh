@@ -100,7 +100,7 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 echo "════════════════════════════════════════════════════════════"
-echo "  Albert — standalone iPhone install (not Expo Go)"
+echo "  Alfred — standalone iPhone install (not Expo Go)"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
@@ -219,7 +219,7 @@ EOF
       echo "    2. bun run build:ios     # cloud build (~15 min)"
       echo "    3. bun run install:ios   # this script — install QR"
       echo ""
-      echo "  start:phone is Expo Go only — it cannot install Albert on your home screen."
+      echo "  start:phone is Expo Go only — it cannot install Alfred on your home screen."
       exit 1
     fi
 
@@ -232,7 +232,7 @@ EOF
     echo "    1. Open the link above in Safari"
     echo "    2. Tap Install under Build artifact"
     echo "    3. Install provisioning profile if prompted (Settings)"
-    echo "    4. Albert appears on your home screen"
+    echo "    4. Alfred appears on your home screen"
     echo ""
     echo "  Install QR (opens build page — tap Install there):"
     echo ""
@@ -246,7 +246,7 @@ EOF
     echo "  After you change JS/screens, push an OTA update:"
     echo "    bun run update:preview"
     echo ""
-    echo "  Force-quit Albert and reopen to fetch the update."
+    echo "  Force-quit Alfred and reopen to fetch the update."
     echo "════════════════════════════════════════════════════════════"
     ;;
 esac

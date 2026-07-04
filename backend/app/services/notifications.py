@@ -78,7 +78,7 @@ def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
     )
     enqueued = 0
     for p in waiting:
-        title = "Albert wants your approval"
+        title = "Alfred wants your approval"
         body = (p.reason or "").strip() or f"Approve a {p.action_type.value.replace('_', ' ')}."
         created = enqueue(
             db,

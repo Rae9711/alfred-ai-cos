@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "alfred",
+    "name": "Alfred",
     "slug": "albert",
     "scheme": "albert",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "runtimeVersion": {
@@ -20,10 +21,14 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": ["shortcuts"],
-        "NSContactsUsageDescription": "Albert looks up contacts when you ask to text someone by name."
+        "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name."
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F9F4E8"
+      },
       "package": "com.alfredassistants.albert",
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -56,7 +61,7 @@
       [
         "expo-contacts",
         {
-          "contactsPermission": "Albert looks up contacts when you ask to text someone by name."
+          "contactsPermission": "Alfred looks up contacts when you ask to text someone by name."
         }
       ]
     ],
@@ -66,6 +71,9 @@
       "eas": {
         "projectId": "45e050ed-fd8c-494a-8173-821548b192f5"
       }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "owner": "slurpdurp"
   }

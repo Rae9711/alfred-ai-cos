@@ -287,7 +287,7 @@ async def sms_inbox_webhook(
         )
         raise HTTPException(
             status_code=400,
-            detail="SMS body is required — re-import Albert SMS Forward from You → SMS forwarding",
+            detail="SMS body is required — re-import Alfred SMS Forward from You → SMS forwarding",
         )
 
     try:

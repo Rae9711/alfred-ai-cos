@@ -40,7 +40,7 @@ export const translations = {
       sectionPriorities: "Also on your plate",
       scheduleEmpty: "Nothing on the calendar for today.",
       prepRequired: "Prep",
-      askFailed: "Couldn't reach Albert — try again.",
+      askFailed: "Couldn't reach Alfred — try again.",
       pendingApprovals: (n: number) =>
         `${n} action${n === 1 ? "" : "s"} await your approval`,
       upcomingReminders: "Reminders",
@@ -129,7 +129,7 @@ export const translations = {
       unreadLabel: "Unread",
       readLabel: "Read",
       mailboxChip: "Mailbox",
-      albertTake: "Albert's read",
+      albertTake: "Alfred's read",
       openLink: "Open link",
     },
     ask: {
@@ -162,7 +162,7 @@ export const translations = {
       openInMessages: "Open in Messages",
       smsOpened: "Draft ready in Messages — tap Send when it looks right.",
       smsMissingPhone:
-        "Sender phone unknown — re-import the Albert SMS shortcut from Settings.",
+        "Sender phone unknown — re-import the Alfred SMS shortcut from Settings.",
     },
     sms: {
       messageLabel: "Text message",
@@ -170,7 +170,7 @@ export const translations = {
     smsCompose: {
       searching: (name: string) => `Looking up “${name}” in your contacts…`,
       permissionDenied:
-        "I need Contacts access to find who you mean. Enable it in Settings → Albert → Contacts, then try again.",
+        "I need Contacts access to find who you mean. Enable it in Settings → Alfred → Contacts, then try again.",
       noMatches: (name: string) =>
         `I couldn't find “${name}” in your contacts.`,
       askPhone: (name: string) =>
@@ -194,7 +194,7 @@ export const translations = {
     },
     emailCompose: {
       permissionDenied:
-        "I need Contacts access to find who you mean. Enable it in Settings → Albert → Contacts, then try again.",
+        "I need Contacts access to find who you mean. Enable it in Settings → Alfred → Contacts, then try again.",
       askEmail: (name: string) =>
         `I couldn't find an email for “${name}” in your contacts. What's their email address?`,
       askWho: "Who should I email?",
@@ -232,7 +232,7 @@ export const translations = {
       smsHintIos:
         "Forward new incoming texts with an iOS Shortcut automation. Older texts on your phone are not synced automatically.",
       smsHintAndroid:
-        "Forward new SMS with a MacroDroid profile (or share a message to Albert manually). Only new messages are captured.",
+        "Forward new SMS with a MacroDroid profile (or share a message to Alfred manually). Only new messages are captured.",
       smsTokenLabel: "X-Sms-Token:",
       smsInstallShortcut: "Install forward shortcut",
       smsCopyToken: "Copy token",
@@ -245,13 +245,13 @@ export const translations = {
         "Text forwarded! Pull to refresh Inbox → SMS to see it.",
       contactsTitle: "Contacts",
       contactsHint:
-        "Needed when you ask Albert to text someone by name in Ask — e.g. “text Mom: see you tomorrow”. Albert looks up the number in your contacts; nothing is uploaded.",
+        "Needed when you ask Alfred to text someone by name in Ask — e.g. “text Mom: see you tomorrow”. Alfred looks up the number in your contacts; nothing is uploaded.",
       contactsStatusGranted: "Access granted",
       contactsStatusDenied: "Denied",
       contactsStatusUndetermined: "Not set",
       contactsStatusUnavailable: "Requires app update",
       contactsUnavailableHint:
-        "Contacts lookup needs the latest Albert build from TestFlight — OTA alone is not enough. Reinstall, then return here to allow access.",
+        "Contacts lookup needs the latest Alfred build from TestFlight — OTA alone is not enough. Reinstall, then return here to allow access.",
       contactsAllow: "Allow access",
       contactsOpenSettings: "Open Settings",
       contactsGrantedToast: "Contacts access enabled.",
@@ -274,7 +274,7 @@ export const translations = {
       subscriptionCheckoutFailed: "Could not open checkout.",
       notificationsTitle: "Notifications",
       notificationsPolicy:
-        "Albert only pushes for mail that needs your action, task reminders, and upcoming meetings.",
+        "Alfred only pushes for mail that needs your action, task reminders, and upcoming meetings.",
       enablePush: "Enable push",
       quietHours: "Quiet hours",
       quietHoursNotSet: "Not set",
@@ -291,7 +291,7 @@ export const translations = {
       iosSubtitle: "iOS — Shortcut + automation",
       androidSubtitle: "Android — MacroDroid",
       iosReferenceCaption:
-        "After import, Albert SMS Forward should look like this: Text (your token) → Dictionary (body, text, shortcut_input → Shortcut Input) → POST to inbox/sms.",
+        "After import, Alfred SMS Forward should look like this: Text (your token) → Dictionary (body, text, shortcut_input → Shortcut Input) → POST to inbox/sms.",
       webhookLabel: "Webhook URL",
       tokenLabel: "X-Sms-Token",
       copyWebhook: "Copy webhook URL",
@@ -302,8 +302,8 @@ export const translations = {
       iosSteps: [
         "Tap Install forward shortcut above. In Safari tap Add Shortcut.",
         "When prompted, paste your X-Sms-Token from this screen (not a placeholder from a screenshot).",
-        "Open Shortcuts → Albert SMS Forward and confirm: Dictionary has body, text, shortcut_input mapped to Shortcut Input; Get Contents of URL is POST JSON to the webhook with Content-Type and X-Sms-Token headers.",
-        "Create automation: Settings → Shortcuts → Automation → + → When I receive a message → Run Immediately → Albert SMS Forward. Leave message filters empty.",
+        "Open Shortcuts → Alfred SMS Forward and confirm: Dictionary has body, text, shortcut_input mapped to Shortcut Input; Get Contents of URL is POST JSON to the webhook with Content-Type and X-Sms-Token headers.",
+        "Create automation: Settings → Shortcuts → Automation → + → When I receive a message → Run Immediately → Alfred SMS Forward. Leave message filters empty.",
         "Allow notifications for Shortcuts if iOS asks.",
         "Test: send yourself a text → Inbox → SMS → pull to refresh.",
       ],
@@ -320,7 +320,7 @@ export const translations = {
         "Headers: Content-Type = application/json and X-Sms-Token = your token below.",
         "Body (JSON): {\"body\":\"{not_text}\",\"text\":\"{not_text}\",\"shortcut_input\":\"{not_text}\"} — use MacroDroid's notification text variable for {not_text}.",
         "Save the macro and enable it. Send yourself a test SMS → Inbox → SMS → pull to refresh.",
-        "Optional — one message at a time: long-press an SMS → Share → Albert.",
+        "Optional — one message at a time: long-press an SMS → Share → Alfred.",
       ],
       androidVerify: [
         "MacroDroid shows the macro ran when a text arrives.",
@@ -353,7 +353,7 @@ export const translations = {
       snapLabel: "Snap a photo",
       forwardSoonTitle: "Forwarding address",
       forwardSoonBody:
-        "you@in.albert.app — forward email or share notes here and Albert sorts them into tasks. (Clipboard copy coming soon.)",
+        "you@in.albert.app — forward email or share notes here and Alfred sorts them into tasks. (Clipboard copy coming soon.)",
       forwardLabel: "Forward something",
       recordingHint:
         "Take your time. I'll sort dates, people, and projects when you stop.",
@@ -569,7 +569,7 @@ export const translations = {
       albertSummary: "摘要",
       openInMessages: "在「信息」中发送",
       smsOpened: "已在「信息」中填好草稿 — 确认后点发送即可。",
-      smsMissingPhone: "无法识别发件人号码，请在设置中重新安装 Albert 短信快捷指令。",
+      smsMissingPhone: "无法识别发件人号码，请在设置中重新安装 Alfred 短信快捷指令。",
     },
     sms: {
       messageLabel: "短信",
@@ -577,7 +577,7 @@ export const translations = {
     smsCompose: {
       searching: (name: string) => `正在通讯录里查找「${name}」…`,
       permissionDenied:
-        "需要通讯录权限才能找到联系人。请在 设置 → Albert → 通讯录 中开启后重试。",
+        "需要通讯录权限才能找到联系人。请在 设置 → Alfred → 通讯录 中开启后重试。",
       noMatches: (name: string) => `通讯录里没有找到「${name}」。`,
       askPhone: (name: string) =>
         `通讯录里没有「${name}」。对方的手机号是多少？`,
@@ -598,7 +598,7 @@ export const translations = {
     },
     emailCompose: {
       permissionDenied:
-        "需要通讯录权限才能找到联系人。请在 设置 → Albert → 通讯录 中开启后重试。",
+        "需要通讯录权限才能找到联系人。请在 设置 → Alfred → 通讯录 中开启后重试。",
       askEmail: (name: string) =>
         `通讯录里没有找到「${name}」的邮箱。请告诉我邮箱地址？`,
       askWho: "要给谁发邮件？",
@@ -635,7 +635,7 @@ export const translations = {
       smsHintIos:
         "用 iOS 快捷指令自动化转发新短信。手机里已有的旧短信不会自动同步。",
       smsHintAndroid:
-        "用 MacroDroid 配置转发新短信（也可手动分享到 Albert）。仅捕获新消息。",
+        "用 MacroDroid 配置转发新短信（也可手动分享到 Alfred）。仅捕获新消息。",
       smsTokenLabel: "X-Sms-Token：",
       smsInstallShortcut: "安装转发快捷指令",
       smsCopyToken: "复制令牌",
@@ -646,13 +646,13 @@ export const translations = {
       smsFirstForwardTip: "短信已转发！在收件箱 → 短信下拉刷新即可看到。",
       contactsTitle: "通讯录",
       contactsHint:
-        "在「对话」里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Albert 只在本地查找号码，不会上传通讯录。",
+        "在「对话」里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Alfred 只在本地查找号码，不会上传通讯录。",
       contactsStatusGranted: "已授权",
       contactsStatusDenied: "已拒绝",
       contactsStatusUndetermined: "未设置",
       contactsStatusUnavailable: "需要更新 App",
       contactsUnavailableHint:
-        "通讯录查找需要安装最新版 Albert（TestFlight）— 仅 OTA 更新不够。请重新安装后再回来授权。",
+        "通讯录查找需要安装最新版 Alfred（TestFlight）— 仅 OTA 更新不够。请重新安装后再回来授权。",
       contactsAllow: "允许访问",
       contactsOpenSettings: "打开设置",
       contactsGrantedToast: "已开启通讯录访问。",
@@ -674,7 +674,7 @@ export const translations = {
       subscriptionCheckoutFailed: "无法打开结账页面。",
       notificationsTitle: "通知",
       notificationsPolicy:
-        "Albert 仅在需处理邮件、任务提醒和即将开始的会议时推送。",
+        "Alfred 仅在需处理邮件、任务提醒和即将开始的会议时推送。",
       enablePush: "开启推送",
       quietHours: "免打扰时段",
       quietHoursNotSet: "未设置",
@@ -691,7 +691,7 @@ export const translations = {
       iosSubtitle: "iOS — 快捷指令 + 自动化",
       androidSubtitle: "Android — MacroDroid",
       iosReferenceCaption:
-        "导入后，Albert SMS Forward 应如下：文本（你的令牌）→ 词典（body、text、shortcut_input → 快捷指令输入）→ POST 到 inbox/sms。",
+        "导入后，Alfred SMS Forward 应如下：文本（你的令牌）→ 词典（body、text、shortcut_input → 快捷指令输入）→ POST 到 inbox/sms。",
       webhookLabel: "Webhook URL",
       tokenLabel: "X-Sms-Token",
       copyWebhook: "复制 Webhook URL",
@@ -702,8 +702,8 @@ export const translations = {
       iosSteps: [
         "点击上方「安装转发快捷指令」，在 Safari 中点「添加快捷指令」。",
         "按提示粘贴本页的 X-Sms-Token（不要用截图里的示例令牌）。",
-        "打开快捷指令 → Albert SMS Forward，确认：词典含 body、text、shortcut_input，均映射到「快捷指令输入」；「获取 URL 内容」为 POST JSON 到 webhook，请求头含 Content-Type 与 X-Sms-Token。",
-        "创建自动化：设置 → 快捷指令 → 自动化 → + → 收到信息时 → 立即运行 → Albert SMS Forward。不要加消息筛选条件。",
+        "打开快捷指令 → Alfred SMS Forward，确认：词典含 body、text、shortcut_input，均映射到「快捷指令输入」；「获取 URL 内容」为 POST JSON 到 webhook，请求头含 Content-Type 与 X-Sms-Token。",
+        "创建自动化：设置 → 快捷指令 → 自动化 → + → 收到信息时 → 立即运行 → Alfred SMS Forward。不要加消息筛选条件。",
         "若系统询问，请允许快捷指令发送通知。",
         "测试：给自己发短信 → 收件箱 → 短信 → 下拉刷新。",
       ],
@@ -720,7 +720,7 @@ export const translations = {
         "请求头：Content-Type = application/json，X-Sms-Token = 下方令牌。",
         "请求体（JSON）：{\"body\":\"{not_text}\",\"text\":\"{not_text}\",\"shortcut_input\":\"{not_text}\"} — 将 {not_text} 替换为 MacroDroid 的通知正文变量。",
         "保存并启用宏。给自己发测试短信 → 收件箱 → 短信 → 下拉刷新。",
-        "可选 — 单条手动转发：长按短信 → 分享 → Albert。",
+        "可选 — 单条手动转发：长按短信 → 分享 → Alfred。",
       ],
       androidVerify: [
         "收到短信时 MacroDroid 显示宏已运行。",
@@ -752,7 +752,7 @@ export const translations = {
       snapLabel: "拍张照片",
       forwardSoonTitle: "转发地址",
       forwardSoonBody:
-        "you@in.albert.app — 转发邮件或分享笔记，Albert 会整理成任务。（复制地址即将上线。）",
+        "you@in.albert.app — 转发邮件或分享笔记，Alfred 会整理成任务。（复制地址即将上线。）",
       forwardLabel: "转发内容",
       recordingHint: "慢慢来。停止后我会整理日期、联系人和项目。",
       stopA11y: "停止",

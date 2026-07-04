@@ -157,7 +157,7 @@ export function SettingsScreen() {
     if (Alert.prompt) {
       Alert.prompt(
         "Quiet hours",
-        "When should Albert hold non-urgent alerts? Format: HH-HH (e.g. 22-08).",
+        "When should Alfred hold non-urgent alerts? Format: HH-HH (e.g. 22-08).",
         (value) => {
           const v = value?.trim();
           if (!v) return;
@@ -304,7 +304,7 @@ export function SettingsScreen() {
   const disconnectGoogle = useCallback(() => {
     Alert.alert(
       "Disconnect Google?",
-      "Albert will lose access to your Gmail and Calendar. Your data in Albert stays.",
+      "Alfred will lose access to your Gmail and Calendar. Your data in Alfred stays.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -325,7 +325,7 @@ export function SettingsScreen() {
   const deleteAccount = useCallback(() => {
     Alert.alert(
       "Delete your account?",
-      "This permanently deletes all your data and revokes Albert's access. This cannot be undone.",
+      "This permanently deletes all your data and revokes Alfred's access. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -793,7 +793,7 @@ export function SettingsScreen() {
         />
       </View>
 
-      <Meta style={styles.version}>Albert · 阿福 · made calmly</Meta>
+      <Meta style={styles.version}>Alfred · 阿福 · made calmly</Meta>
     </ScrollView>
   );
 }
