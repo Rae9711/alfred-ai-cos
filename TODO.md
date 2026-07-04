@@ -55,13 +55,15 @@ Gate green throughout: ruff, mypy strict, 73 pytest, tsc (shared + mobile).
 
 ### Correctness and quality
 
-- [ ] **Thread-aware extraction (trust-critical, found in live testing 2026-05-22).**
+- [x] **Thread-aware extraction (trust-critical, found in live testing 2026-05-22).**
       Extraction runs per-message in isolation, so a commitment raised early in a thread
       stays flagged even after it was resolved later in the SAME thread (e.g. the user
       replied with the doc, or the sender said "never mind"). Fix: fetch the full Gmail
       thread (`gmail.users.threads.get`) and extract over the whole conversation, marking
       a commitment resolved/closed when a later message in the thread settles it. Touches
-      `app/services/extraction.py` and `app/services/gmail.py`.
+      `app/services/extraction.py` and `app/services/gmail.py`. *(Verified done —
+      `_reconcile_thread_commitments` in `extraction.py` is implemented and called from
+      both extraction entry points; found stale during /plan-eng-review 2026-07-02.)*
 - [ ] Full-thread retrieval for drafting (currently uses the stored snippet).
 - [ ] Idempotent, incremental Gmail sync (history API / `historyId`) instead of refetch.
 - [ ] Priority engine learns from feedback (PRD 16.1); feedback is recorded but not yet fed back.
@@ -69,6 +71,27 @@ Gate green throughout: ruff, mypy strict, 73 pytest, tsc (shared + mobile).
 - [ ] Real spend-limit policy with resets/ledger (current SpendLimit is a single-period cap).
 - [ ] Integration tests against Gmail / Calendar / Stripe / WhatsApp sandboxes with live keys.
 - [ ] OpenAPI-to-TypeScript codegen so `packages/shared-types` is generated, not hand-mirrored.
+- [ ] **Document all input channels in one place** (Gmail, Calendar, SMS today; WhatsApp
+      planned) — what flows into `Message`/extraction/`assistant.py` context and how.
+      Both the design doc and /plan-eng-review independently rediscovered that SMS
+      (`sms_inbox.py`, `sms_shortcut.py`, 8+ mobile files) is a deep, already-wired third
+      channel, after the fact. P2, effort S. *(Added via /plan-eng-review 2026-07-02.)*
+- [ ] **Per-account sync lock.** Nothing prevents two Celery workers from syncing the
+      same account concurrently — during the planned concierge test (3-5 more accounts
+      within 2 weeks), simultaneous syncs of one account could double-hit Gmail's rate
+      limit right as the new retry/backoff logic depends on that limit behaving
+      predictably. Pre-existing gap, not introduced by this plan, but real at pilot
+      scale. P2. *(Added via /plan-eng-review 2026-07-02.)*
+- [ ] **Generalize the "announce state changes, not routine ticks" a11y pattern.**
+      The level-up-only accessibility announcement (see avatar/XP feedback spec) should
+      become the standard rule for any future meaningful-but-infrequent avatar state
+      change (e.g. a streak-broken state), not a one-off special case. No other such
+      states exist yet — low urgency. P4. *(Added via /plan-design-review 2026-07-02.)*
+- [ ] Define a real, distinct trigger for the `tool_used` XP event type (mobile
+      `agentMeta.ts`) once a genuine use case exists — currently defined with real
+      XP/cap values but deliberately left unwired (only `task_completed` fires) to avoid
+      double-counting against an undefined boundary. P4/someday, no current urgency.
+      *(Added via /plan-eng-review 2026-07-02.)*
 
 ## Later (PRD roadmap Phase 2-3)
 

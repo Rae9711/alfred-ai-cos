@@ -31,6 +31,8 @@ class FakeLLM:
         detected_project: str | None = None,
         interpretation: AssistantInterpretation | None = None,
         chat_reply: str = "You have 2 open loops today.",
+        chat_cited_ids: list[str] | None = None,
+        chat_has_context: bool = True,
         schedule_candidate: bool = False,
         schedule_proposal: ExtractedScheduleProposal | None = None,
     ) -> None:
@@ -42,6 +44,8 @@ class FakeLLM:
         self.interpret_calls: list[dict] = []
         self.chat_calls: list[dict] = []
         self.chat_reply = chat_reply
+        self.chat_cited_ids = chat_cited_ids or []
+        self.chat_has_context = chat_has_context
         self._schedule_candidate = schedule_candidate
         self._schedule_proposal = schedule_proposal
 
@@ -160,7 +164,11 @@ class FakeLLM:
         history: list[dict[str, str]] | None = None,
     ) -> AssistantChatReply:
         self.chat_calls.append({"question": question, "context": context, "history": history})
-        return AssistantChatReply(reply=self.chat_reply)
+        return AssistantChatReply(
+            reply=self.chat_reply,
+            cited_ids=self.chat_cited_ids,
+            has_context=self.chat_has_context,
+        )
 
 
 class FakeNotifier:

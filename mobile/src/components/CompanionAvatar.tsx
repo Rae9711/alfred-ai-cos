@@ -132,31 +132,73 @@ export function CompanionAvatar({
   return body;
 }
 
-/** Cloud cottage for the tab bar — butler peeks out when occupied (Inbox / You). */
+/** Cloud cottage for the tab bar — butler peeks out when occupied (Inbox / You).
+ *
+ * Tap gives a brief acknowledgment bounce (design: docs/designs/2026-07-02-
+ * avatar-interaction-space.md, T-AV1) before onPress fires. Deliberately a local
+ * animation, not a change to the shared `state` mood system — that stays reserved
+ * for real backend status (thinking/success/error), not a UI tap flourish. Mixing
+ * the two would risk a real status update flickering the tap animation or vice
+ * versa. */
 export function CompanionAvatarHome({
   size = 54,
   color = colors.accent,
   state = "idle",
   occupied = false,
+  onPress,
+  accessibilityLabel = occupied
+    ? "Alfred companion home — open capture"
+    : "Alfred away working — open capture",
 }: Pick<CompanionAvatarProps, "size" | "color" | "state"> & {
   occupied?: boolean;
+  onPress?: () => void;
+  /** Pass the caller's localized string (e.g. t.a11y.captureHome) — this default
+   * is English-only and exists so callers that don't localize still get a label. */
+  accessibilityLabel?: string;
 }) {
-  return (
-    <View
-      style={styles.homeSlot}
-      accessibilityLabel={
-        occupied
-          ? "Alfred companion home — open capture"
-          : "Alfred away working — open capture"
-      }
+  const bounce = useRef(new Animated.Value(1)).current;
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(bounce, {
+        toValue: 0.85,
+        duration: 80,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(bounce, {
+        toValue: 1,
+        friction: 4,
+        tension: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    onPress?.();
+  };
+
+  const content = (
+    <Animated.View
+      style={[styles.homeSlot, { transform: [{ scale: bounce }] }]}
     >
-      <CloudHomeSvg
-        size={size}
-        color={color}
-        occupied={occupied}
-        state={state}
-      />
-    </View>
+      <CloudHomeSvg size={size} color={color} occupied={occupied} state={state} />
+    </Animated.View>
+  );
+
+  if (!onPress) {
+    return (
+      <View style={styles.homeSlot} accessibilityLabel={accessibilityLabel}>
+        <CloudHomeSvg size={size} color={color} occupied={occupied} state={state} />
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      {content}
+    </Pressable>
   );
 }
 

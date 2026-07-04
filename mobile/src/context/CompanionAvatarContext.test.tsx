@@ -75,12 +75,51 @@ describe("placement and mood", () => {
   });
 });
 
+describe("flashState", () => {
+  it("overrides the placement-derived mood, then auto-reverts", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    expect(result.current.state).toBe("idle");
+    act(() => result.current.flashState("error", 20));
+    expect(result.current.state).toBe("error");
+    await waitFor(() => expect(result.current.state).toBe("idle"));
+  });
+
+  it("takes precedence over a concurrent placement/thinking mood change", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    act(() => result.current.flashState("error", 50));
+    act(() => result.current.setThinking(true));
+    expect(result.current.state).toBe("error");
+    await waitFor(() => expect(result.current.state).toBe("thinking"));
+  });
+});
+
 describe("recordEvent", () => {
   it("updates the in-memory meta and persists the XP gain", async () => {
     const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
     await act(() => result.current.recordEvent("agent_message_sent"));
     expect(result.current.meta.xp).toBe(5);
     expect(JSON.parse(store.get(META_KEY)!).xp).toBe(5);
+  });
+
+  it("resolves leveledUp: false when the event doesn't cross a level threshold", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    let resolved: Awaited<ReturnType<typeof result.current.recordEvent>>;
+    await act(async () => {
+      resolved = await result.current.recordEvent("agent_message_sent");
+    });
+    expect(resolved!).toEqual({ leveledUp: false, level: 1 });
+  });
+
+  it("resolves leveledUp: true with the new level when a threshold is crossed", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    // 40 XP per task_completed; level 2 starts at 80 — the 2nd call crosses it.
+    await act(() => result.current.recordEvent("task_completed"));
+    let resolved: Awaited<ReturnType<typeof result.current.recordEvent>>;
+    await act(async () => {
+      resolved = await result.current.recordEvent("task_completed");
+    });
+    expect(resolved!).toEqual({ leveledUp: true, level: 2 });
+    expect(result.current.meta.level).toBe(2);
   });
 });
 

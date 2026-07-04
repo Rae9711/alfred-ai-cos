@@ -25,6 +25,7 @@ import {
 
 import { setToken } from "@/api/auth";
 import { AuthProvider, useAuth } from "@/api/AuthContext";
+import { CompanionAvatarProvider } from "@/context/CompanionAvatarContext";
 import { handleSharedTextUrl } from "@/lib/shareIntent";
 import { colors } from "@/theme/theme";
 import { View } from "react-native";
@@ -109,7 +110,14 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <DeepLinkHandler />
+      {/* Hoisted from (tabs)/index.tsx (design: docs/designs/2026-07-02-avatar-
+          interaction-space.md, T4). approvals.tsx is a top-level route sibling to
+          (tabs), reachable directly from a cold-start push-notification deep link
+          (see DeepLinkHandler above) — it needs avatar/XP access before the tab
+          shell ever mounts, not after. One provider instance for the whole app. */}
+      <CompanionAvatarProvider>
+        <DeepLinkHandler />
+      </CompanionAvatarProvider>
     </AuthProvider>
   );
 }

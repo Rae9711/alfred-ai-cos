@@ -50,11 +50,13 @@ def _now_in_tz(timezone: str) -> datetime:
         return datetime.now(UTC)
 
 
-def _format_upcoming(db: Session, user_id: str) -> str:
+def _format_upcoming(db: Session, user_id: str, *, cited_ids: set[str] | None = None) -> str:
     lines: list[str] = []
     for event in meeting_prep.upcoming_events(db, user_id, within_hours=24 * 14)[:20]:
         when = event.start_time.isoformat() if event.start_time else "?"
-        lines.append(f"- id={event.id} | {event.title or 'Untitled'} | {when}")
+        if cited_ids is not None:
+            cited_ids.add(event.id)
+        lines.append(f"- [id:{event.id}] {event.title or 'Untitled'} | {when}")
     return "\n".join(lines) if lines else "(none)"
 
 
@@ -351,7 +353,7 @@ def interpret_and_book(db: Session, user: User, *, text: str, tz: str) -> Assist
     return interpret_and_act(db, user, text=text, tz=tz)
 
 
-def _format_today_context(db: Session, user_id: str, *, tz: str) -> str:
+def _format_today_context(db: Session, user_id: str, *, tz: str, cited_ids: set[str]) -> str:
     try:
         today = datetime.now(ZoneInfo(tz)).date()
     except (ZoneInfoNotFoundError, ValueError):
@@ -362,29 +364,38 @@ def _format_today_context(db: Session, user_id: str, *, tz: str) -> str:
         for p in dashboard.top_priorities[:8]:
             due = f" (due {p.due_date})" if p.due_date else ""
             who = f" — {p.counterparty}" if p.counterparty else ""
-            lines.append(f"- {p.title}{who}{due}: {p.reason}")
+            cited_ids.add(p.id)
+            lines.append(f"- [id:{p.id}] {p.title}{who}{due}: {p.reason}")
     else:
         lines.append("- (none)")
     return "\n".join(lines)
 
 
-def _format_waiting_context(db: Session, user_id: str) -> str:
+def _format_waiting_context(db: Session, user_id: str, *, cited_ids: set[str]) -> str:
     view = build_waiting(db, user_id)
     lines = ["Waiting on you:"]
     for entry in view.waiting_on_you[:8]:
-        lines.append(f"- {entry.commitment.description} ({entry.commitment.counterparty})")
+        cited_ids.add(entry.commitment.id)
+        lines.append(
+            f"- [id:{entry.commitment.id}] {entry.commitment.description} "
+            f"({entry.commitment.counterparty})"
+        )
     if not view.waiting_on_you:
         lines.append("- (none)")
     lines.append("")
     lines.append("You are waiting on:")
     for entry in view.you_are_waiting_on[:8]:
-        lines.append(f"- {entry.commitment.description} ({entry.commitment.counterparty})")
+        cited_ids.add(entry.commitment.id)
+        lines.append(
+            f"- [id:{entry.commitment.id}] {entry.commitment.description} "
+            f"({entry.commitment.counterparty})"
+        )
     if not view.you_are_waiting_on:
         lines.append("- (none)")
     return "\n".join(lines)
 
 
-def _format_inbox_context(db: Session, user_id: str) -> str:
+def _format_inbox_context(db: Session, user_id: str, *, cited_ids: set[str]) -> str:
     replied = user_replied_message_ids(db, user_id)
     rows = list(
         db.scalars(
@@ -397,7 +408,9 @@ def _format_inbox_context(db: Session, user_id: str) -> str:
     lines = ["Inbox needing attention:"]
     count = 0
     for m in rows:
-        if m.source == "sms" or not message_in_primary_inbox(m):
+        # SMS is a first-class source alongside Gmail — do not filter it out of
+        # assistant context (see /plan-eng-review + /plan-design-review 2026-07-02).
+        if m.source != "sms" and not message_in_primary_inbox(m):
             continue
         category = effective_inbox_category(m)
         if not message_needs_attention(
@@ -407,7 +420,9 @@ def _format_inbox_context(db: Session, user_id: str) -> str:
         ):
             continue
         subj = m.subject or m.snippet or "(no subject)"
-        lines.append(f"- [{category}] {m.sender}: {subj}")
+        source_tag = "sms" if m.source == "sms" else category
+        cited_ids.add(m.id)
+        lines.append(f"- [id:{m.id}] [{source_tag}] {m.sender}: {subj}")
         count += 1
         if count >= 10:
             break
@@ -416,20 +431,26 @@ def _format_inbox_context(db: Session, user_id: str) -> str:
     return "\n".join(lines)
 
 
-def build_assistant_context(db: Session, user: User, *, tz: str) -> str:
-    """Structured snapshot for contextual Ask chat."""
-    events = _format_upcoming(db, user.id)
+def build_assistant_context(db: Session, user: User, *, tz: str) -> tuple[str, set[str]]:
+    """Structured snapshot for contextual Ask chat.
+
+    Returns the formatted text alongside the set of real ids that appear in it, so
+    chat_with_context can verify the model only cites things that actually exist
+    (structural grounding, not just prompt instruction — see D2, 2026-07-02).
+    """
+    cited_ids: set[str] = set()
+    events = _format_upcoming(db, user.id, cited_ids=cited_ids)
     parts = [
-        _format_today_context(db, user.id, tz=tz),
+        _format_today_context(db, user.id, tz=tz, cited_ids=cited_ids),
         "",
-        _format_waiting_context(db, user.id),
+        _format_waiting_context(db, user.id, cited_ids=cited_ids),
         "",
-        _format_inbox_context(db, user.id),
+        _format_inbox_context(db, user.id, cited_ids=cited_ids),
         "",
         "Upcoming calendar (next 2 weeks):",
         events or "(none)",
     ]
-    return "\n".join(parts)
+    return "\n".join(parts), cited_ids
 
 
 def chat_with_context(
@@ -451,12 +472,30 @@ def chat_with_context(
         ):
             return outcome
 
-    context = build_assistant_context(db, user, tz=tz)
+    context, context_ids = build_assistant_context(db, user, tz=tz)
     result = get_llm().answer_contextual_question(
         question=text,
         context=context,
         history=history,
     )
+
+    if not result.has_context:
+        # Distinct from "I don't understand your question" — this is a brand-new
+        # or fully caught-up user with nothing to report yet. See D7, 2026-07-02.
+        return AssistantOutcome(
+            action="none",
+            reply="Nothing's come in yet — I'll let you know the moment something needs your attention.",
+        )
+
+    if result.cited_ids and not set(result.cited_ids).issubset(context_ids):
+        # The model cited something that isn't actually in the context we sent it —
+        # treat as a grounding failure rather than surface a possibly-invented
+        # answer as fact (structural grounding, not just prompt instruction — D2).
+        return AssistantOutcome(
+            action="none",
+            reply="I'm not confident about that one — try asking about your priorities or inbox.",
+        )
+
     reply = (result.reply or "").strip()
     return AssistantOutcome(
         action="none",

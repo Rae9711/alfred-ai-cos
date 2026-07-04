@@ -13,6 +13,7 @@ from typing import Any
 
 from googleapiclient.discovery import build
 
+from app.services.api_retry import execute_with_retry
 from app.services.google_oauth import credentials_from_payload
 
 
@@ -47,9 +48,8 @@ def list_upcoming_events(
     time_min_iso = min_dt.isoformat()
     time_max_iso = max_dt.isoformat()
 
-    resp = (
-        svc.events()
-        .list(
+    resp = execute_with_retry(
+        svc.events().list(
             calendarId="primary",
             timeMin=time_min_iso,
             timeMax=time_max_iso,
@@ -57,7 +57,6 @@ def list_upcoming_events(
             orderBy="startTime",
             maxResults=max_results,
         )
-        .execute()
     )
     items: list[dict[str, Any]] = []
     for item in resp.get("items", []):

@@ -49,6 +49,12 @@ import {
 } from "@/lib/contacts";
 import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
+// Concierge-test pilot window: real billing isn't legally cleared yet
+// (KYC/compliance pending), so the Stripe subscribe entry point stays hidden
+// until that clears. Flip to false once billing is cleared for real users.
+// Plan: user-main-eng-review-test-plan-20260702-172820.md, T8.
+const PILOT_HIDE_BILLING = true;
+
 export function SettingsScreen() {
   const { signOut } = useAuth();
   const { openSheet, closeSheet } = useShell();
@@ -377,7 +383,7 @@ export function SettingsScreen() {
   );
 
   const openBillingCheckout = useCallback(async () => {
-    if (billingBusy) return;
+    if (PILOT_HIDE_BILLING || billingBusy) return;
     setNote(null);
     setBillingBusy(true);
     try {
@@ -532,6 +538,8 @@ export function SettingsScreen() {
               tiny
               onPress={() => void openBillingManage()}
             />
+          ) : PILOT_HIDE_BILLING ? (
+            <Meta style={styles.smsHint}>{s.subscriptionComingSoon}</Meta>
           ) : (
             <Btn
               label={

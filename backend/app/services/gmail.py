@@ -17,6 +17,7 @@ from typing import Any, Literal, cast
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from app.services.api_retry import execute_with_retry
 from app.services.google_oauth import credentials_from_payload
 
 _active_creds: contextvars.ContextVar[Credentials | None] = contextvars.ContextVar(
@@ -59,7 +60,7 @@ class HistoryExpiredError(Exception):
 def get_history_id(token_payload: dict[str, Any]) -> str:
     """Return the mailbox's current historyId (cursor for incremental sync)."""
     svc = _service(token_payload)
-    profile = svc.users().getProfile(userId="me").execute()
+    profile = execute_with_retry(svc.users().getProfile(userId="me"))
     history_id = profile.get("historyId")
     if not history_id:
         raise ValueError("Gmail profile did not return historyId")
@@ -69,7 +70,9 @@ def get_history_id(token_payload: dict[str, Any]) -> str:
 def get_message_label_ids(token_payload: dict[str, Any], message_id: str) -> list[str]:
     """Return label ids for a message without fetching the full body."""
     svc = _service(token_payload)
-    raw = svc.users().messages().get(userId="me", id=message_id, format="minimal").execute()
+    raw = execute_with_retry(
+        svc.users().messages().get(userId="me", id=message_id, format="minimal")
+    )
     return list(raw.get("labelIds") or [])
 
 
@@ -136,7 +139,7 @@ def list_history_added_message_ids(
             }
             if label_id:
                 kwargs["labelId"] = label_id
-            resp = svc.users().history().list(**kwargs).execute()
+            resp = execute_with_retry(svc.users().history().list(**kwargs))
         except Exception as exc:
             # googleapiclient raises HttpError with status 404 when the cursor expired.
             if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
@@ -177,7 +180,7 @@ def list_message_ids(
             kwargs["q"] = query
         if page_token:
             kwargs["pageToken"] = page_token
-        resp = svc.users().messages().list(**kwargs).execute()
+        resp = execute_with_retry(svc.users().messages().list(**kwargs))
         for item in resp.get("messages", []) or []:
             mid = item.get("id")
             if mid and mid not in ids:
@@ -241,7 +244,7 @@ def list_history_label_affected_message_ids(
     latest_history_id = start_history_id
     while True:
         try:
-            resp = (
+            resp = execute_with_retry(
                 svc.users()
                 .history()
                 .list(
@@ -251,7 +254,6 @@ def list_history_label_affected_message_ids(
                     historyTypes=["labelAdded", "labelRemoved"],
                     pageToken=page_token,
                 )
-                .execute()
             )
         except Exception as exc:
             if getattr(exc, "resp", None) is not None and exc.resp.status == 404:
@@ -305,7 +307,7 @@ def get_message(token_payload: dict[str, Any], message_id: str) -> dict[str, Any
     auto-submitted, reply-to, cc, bcc, x-mailer, feedback-id) that the ranker uses
     to deterministically classify automated / bulk / suspicious senders."""
     svc = _service(token_payload)
-    raw = svc.users().messages().get(userId="me", id=message_id, format="full").execute()
+    raw = execute_with_retry(svc.users().messages().get(userId="me", id=message_id, format="full"))
     headers = {h["name"].lower(): h["value"] for h in raw.get("payload", {}).get("headers", [])}
     # Preserve the subset of headers the sender classifier reads. Keeping this small
     # so the JSON column stays cheap and the spam signals are auditable per message.
