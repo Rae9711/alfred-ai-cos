@@ -1,8 +1,15 @@
-// Capture — full-screen voice/text/photo/forward capture, pixel-matched to the
-// prototype's ScreenCapture. Modes (Speak/Type/Snap/Forward); voice idle (breathing
-// rings + mic), recording (ink bg, timer, animated waveform), parsed (transcript,
-// detected chips, extracted task cards). Type → captureText, Voice → captureVoice
-// (both real). Snap/Forward are styled stubs, as in the prototype.
+// Capture — the avatar interaction space (design: docs/designs/2026-07-02-avatar-
+// interaction-space.md). One unified composer (text + inline mic, no mode tabs to
+// choose between first) replaces the old Speak/Type/Snap/Forward switcher — talking
+// to Alfred shouldn't require picking a mode before you can start. Recording (ink
+// bg, timer, animated waveform) and parsed (transcript, detected chips, extracted
+// task cards) states are unchanged. Type → captureText, Voice → captureVoice (both
+// real). Snap/Forward remain reachable as secondary actions, still styled stubs.
+//
+// Deliberately NOT a chat transcript: one capture in, one acknowledgment card back,
+// no persistent back-and-forth history. A transcript view would make this visually
+// indistinguishable from the Ask screen, which is exactly the "open-ended companion
+// chat" boundary this space is designed to stay inside of.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -32,15 +39,7 @@ import {
 } from "@/components/ui";
 import { colors, fonts, layout } from "@/theme/theme";
 
-type Mode = "voice" | "text" | "photo" | "forward";
 type Phase = "idle" | "recording" | "parsed";
-
-const MODES: { id: Mode; label: string }[] = [
-  { id: "voice", label: "Speak" },
-  { id: "text", label: "Type" },
-  { id: "photo", label: "Snap" },
-  { id: "forward", label: "Forward" },
-];
 
 export function CaptureScreen({
   onClose,
@@ -50,7 +49,6 @@ export function CaptureScreen({
   initialText?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [mode, setMode] = useState<Mode>(initialText ? "text" : "voice");
   const [text, setText] = useState(initialText ?? "");
   const [result, setResult] = useState<CaptureResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -127,8 +125,6 @@ export function CaptureScreen({
         <RecordingState onStop={() => void voice.stop()} />
       ) : (
         <IdleState
-          mode={mode}
-          setMode={setMode}
           text={text}
           setText={setText}
           busy={busy}
@@ -144,8 +140,6 @@ export function CaptureScreen({
 // ── Idle ─────────────────────────────────────────────────────────────────────
 
 function IdleState({
-  mode,
-  setMode,
   text,
   setText,
   busy,
@@ -153,8 +147,6 @@ function IdleState({
   onStartVoice,
   onSubmitText,
 }: {
-  mode: Mode;
-  setMode: (m: Mode) => void;
   text: string;
   setText: (t: string) => void;
   busy: boolean;
@@ -173,46 +165,22 @@ function IdleState({
           Tell me what's <SerifEm>on your mind</SerifEm>.
         </Serif>
         <Text style={styles.idleSub}>
-          Speak in any order. I'll pull out tasks, dates, people, and projects.
+          Type it, or tap the mic to speak. I'll pull out tasks, dates,
+          people, and projects.
         </Text>
       </View>
 
-      {/* Mode tabs */}
-      <View style={styles.modeTabs}>
-        {MODES.map((m) => {
-          const active = mode === m.id;
-          return (
-            <Pressable
-              key={m.id}
-              onPress={() => setMode(m.id)}
-              style={[styles.modeTab, active && styles.modeTabActive]}
-            >
-              <ModeIcon mode={m.id} active={active} />
-              <Text
-                style={[styles.modeLabel, active && styles.modeLabelActive]}
-              >
-                {m.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.modeBody}>
-        {mode === "voice" ? <VoiceIdle onStart={onStartVoice} /> : null}
-        {mode === "text" ? (
-          <TextIdle
-            text={text}
-            setText={setText}
-            busy={busy}
-            onSubmit={onSubmitText}
-          />
-        ) : null}
-        {mode === "photo" ? <PhotoIdle /> : null}
-        {mode === "forward" ? <ForwardIdle /> : null}
-      </View>
+      <UnifiedComposer
+        text={text}
+        setText={setText}
+        busy={busy}
+        onStartVoice={onStartVoice}
+        onSubmit={onSubmitText}
+      />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <SecondaryActions />
 
       {/* I'll listen for */}
       <View style={styles.listenFor}>
@@ -257,88 +225,44 @@ function IdleState({
   );
 }
 
-function ModeIcon({ mode, active }: { mode: Mode; active: boolean }) {
-  const color = active ? colors.ink : colors.ink3;
-  if (mode === "voice") return <Ic.Mic size={18} color={color} stroke={1.6} />;
-  if (mode === "text") return <Ic.Type size={18} color={color} stroke={1.6} />;
-  if (mode === "photo")
-    return <Ic.Image size={18} color={color} stroke={1.6} />;
-  return <Ic.Forward size={18} color={color} stroke={1.6} />;
-}
-
-function VoiceIdle({ onStart }: { onStart: () => void }) {
-  const r1 = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(r1, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(r1, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [r1]);
-  const scale = r1.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.94, 1.06],
-  });
-
-  return (
-    <View style={styles.voiceIdle}>
-      <View style={styles.ringWrap}>
-        <Animated.View
-          style={[styles.ring, styles.ring1, { transform: [{ scale }] }]}
-        />
-        <Animated.View
-          style={[styles.ring, styles.ring2, { transform: [{ scale }] }]}
-        />
-        <Pressable
-          style={styles.micBtn}
-          onPress={onStart}
-          accessibilityLabel="Start recording"
-        >
-          <Ic.Mic size={38} color="#fff" stroke={1.6} />
-        </Pressable>
-      </View>
-      <Serif size={16} italic color={colors.ink2} style={styles.voiceHint}>
-        Tap to begin. Take your time.
-      </Serif>
-      <Meta>Records a voice note, then sorts it into tasks</Meta>
-    </View>
-  );
-}
-
-function TextIdle({
+// One composer, not a mode switcher: text is always the primary surface, the mic
+// is an inline alternative for when speaking is easier than typing. Tapping the
+// mic hands off to the existing RecordingState (unchanged) rather than opening a
+// separate "voice mode" idle screen — there's nothing to switch into or out of.
+function UnifiedComposer({
   text,
   setText,
   busy,
+  onStartVoice,
   onSubmit,
 }: {
   text: string;
   setText: (t: string) => void;
   busy: boolean;
+  onStartVoice: () => void;
   onSubmit: () => void;
 }) {
   return (
-    <View style={styles.textIdle}>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        placeholder="e.g. remind me to email Daniel the A3 PDF tomorrow, book the United flight home for Friday morning, ask Chen about the lab write-up tonight…"
-        placeholderTextColor={inputPlaceholder}
-        multiline
-        style={styles.textArea}
-      />
+    <View style={styles.composer}>
+      <View style={styles.composerInputRow}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="e.g. remind me to email Daniel the A3 PDF tomorrow, book the United flight home for Friday morning…"
+          placeholderTextColor={inputPlaceholder}
+          multiline
+          style={styles.composerInput}
+        />
+        <Pressable
+          style={styles.composerMic}
+          onPress={onStartVoice}
+          accessibilityLabel="Speak instead of typing"
+        >
+          <Ic.Mic size={20} color="#fff" stroke={1.6} />
+        </Pressable>
+      </View>
       <Btn
-        label={busy ? "Parsing…" : "Add to Today"}
+        label={busy ? "Parsing…" : "Tell Alfred"}
         kind="accent"
         full
         disabled={busy || !text.trim()}
@@ -348,57 +272,35 @@ function TextIdle({
   );
 }
 
-function PhotoIdle() {
+// Snap and Forward stay reachable but demoted to compact secondary actions,
+// not full modes competing with the primary composer for attention.
+function SecondaryActions() {
   return (
-    <View style={styles.dropZone}>
-      <View style={styles.dropIcon}>
-        <Ic.Image size={26} color={colors.ink3} stroke={1.4} />
-      </View>
-      <Serif size={17} color={colors.ink2} style={styles.dropTitle}>
-        Whiteboard, screenshot, or paper to-do list.
-      </Serif>
-      <Meta style={styles.dropMeta}>
-        I'll read it, extract tasks, and ask before adding anything ambiguous.
-      </Meta>
-      <Btn
-        label="Choose photo"
-        kind="ghost"
-        tiny
-        leading={<Ic.Plus size={11} color={colors.ink2} />}
+    <View style={styles.secondaryRow}>
+      <Pressable
+        style={styles.secondaryAction}
         onPress={() =>
           Alert.alert(
             "Photo capture",
             "Snapping a whiteboard or to-do list is coming soon. For now, speak or type your note.",
           )
         }
-      />
-    </View>
-  );
-}
-
-function ForwardIdle() {
-  return (
-    <View style={styles.forwardCard}>
-      <Text style={styles.forwardLabel}>Forward anything to</Text>
-      <View style={styles.forwardAddr}>
-        <Ic.Mail size={14} color={colors.ink3} />
-        <Text style={styles.forwardEmail}>you@in.albert.app</Text>
-        <Btn
-          label="Copy"
-          kind="ghost"
-          tiny
-          onPress={() =>
-            Alert.alert(
-              "Forwarding address",
-              "you@in.albert.app — forward email or share notes here and Albert sorts them into tasks. (Clipboard copy coming soon.)",
-            )
-          }
-        />
-      </View>
-      <Meta style={styles.forwardMeta}>
-        Works with email, WhatsApp share, the iOS share sheet, or a pasted link.
-        I'll extract tasks and tell you what I found.
-      </Meta>
+      >
+        <Ic.Image size={14} color={colors.ink3} stroke={1.6} />
+        <Text style={styles.secondaryActionLabel}>Snap a photo</Text>
+      </Pressable>
+      <Pressable
+        style={styles.secondaryAction}
+        onPress={() =>
+          Alert.alert(
+            "Forwarding address",
+            "you@in.albert.app — forward email or share notes here and Albert sorts them into tasks. (Clipboard copy coming soon.)",
+          )
+        }
+      >
+        <Ic.Forward size={14} color={colors.ink3} stroke={1.6} />
+        <Text style={styles.secondaryActionLabel}>Forward something</Text>
+      </Pressable>
     </View>
   );
 }
@@ -598,63 +500,16 @@ const styles = StyleSheet.create({
   idleHeading: { maxWidth: 300, lineHeight: 32 },
   idleSub: { color: colors.ink3, marginTop: 8, fontSize: 14, lineHeight: 21 },
 
-  modeTabs: {
+  composer: { gap: 10 },
+  composerInputRow: {
     flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    backgroundColor: colors.paper2,
-    borderRadius: 14,
+    alignItems: "flex-end",
+    gap: 8,
   },
-  modeTab: {
+  composerInput: {
     flex: 1,
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-    borderRadius: 11,
-  },
-  modeTabActive: {
-    backgroundColor: colors.card,
-    shadowColor: "#19171A",
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  modeLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    textTransform: "uppercase",
-    color: colors.ink3,
-  },
-  modeLabelActive: { color: colors.ink },
-  modeBody: { marginTop: 18, minHeight: 220 },
-
-  voiceIdle: { alignItems: "center", paddingVertical: 24, gap: 6 },
-  ringWrap: {
-    width: 200,
-    height: 200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ring: { position: "absolute", borderRadius: 100 },
-  ring1: { width: 200, height: 200, backgroundColor: "rgba(58,93,168,0.08)" },
-  ring2: { width: 152, height: 152, backgroundColor: "rgba(58,93,168,0.12)" },
-  micBtn: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.accent,
-    shadowOpacity: 0.32,
-    shadowRadius: 36,
-    shadowOffset: { width: 0, height: 14 },
-  },
-  voiceHint: { marginTop: 18 },
-
-  textIdle: { gap: 10 },
-  textArea: {
-    minHeight: 180,
+    minHeight: 96,
+    maxHeight: 180,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
     borderRadius: 16,
@@ -665,61 +520,33 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     textAlignVertical: "top",
   },
-
-  dropZone: {
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: colors.hair2,
-    borderRadius: 16,
-    padding: 28,
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.paper2,
-    minHeight: 180,
-    justifyContent: "center",
-  },
-  dropIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 14,
-    backgroundColor: colors.card,
+  composerMic: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: colors.accent,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
   },
-  dropTitle: { textAlign: "center", lineHeight: 23 },
-  dropMeta: { maxWidth: 240, textAlign: "center", lineHeight: 18 },
 
-  forwardCard: {
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    borderRadius: 16,
-    padding: 16,
+  secondaryRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 14,
   },
-  forwardLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
-    marginBottom: 8,
-  },
-  forwardAddr: {
+  secondaryAction: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: colors.paper2,
-    borderRadius: 10,
+    gap: 6,
   },
-  forwardEmail: {
-    flex: 1,
-    fontFamily: fonts.mono,
+  secondaryActionLabel: {
     fontSize: 13,
-    color: colors.ink,
+    color: colors.ink3,
   },
-  forwardMeta: { marginTop: 10, lineHeight: 18 },
 
   error: { color: colors.warn, fontSize: 13, marginTop: 12 },
 

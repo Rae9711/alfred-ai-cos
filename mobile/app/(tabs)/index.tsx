@@ -11,10 +11,7 @@ import * as Notifications from "expo-notifications";
 import { CompanionAvatarHome } from "@/components/CompanionAvatar";
 import { Ic } from "@/components/icons";
 import { ShellProvider } from "@/components/Shell";
-import {
-  CompanionAvatarProvider,
-  useCompanionAvatar,
-} from "@/context/CompanionAvatarContext";
+import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
 import { MailboxProvider } from "@/context/MailboxContext";
 import {
@@ -28,12 +25,12 @@ import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { colors, fonts, layout } from "@/theme/theme";
 
+// CompanionAvatarProvider now lives in the root layout (app/_layout.tsx), not
+// here — see T4 in docs/designs/2026-07-02-avatar-interaction-space.md.
 export default function TabsHome() {
   return (
     <LocaleProvider>
-      <CompanionAvatarProvider>
-        <TabsHomeInner />
-      </CompanionAvatarProvider>
+      <TabsHomeInner />
     </LocaleProvider>
   );
 }
@@ -115,20 +112,18 @@ function TabsChrome({
             onPress={() => setTab("inbox")}
             icon={(c) => <Ic.Inbox size={22} color={c} stroke={1.5} />}
           />
-          <Pressable
-            style={styles.capture}
-            onPress={() => router.push("/capture")}
-            accessibilityLabel={
-              atHome ? t.a11y.captureHome : t.a11y.captureAway
-            }
-          >
+          <View style={styles.capture}>
             <CompanionAvatarHome
               size={54}
               color={meta.color}
               state={state}
               occupied={atHome}
+              onPress={() => router.push("/capture")}
+              accessibilityLabel={
+                atHome ? t.a11y.captureHome : t.a11y.captureAway
+              }
             />
-          </Pressable>
+          </View>
           <Tab
             label={t.tabs.ask}
             active={tab === "ask"}

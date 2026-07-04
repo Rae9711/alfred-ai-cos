@@ -17,6 +17,7 @@ import type { ActionProposal } from "@albert/shared-types";
 import { api } from "@/api/client";
 import { Ic } from "@/components/icons";
 import { Btn, Card, Eyebrow, IconBtn, Pill, Serif } from "@/components/ui";
+import { useApproveAction } from "@/hooks/useApproveAction";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 const RISK_LABEL: Record<number, string> = {
@@ -80,6 +81,7 @@ function ActionCard({
 
 export function ActionApprovalScreen() {
   const router = useRouter();
+  const { approveAction } = useApproveAction();
   const [actions, setActions] = useState<ActionProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,7 +101,7 @@ export function ActionApprovalScreen() {
     async (action: ActionProposal) => {
       const run = async (confirm: boolean) => {
         try {
-          await api.approveAction(action.id, confirm);
+          await approveAction(action.id, confirm);
           await load();
         } catch (e) {
           setError(e instanceof Error ? e.message : "Approval failed");
@@ -122,7 +124,7 @@ export function ActionApprovalScreen() {
         await run(false);
       }
     },
-    [load],
+    [approveAction, load],
   );
 
   const reject = useCallback(

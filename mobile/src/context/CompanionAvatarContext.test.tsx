@@ -75,6 +75,24 @@ describe("placement and mood", () => {
   });
 });
 
+describe("flashState", () => {
+  it("overrides the placement-derived mood, then auto-reverts", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    expect(result.current.state).toBe("idle");
+    act(() => result.current.flashState("error", 20));
+    expect(result.current.state).toBe("error");
+    await waitFor(() => expect(result.current.state).toBe("idle"));
+  });
+
+  it("takes precedence over a concurrent placement/thinking mood change", async () => {
+    const { result } = renderHook(() => useCompanionAvatar(), { wrapper });
+    act(() => result.current.flashState("error", 50));
+    act(() => result.current.setThinking(true));
+    expect(result.current.state).toBe("error");
+    await waitFor(() => expect(result.current.state).toBe("thinking"));
+  });
+});
+
 describe("recordEvent", () => {
   it("updates the in-memory meta and persists the XP gain", async () => {
     const { result } = renderHook(() => useCompanionAvatar(), { wrapper });

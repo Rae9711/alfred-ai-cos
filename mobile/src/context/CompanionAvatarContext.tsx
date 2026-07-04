@@ -13,6 +13,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -49,6 +50,12 @@ type CompanionAvatarApi = {
   ) => Promise<void>;
   /** Persist a tint-color change and refresh meta (future settings sheet). */
   setColor: (color: string) => Promise<void>;
+  /** Briefly override the placement-derived mood with a real backend outcome
+   * (e.g. "error" on a failed approval), then auto-revert. Reserved for real
+   * status, not UI flourishes — see CompanionAvatar.tsx's tap-bounce comment
+   * for why the center-button tap animation deliberately stays local instead
+   * of going through this. */
+  flashState: (state: AvatarState, durationMs?: number) => void;
 };
 
 const CompanionAvatarContext = createContext<CompanionAvatarApi | null>(null);
@@ -68,17 +75,35 @@ export function CompanionAvatarProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<AgentMeta>(getDefaultMeta);
   const [placement, setPlacement] = useState<AvatarPlacement>("home");
   const [thinking, setThinking] = useState(false);
+  const [flash, setFlash] = useState<AvatarState | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hydrate persisted growth meta from SecureStore on mount.
   useEffect(() => {
     void loadCompanionMeta().then(setMeta);
   }, []);
 
-  const state = moodForContext({
-    placement,
-    thinking,
-    sleeping: false,
-  });
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    };
+  }, []);
+
+  // A flash (real backend outcome) always wins over the placement-derived mood.
+  const state =
+    flash ?? moodForContext({ placement, thinking, sleeping: false });
+
+  const flashState = useCallback<CompanionAvatarApi["flashState"]>(
+    (next, durationMs = 1800) => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+      setFlash(next);
+      flashTimer.current = setTimeout(() => {
+        setFlash(null);
+        flashTimer.current = null;
+      }, durationMs);
+    },
+    [],
+  );
 
   const recordEvent = useCallback<
     CompanionAvatarApi["recordEvent"]
@@ -115,8 +140,9 @@ export function CompanionAvatarProvider({ children }: { children: ReactNode }) {
       setThinking,
       recordEvent,
       setColor,
+      flashState,
     }),
-    [meta, placement, state, thinking, recordEvent, setColor],
+    [meta, placement, state, thinking, recordEvent, setColor, flashState],
   );
 
   return (

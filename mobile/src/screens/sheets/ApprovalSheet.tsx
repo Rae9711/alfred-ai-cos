@@ -32,6 +32,7 @@ import {
   SerifEm,
   inputPlaceholder,
 } from "@/components/ui";
+import { useApproveAction } from "@/hooks/useApproveAction";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 type Tone = "concise" | "warm" | "formal";
@@ -52,6 +53,7 @@ export function ApprovalSheet({
   onDone?: () => void;
 }) {
   const { closeSheet, showToast } = useShell();
+  const { approveAction } = useApproveAction();
   // Can we actually push this to the user's Gmail drafts? Only when it came from a real
   const generates = messageId != null || commitmentId != null;
 
@@ -120,7 +122,7 @@ export function ApprovalSheet({
     try {
       if (draftId) {
         const proposal = await api.proposeDraftToGmail(draftId);
-        await api.approveAction(proposal.id);
+        await approveAction(proposal.id);
         showToast("Saved to your Gmail drafts.");
       } else {
         showToast("Draft saved.");
@@ -131,7 +133,7 @@ export function ApprovalSheet({
       setError(e instanceof Error ? e.message : "Couldn't save the draft");
       setSaving(null);
     }
-  }, [draftId, closeSheet, onDone, showToast]);
+  }, [draftId, approveAction, closeSheet, onDone, showToast]);
 
   // Send the reply from the user's Gmail (message mode only — it threads onto the real
   // message). Goes through the level-3 approval path; here we approve immediately since
@@ -142,7 +144,7 @@ export function ApprovalSheet({
     setError(null);
     try {
       const proposal = await api.proposeSendDraft(draftId);
-      await api.approveAction(proposal.id);
+      await approveAction(proposal.id);
       showToast("Sent.");
       closeSheet();
       onDone?.();
@@ -150,7 +152,7 @@ export function ApprovalSheet({
       setError(e instanceof Error ? e.message : "Couldn't send");
       setSaving(null);
     }
-  }, [draftId, closeSheet, onDone, showToast]);
+  }, [draftId, approveAction, closeSheet, onDone, showToast]);
 
   return (
     <View style={styles.wrap}>
