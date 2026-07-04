@@ -91,6 +91,23 @@ class ThreadReconciliation(BaseModel):
 
 class AssistantChatReply(BaseModel):
     reply: str = Field(description="A concise, helpful answer grounded in the provided context.")
+    cited_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "IDs of the specific messages, tasks, commitments, or calendar events from the "
+            "provided context that this reply is based on. Every factual claim in the reply "
+            "must trace back to at least one cited id. Leave empty only when has_context is "
+            "false."
+        ),
+    )
+    has_context: bool = Field(
+        default=True,
+        description=(
+            "False when there is no relevant context to answer from — e.g. the user's inbox, "
+            "calendar, or tasks are empty, or nothing in the context relates to what they asked. "
+            "Set this instead of guessing."
+        ),
+    )
 
 
 class AssistantInterpretation(BaseModel):
