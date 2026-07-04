@@ -516,8 +516,11 @@ export function HomeScreen() {
           </Pressable>
         ) : null}
 
-        <View style={styles.butlerBlock}>
-          <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
+        <View style={styles.interactionZone}>
+          <Serif size={30} style={styles.interactionTitle}>
+            {t.capture.idleTitlePlain}{" "}
+            <SerifEm>{t.capture.idleTitleEm}</SerifEm>.
+          </Serif>
           <View style={styles.avatarRow}>
             <CompanionAvatar
               size={160}
@@ -528,6 +531,10 @@ export function HomeScreen() {
               accessibilityLabel={t.a11y.captureHome}
             />
           </View>
+        </View>
+
+        <View style={styles.butlerBlock}>
+          <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
           {todayData?.day_overview ? (
             <Text style={styles.dayOverview}>{todayData.day_overview}</Text>
           ) : null}
@@ -728,12 +735,14 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1 },
   searchBtn: { paddingTop: 8 },
-  butlerBlock: { marginTop: spacing.lg, gap: 8 },
-  avatarRow: {
+  interactionZone: {
     alignItems: "center",
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    marginTop: spacing.lg,
+    gap: spacing.sm,
   },
+  interactionTitle: { textAlign: "center" },
+  butlerBlock: { marginTop: spacing.lg, gap: 8 },
+  avatarRow: { alignItems: "center" },
   butlerLabel: {
     fontFamily: fonts.mono,
     fontSize: 10,
