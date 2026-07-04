@@ -495,6 +495,13 @@ export function HomeScreen() {
           >
             <Ic.Search size={18} color={colors.ink3} stroke={1.5} />
           </Pressable>
+          <CompanionAvatar
+            size={52}
+            level={meta.level}
+            color={meta.color}
+            state={state}
+            speech={t.home.speechHi}
+          />
         </View>
 
         {pendingCount > 0 ? (
