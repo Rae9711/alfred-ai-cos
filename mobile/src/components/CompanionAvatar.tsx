@@ -1,6 +1,6 @@
-// Alfred's companion avatar — 3D robot mascot in SVG.
+// Alfred's companion avatar — 3D robot mascot from bundled reference art.
 //
-// Vector art ported from mobile/demo/avatar-sim/sim.ts (react-native-svg).
+// Raster base (mobile/assets/alfred-mascot.png) + SVG mood overlays.
 // Placements (controlled by parent screens):
 //   • today  — top-right greeting chip ("Hi!")
 //   • ask    — bottom-right while chatting
