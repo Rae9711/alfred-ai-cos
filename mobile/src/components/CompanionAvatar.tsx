@@ -6,7 +6,7 @@
 //   • ask    — bottom-right while chatting
 //   • home   — cloud cottage in the center tab slot (butler peeks out on Inbox / You)
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -132,14 +132,15 @@ export function CompanionAvatar({
   return body;
 }
 
+/** Brief thinking mood on center-tab tap before navigation (T-AV1). */
+export const COMPANION_HOME_TAP_THINKING_MS = 320;
+
 /** Cloud cottage for the tab bar — butler peeks out when occupied (Inbox / You).
  *
- * Tap gives a brief acknowledgment bounce (design: docs/designs/2026-07-02-
- * avatar-interaction-space.md, T-AV1) before onPress fires. Deliberately a local
- * animation, not a change to the shared `state` mood system — that stays reserved
- * for real backend status (thinking/success/error), not a UI tap flourish. Mixing
- * the two would risk a real status update flickering the tap animation or vice
- * versa. */
+ * Tap flashes the thinking mood (~320ms) so Alfred visibly "listens" before
+ * Capture opens (design: docs/designs/2026-07-02-avatar-interaction-space.md,
+ * T-AV1). Local tap state only — not the shared provider mood, which stays
+ * reserved for real backend status (Ask in flight, approval outcomes). */
 export function CompanionAvatarHome({
   size = 54,
   color = colors.accent,
@@ -156,11 +157,17 @@ export function CompanionAvatarHome({
    * is English-only and exists so callers that don't localize still get a label. */
   accessibilityLabel?: string;
 }) {
+  const [tapFlash, setTapFlash] = useState(false);
+  const pending = useRef(false);
   const bounce = useRef(new Animated.Value(1)).current;
+
   const handlePress = () => {
+    if (!onPress || pending.current) return;
+    pending.current = true;
+    setTapFlash(true);
     Animated.sequence([
       Animated.timing(bounce, {
-        toValue: 0.85,
+        toValue: 0.92,
         duration: 80,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
@@ -172,14 +179,26 @@ export function CompanionAvatarHome({
         useNativeDriver: true,
       }),
     ]).start();
-    onPress?.();
+    setTimeout(() => {
+      onPress();
+      setTapFlash(false);
+      pending.current = false;
+    }, COMPANION_HOME_TAP_THINKING_MS);
   };
+
+  const displayState = tapFlash ? "thinking" : state;
+  const displayOccupied = occupied || tapFlash;
 
   const content = (
     <Animated.View
       style={[styles.homeSlot, { transform: [{ scale: bounce }] }]}
     >
-      <CloudHomeSvg size={size} color={color} occupied={occupied} state={state} />
+      <CloudHomeSvg
+        size={size}
+        color={color}
+        occupied={displayOccupied}
+        state={displayState}
+      />
     </Animated.View>
   );
 

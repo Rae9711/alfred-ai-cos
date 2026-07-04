@@ -7,12 +7,15 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { CaptureScreen } from "@/screens/CaptureScreen";
+import { LocaleProvider } from "@/context/LocaleContext";
 
 export default function Capture() {
   const router = useRouter();
   const params = useLocalSearchParams<{ text?: string }>();
   const initialText = typeof params.text === "string" ? params.text : undefined;
   return (
-    <CaptureScreen onClose={() => router.back()} initialText={initialText} />
+    <LocaleProvider>
+      <CaptureScreen onClose={() => router.back()} initialText={initialText} />
+    </LocaleProvider>
   );
 }

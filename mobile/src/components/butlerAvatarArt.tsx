@@ -99,13 +99,13 @@ export function CloudHomeSvg({
       Animated.sequence([
         Animated.timing(hover, {
           toValue: -3,
-          duration: 4400,
+          duration: state === "thinking" ? 2200 : 4400,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(hover, {
           toValue: 0,
-          duration: 4400,
+          duration: state === "thinking" ? 2200 : 4400,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -113,7 +113,7 @@ export function CloudHomeSvg({
     );
     loop.start();
     return () => loop.stop();
-  }, [hover]);
+  }, [hover, state]);
 
   return (
     <Animated.View style={{ transform: [{ translateY: hover }] }}>
@@ -195,6 +195,7 @@ export function CloudHomeSvg({
             strokeWidth="1.5"
             fill="none"
           />
+          {state === "thinking" ? <HomeThinkingBits color={color} /> : null}
         </G>
       </Svg>
     </Animated.View>
@@ -318,6 +319,16 @@ function PeekEyes({
           fill="none"
           strokeLinecap="round"
         />
+      </G>
+    );
+  }
+  if (state === "thinking") {
+    return (
+      <G>
+        <Circle cx="52.5" cy="61.5" r="4.6" fill={`url(#${eyeGrad})`} />
+        <Circle cx="63.5" cy="61.5" r="4.6" fill={`url(#${eyeGrad})`} />
+        <Circle cx="51" cy="60" r="1.3" fill="#FFFFFF" opacity="0.8" />
+        <Circle cx="62" cy="60" r="1.3" fill="#FFFFFF" opacity="0.8" />
       </G>
     );
   }
@@ -544,6 +555,31 @@ function ButlerBody({
         ) : null}
       </G>
     </>
+  );
+}
+
+function HomeThinkingBits({ color }: { color: string }) {
+  return (
+    <G>
+      <Path
+        d="M78 18 L74 8"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M88 14 L88 6"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M98 18 L102 8"
+        stroke={color}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+    </G>
   );
 }
 

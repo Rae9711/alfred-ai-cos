@@ -328,6 +328,59 @@ export const translations = {
         "Wrong token → 401; empty body → 400.",
       ],
     },
+    capture: {
+      eyebrowIdle: "New capture",
+      eyebrowListening: "Listening",
+      eyebrowCaptured: "Captured",
+      idleTitlePlain: "Tell me what's",
+      idleTitleEm: "on your mind",
+      idleSub:
+        "Type it, or tap the mic to speak. I'll pull out tasks, dates, people, and projects.",
+      composerPlaceholder:
+        "e.g. remind me to email Daniel the A3 PDF tomorrow, book the United flight home for Friday morning…",
+      composerSubmit: "Tell Alfred",
+      composerParsing: "Parsing…",
+      listenFor: "I'll listen for",
+      chipDates: "Dates",
+      chipPeople: "People",
+      chipTasks: "Tasks",
+      chipProjects: "Projects",
+      chipDecisions: "Decisions",
+      micA11y: "Speak instead of typing",
+      snapSoonTitle: "Photo capture",
+      snapSoonBody:
+        "Snapping a whiteboard or to-do list is coming soon. For now, speak or type your note.",
+      snapLabel: "Snap a photo",
+      forwardSoonTitle: "Forwarding address",
+      forwardSoonBody:
+        "you@in.albert.app — forward email or share notes here and Albert sorts them into tasks. (Clipboard copy coming soon.)",
+      forwardLabel: "Forward something",
+      recordingHint:
+        "Take your time. I'll sort dates, people, and projects when you stop.",
+      stopA11y: "Stop",
+      parseFailed: "Couldn't parse that note",
+      ackNothing:
+        "I didn't pick up anything actionable in that — want to try again?",
+      ackOne: (title: string) => `Got it — I've noted "${title}".`,
+      ackDue: (title: string, due: string) =>
+        `Understood — "${title}" is on for ${due}.`,
+      ackReminder: (title: string, when: string) =>
+        `I'll remind you about "${title}" ${when}.`,
+      ackOneWithProject: (title: string, project: string) =>
+        `Noted under ${project}: "${title}".`,
+      ackMany: (n: number, first: string) =>
+        n === 2
+          ? `I've pulled out two things — "${first}" and one more.`
+          : `I've pulled out ${n} things — starting with "${first}".`,
+      ackManyWithProject: (n: number, first: string, project: string) =>
+        n === 2
+          ? `Two items for ${project} — "${first}" and one more.`
+          : `${n} items for ${project} — starting with "${first}".`,
+      resultSection: "What I've noted",
+      addToToday: (n: number) =>
+        n === 1 ? "Add to Today" : `Add ${n} to Today`,
+      redo: "Try again",
+    },
     a11y: {
       captureHome: "Alfred companion home — open capture",
       captureAway: "Alfred away working — open capture",
@@ -675,6 +728,55 @@ export const translations = {
         "HTTP 返回 200，JSON 含 message_id。",
         "令牌错误 → 401；正文为空 → 400。",
       ],
+    },
+    capture: {
+      eyebrowIdle: "新速记",
+      eyebrowListening: "聆听中",
+      eyebrowCaptured: "已记录",
+      idleTitlePlain: "告诉我",
+      idleTitleEm: "你在想什么",
+      idleSub: "打字或点麦克风说话。我会整理任务、日期、联系人和项目。",
+      composerPlaceholder:
+        "例如：明天提醒我给 Daniel 发 A3 PDF，订周五早上回家的 United 航班…",
+      composerSubmit: "告诉 Alfred",
+      composerParsing: "解析中…",
+      listenFor: "我会留意",
+      chipDates: "日期",
+      chipPeople: "联系人",
+      chipTasks: "任务",
+      chipProjects: "项目",
+      chipDecisions: "决策",
+      micA11y: "用语音代替打字",
+      snapSoonTitle: "拍照速记",
+      snapSoonBody:
+        "拍摄白板或待办清单即将上线。现在请先说话或打字。",
+      snapLabel: "拍张照片",
+      forwardSoonTitle: "转发地址",
+      forwardSoonBody:
+        "you@in.albert.app — 转发邮件或分享笔记，Albert 会整理成任务。（复制地址即将上线。）",
+      forwardLabel: "转发内容",
+      recordingHint: "慢慢来。停止后我会整理日期、联系人和项目。",
+      stopA11y: "停止",
+      parseFailed: "无法解析这条笔记",
+      ackNothing: "我没从中找到可执行的内容 — 要再试一次吗？",
+      ackOne: (title: string) => `好的 — 我已记下「${title}」。`,
+      ackDue: (title: string, due: string) =>
+        `明白 — 「${title}」安排在 ${due}。`,
+      ackReminder: (title: string, when: string) =>
+        `我会在 ${when} 提醒你「${title}」。`,
+      ackOneWithProject: (title: string, project: string) =>
+        `已归入 ${project}：「${title}」。`,
+      ackMany: (n: number, first: string) =>
+        n === 2
+          ? `我整理了两件事 — 「${first}」还有一项。`
+          : `我整理了 ${n} 件事 — 首先是「${first}」。`,
+      ackManyWithProject: (n: number, first: string, project: string) =>
+        n === 2
+          ? `${project} 下有两项 — 「${first}」还有一项。`
+          : `${project} 下有 ${n} 项 — 首先是「${first}」。`,
+      resultSection: "我已记下",
+      addToToday: (n: number) => (n === 1 ? "加入今日" : `加入今日（${n} 项）`),
+      redo: "重来",
     },
     a11y: {
       captureHome: "管家在家 — 打开速记",

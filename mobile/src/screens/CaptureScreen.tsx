@@ -31,12 +31,13 @@ import {
   Btn,
   Eyebrow,
   IconBtn,
-  Meta,
   Pill,
   Serif,
   SerifEm,
   inputPlaceholder,
 } from "@/components/ui";
+import { useLocale } from "@/context/LocaleContext";
+import { buildCaptureAcknowledgment } from "@/lib/captureAck";
 import { colors, fonts, layout } from "@/theme/theme";
 
 type Phase = "idle" | "recording" | "parsed";
@@ -48,6 +49,7 @@ export function CaptureScreen({
   onClose: () => void;
   initialText?: string;
 }) {
+  const { t } = useLocale();
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState(initialText ?? "");
   const [result, setResult] = useState<CaptureResponse | null>(null);
@@ -63,20 +65,20 @@ export function CaptureScreen({
   const dark = phase === "recording" || recording;
 
   const submitText = useCallback(async () => {
-    const t = text.trim();
-    if (!t) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await api.captureText(t);
+      const r = await api.captureText(trimmed);
       setResult(r);
       setPhase("parsed");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't parse that note");
+      setError(e instanceof Error ? e.message : t.capture.parseFailed);
     } finally {
       setBusy(false);
     }
-  }, [text]);
+  }, [text, t.capture.parseFailed]);
 
   const reset = () => {
     setPhase("idle");
@@ -106,10 +108,10 @@ export function CaptureScreen({
         </IconBtn>
         <Eyebrow color={dark ? "rgba(255,255,255,0.6)" : colors.ink3}>
           {phase === "idle"
-            ? "New capture"
+            ? t.capture.eyebrowIdle
             : recording
-              ? "Listening"
-              : "Captured"}
+              ? t.capture.eyebrowListening
+              : t.capture.eyebrowCaptured}
         </Eyebrow>
         <View style={styles.topSpacer} />
       </View>
@@ -117,7 +119,6 @@ export function CaptureScreen({
       {phase === "parsed" && result ? (
         <ParsedState
           result={result}
-          transcript={text}
           onRedo={reset}
           onDone={onClose}
         />
@@ -154,6 +155,7 @@ function IdleState({
   onStartVoice: () => void;
   onSubmitText: () => void;
 }) {
+  const { t } = useLocale();
   return (
     <ScrollView
       style={styles.scroll}
@@ -162,12 +164,10 @@ function IdleState({
     >
       <View style={styles.idleTitle}>
         <Serif size={30} style={styles.idleHeading}>
-          Tell me what's <SerifEm>on your mind</SerifEm>.
+          {t.capture.idleTitlePlain}{" "}
+          <SerifEm>{t.capture.idleTitleEm}</SerifEm>.
         </Serif>
-        <Text style={styles.idleSub}>
-          Type it, or tap the mic to speak. I'll pull out tasks, dates,
-          people, and projects.
-        </Text>
+        <Text style={styles.idleSub}>{t.capture.idleSub}</Text>
       </View>
 
       <UnifiedComposer
@@ -182,32 +182,31 @@ function IdleState({
 
       <SecondaryActions />
 
-      {/* I'll listen for */}
       <View style={styles.listenFor}>
         <View style={styles.listenHead}>
           <AlfMark size={12} color={colors.accent} />
-          <Text style={styles.listenLabel}>I'll listen for</Text>
+          <Text style={styles.listenLabel}>{t.capture.listenFor}</Text>
         </View>
         <View style={styles.chipRow}>
           {[
             {
-              label: "Dates",
+              label: t.capture.chipDates,
               icon: <Ic.Calendar size={11} color={colors.ink3} stroke={1.8} />,
             },
             {
-              label: "People",
+              label: t.capture.chipPeople,
               icon: <Ic.User size={11} color={colors.ink3} stroke={1.8} />,
             },
             {
-              label: "Tasks",
+              label: t.capture.chipTasks,
               icon: <Ic.Check size={11} color={colors.ink3} stroke={2.4} />,
             },
             {
-              label: "Projects",
+              label: t.capture.chipProjects,
               icon: <Ic.Stack size={11} color={colors.ink3} stroke={1.8} />,
             },
             {
-              label: "Decisions",
+              label: t.capture.chipDecisions,
               icon: <Ic.Bell size={11} color={colors.ink3} stroke={1.8} />,
             },
           ].map((c) => (
@@ -242,13 +241,14 @@ function UnifiedComposer({
   onStartVoice: () => void;
   onSubmit: () => void;
 }) {
+  const { t } = useLocale();
   return (
     <View style={styles.composer}>
       <View style={styles.composerInputRow}>
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="e.g. remind me to email Daniel the A3 PDF tomorrow, book the United flight home for Friday morning…"
+          placeholder={t.capture.composerPlaceholder}
           placeholderTextColor={inputPlaceholder}
           multiline
           style={styles.composerInput}
@@ -256,13 +256,13 @@ function UnifiedComposer({
         <Pressable
           style={styles.composerMic}
           onPress={onStartVoice}
-          accessibilityLabel="Speak instead of typing"
+          accessibilityLabel={t.capture.micA11y}
         >
           <Ic.Mic size={20} color="#fff" stroke={1.6} />
         </Pressable>
       </View>
       <Btn
-        label={busy ? "Parsing…" : "Tell Alfred"}
+        label={busy ? t.capture.composerParsing : t.capture.composerSubmit}
         kind="accent"
         full
         disabled={busy || !text.trim()}
@@ -275,31 +275,26 @@ function UnifiedComposer({
 // Snap and Forward stay reachable but demoted to compact secondary actions,
 // not full modes competing with the primary composer for attention.
 function SecondaryActions() {
+  const { t } = useLocale();
   return (
     <View style={styles.secondaryRow}>
       <Pressable
         style={styles.secondaryAction}
         onPress={() =>
-          Alert.alert(
-            "Photo capture",
-            "Snapping a whiteboard or to-do list is coming soon. For now, speak or type your note.",
-          )
+          Alert.alert(t.capture.snapSoonTitle, t.capture.snapSoonBody)
         }
       >
         <Ic.Image size={14} color={colors.ink3} stroke={1.6} />
-        <Text style={styles.secondaryActionLabel}>Snap a photo</Text>
+        <Text style={styles.secondaryActionLabel}>{t.capture.snapLabel}</Text>
       </Pressable>
       <Pressable
         style={styles.secondaryAction}
         onPress={() =>
-          Alert.alert(
-            "Forwarding address",
-            "you@in.albert.app — forward email or share notes here and Albert sorts them into tasks. (Clipboard copy coming soon.)",
-          )
+          Alert.alert(t.capture.forwardSoonTitle, t.capture.forwardSoonBody)
         }
       >
         <Ic.Forward size={14} color={colors.ink3} stroke={1.6} />
-        <Text style={styles.secondaryActionLabel}>Forward something</Text>
+        <Text style={styles.secondaryActionLabel}>{t.capture.forwardLabel}</Text>
       </Pressable>
     </View>
   );
@@ -308,6 +303,7 @@ function SecondaryActions() {
 // ── Recording ──────────────────────────────────────────────────────────────
 
 function RecordingState({ onStop }: { onStop: () => void }) {
+  const { t } = useLocale();
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setElapsed((e) => e + 0.1), 100);
@@ -316,7 +312,7 @@ function RecordingState({ onStop }: { onStop: () => void }) {
   return (
     <View style={styles.recording}>
       <View style={styles.recTop}>
-        <Text style={styles.recListening}>Listening</Text>
+        <Text style={styles.recListening}>{t.capture.eyebrowListening}</Text>
         <Serif size={38} color="#fff" style={styles.recTimer}>
           {elapsed.toFixed(1)}
           <Text style={styles.recTimerUnit}>s</Text>
@@ -329,12 +325,12 @@ function RecordingState({ onStop }: { onStop: () => void }) {
         color="rgba(255,255,255,0.7)"
         style={styles.recHint}
       >
-        Take your time. I'll sort dates, people, and projects when you stop.
+        {t.capture.recordingHint}
       </Serif>
       <Pressable
         style={styles.stopBtn}
         onPress={onStop}
-        accessibilityLabel="Stop"
+        accessibilityLabel={t.capture.stopA11y}
       >
         <View style={styles.stopSquare} />
       </Pressable>
@@ -395,38 +391,24 @@ function Waveform() {
 
 function ParsedState({
   result,
-  transcript,
   onRedo,
   onDone,
 }: {
   result: CaptureResponse;
-  transcript: string;
   onRedo: () => void;
   onDone: () => void;
 }) {
+  const { t } = useLocale();
   const tasks = result.tasks;
+  const acknowledgment = buildCaptureAcknowledgment(result, t.capture);
   return (
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.parsedContent}
     >
       <Serif size={26} style={styles.parsedHeading}>
-        Here's what I <SerifEm>heard</SerifEm>.
+        {acknowledgment}
       </Serif>
-
-      {transcript ? (
-        <View style={styles.transcript}>
-          <Text style={styles.transcriptLabel}>Transcript</Text>
-          <Serif
-            size={15.5}
-            italic
-            color={colors.ink2}
-            style={styles.transcriptText}
-          >
-            "{transcript}"
-          </Serif>
-        </View>
-      ) : null}
 
       {result.detected_project ? (
         <View style={styles.chips}>
@@ -438,35 +420,42 @@ function ParsedState({
         </View>
       ) : null}
 
-      <Text style={styles.parsedSection}>
-        {tasks.length} task{tasks.length === 1 ? "" : "s"} extracted
-      </Text>
-      <View style={styles.taskList}>
-        {tasks.map((t, i) => (
-          <View key={t.id} style={styles.taskCard}>
-            <View style={styles.taskNum}>
-              <Text style={styles.taskNumText}>{i + 1}</Text>
-            </View>
-            <View style={styles.taskBody}>
-              <Text style={styles.taskTitle}>{t.title}</Text>
-              <View style={styles.taskMeta}>
-                {t.due_date ? <Pill label={t.due_date} kind="warn" /> : null}
+      {tasks.length > 0 ? (
+        <>
+          <Text style={styles.parsedSection}>{t.capture.resultSection}</Text>
+          <View style={styles.taskList}>
+            {tasks.map((task, i) => (
+              <View key={task.id} style={styles.taskCard}>
+                <View style={styles.taskNum}>
+                  <Text style={styles.taskNumText}>{i + 1}</Text>
+                </View>
+                <View style={styles.taskBody}>
+                  <Text style={styles.taskTitle}>{task.title}</Text>
+                  <View style={styles.taskMeta}>
+                    {task.due_date ? (
+                      <Pill label={task.due_date} kind="warn" />
+                    ) : null}
+                    {task.remind_at ? (
+                      <Pill label={task.remind_at} kind="muted" />
+                    ) : null}
+                  </View>
+                </View>
               </View>
-            </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      ) : null}
 
       <View style={styles.parsedActions}>
         <Btn
-          label="Redo"
+          label={t.capture.redo}
           kind="ghost"
           onPress={onRedo}
           style={styles.redoBtn}
           leading={<Ic.Refresh size={12} color={colors.ink2} />}
         />
         <Btn
-          label={`Add ${tasks.length} to Today`}
+          label={t.capture.addToToday(tasks.length)}
           kind="accent"
           onPress={onDone}
           style={styles.addBtn}
@@ -617,22 +606,7 @@ const styles = StyleSheet.create({
   },
 
   parsedContent: { paddingHorizontal: layout.padX, paddingBottom: 30 },
-  parsedHeading: { marginTop: 8 },
-  transcript: {
-    marginTop: 14,
-    backgroundColor: colors.paper2,
-    borderRadius: 18,
-    padding: layout.cardPad,
-  },
-  transcriptLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
-    marginBottom: 8,
-  },
-  transcriptText: { lineHeight: 23 },
+  parsedHeading: { marginTop: 8, lineHeight: 32 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 14 },
   parsedSection: {
     fontSize: 13,
