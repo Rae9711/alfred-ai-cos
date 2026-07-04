@@ -110,7 +110,7 @@ export function MessageDetailSheet({
           <Text style={styles.from}>{sender}</Text>
           {summary ? (
             <View style={styles.summaryBox}>
-              <Text style={styles.summaryLabel}>{t.ask.albertSummary}</Text>
+              <Text style={styles.summaryLabel}>{t.ask.alfredSummary}</Text>
               <Text style={styles.summaryText}>{summary}</Text>
             </View>
           ) : null}

@@ -129,7 +129,7 @@ export const translations = {
       unreadLabel: "Unread",
       readLabel: "Read",
       mailboxChip: "Mailbox",
-      albertTake: "Alfred's read",
+      alfredTake: "Alfred's read",
       openLink: "Open link",
     },
     ask: {
@@ -158,7 +158,7 @@ export const translations = {
       drafting: "Drafting your reply…",
       originalEmail: "Original email",
       loadingEmail: "Loading full email…",
-      albertSummary: "Summary",
+      alfredSummary: "Summary",
       openInMessages: "Open in Messages",
       smsOpened: "Draft ready in Messages — tap Send when it looks right.",
       smsMissingPhone:
@@ -537,7 +537,7 @@ export const translations = {
       unreadLabel: "未读",
       readLabel: "已读",
       mailboxChip: "邮箱",
-      albertTake: "管家摘要",
+      alfredTake: "管家摘要",
       openLink: "打开链接",
     },
     ask: {
@@ -566,7 +566,7 @@ export const translations = {
       drafting: "正在起草回复…",
       originalEmail: "原始邮件",
       loadingEmail: "正在加载完整邮件…",
-      albertSummary: "摘要",
+      alfredSummary: "摘要",
       openInMessages: "在「信息」中发送",
       smsOpened: "已在「信息」中填好草稿 — 确认后点发送即可。",
       smsMissingPhone: "无法识别发件人号码，请在设置中重新安装 Alfred 短信快捷指令。",

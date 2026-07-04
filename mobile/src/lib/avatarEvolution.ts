@@ -40,19 +40,19 @@ export type EvolutionState = {
 export const EVOLUTION_FORMS: [EvolutionForm, ...EvolutionForm[]] = [
   {
     minLevel: 1,
-    name: "Cloud core",
+    name: "Alfred",
     shellAsset: "/avatar-pack/evo-core-lv1.svg",
     lottieSkin: "cloud-core-base.json",
   },
   {
     minLevel: 5,
-    name: "Cloud core · advanced",
+    name: "Alfred · seasoned",
     shellAsset: "/avatar-pack/evo-core-lv5.svg",
     lottieSkin: "cloud-core-base.json",
   },
   {
     minLevel: 10,
-    name: "Cloud core · awakened",
+    name: "Alfred · awakened",
     shellAsset: "/avatar-pack/evo-core-lv10.svg",
     lottieSkin: "cloud-core-base.json",
   },

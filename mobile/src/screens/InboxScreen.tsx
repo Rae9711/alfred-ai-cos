@@ -300,7 +300,7 @@ export function InboxScreen() {
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
                 processed: t.inbox.processed,
-                albertTake: t.inbox.albertTake,
+                alfredTake: t.inbox.alfredTake,
               }}
             />
           ))}
@@ -329,7 +329,7 @@ export function InboxScreen() {
                 unread: t.inbox.unreadLabel,
                 replied: t.inbox.replied,
                 processed: t.inbox.processed,
-                albertTake: t.inbox.albertTake,
+                alfredTake: t.inbox.alfredTake,
               }}
             />
           ))}
@@ -480,7 +480,7 @@ function InboxCard({
     unread: string;
     replied: string;
     processed: string;
-    albertTake: string;
+    alfredTake: string;
   };
 }) {
   return (
@@ -500,7 +500,7 @@ function InboxCard({
           </View>
           <Text style={styles.cardTitle}>{item.title}</Text>
           {item.take ? (
-            <Text style={styles.summaryLabel}>{labels.albertTake}</Text>
+            <Text style={styles.summaryLabel}>{labels.alfredTake}</Text>
           ) : null}
           <Text style={styles.summary}>{item.summary}</Text>
           <MessageLinks
@@ -564,7 +564,7 @@ function DecisionCard({
     unread: string;
     replied: string;
     processed: string;
-    albertTake: string;
+    alfredTake: string;
   };
 }) {
   return (
@@ -584,7 +584,7 @@ function DecisionCard({
           </View>
           <Text style={styles.cardTitle}>{item.title}</Text>
           {item.take ? (
-            <Text style={styles.summaryLabel}>{labels.albertTake}</Text>
+            <Text style={styles.summaryLabel}>{labels.alfredTake}</Text>
           ) : null}
           <Text style={styles.summary}>{item.summary}</Text>
           <MessageLinks

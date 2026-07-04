@@ -832,7 +832,7 @@ export function AskScreen() {
               labels={{
                 title: t.ask.originalEmail,
                 loading: t.ask.loadingEmail,
-                summary: t.ask.albertSummary,
+                summary: t.ask.alfredSummary,
               }}
             />
           ) : null}

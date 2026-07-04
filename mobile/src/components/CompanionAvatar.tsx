@@ -1,10 +1,10 @@
-// Alfred's companion avatar — "Light Airy Butler" + cloud cottage home.
+// Alfred's companion avatar — 3D robot mascot in SVG.
 //
 // Vector art ported from mobile/demo/avatar-sim/sim.ts (react-native-svg).
 // Placements (controlled by parent screens):
 //   • today  — top-right greeting chip ("Hi!")
 //   • ask    — bottom-right while chatting
-//   • home   — cloud cottage in the center tab slot (butler peeks out on Inbox / You)
+//   • home   — robot bust in the center tab slot (Capture entry)
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -135,7 +135,7 @@ export function CompanionAvatar({
 /** Brief thinking mood on center-tab tap before navigation (T-AV1). */
 export const COMPANION_HOME_TAP_THINKING_MS = 320;
 
-/** Cloud cottage for the tab bar — butler peeks out when occupied (Inbox / You).
+/** Robot bust for the tab bar — active face when occupied (Inbox / You).
  *
  * Tap flashes the thinking mood (~320ms) so Alfred visibly "listens" before
  * Capture opens (design: docs/designs/2026-07-02-avatar-interaction-space.md,
