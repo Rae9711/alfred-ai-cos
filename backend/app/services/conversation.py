@@ -444,15 +444,10 @@ def confirm_action(
         )
 
     if kind in (ConversationActionKind.follow_up, ConversationActionKind.commitment):
-        owner = (
-            CommitmentOwner.user
-            if kind == ConversationActionKind.commitment
-            else CommitmentOwner.user
-        )
         commitment = Commitment(
             user_id=user.id,
             description=title,
-            owner=owner,
+            owner=CommitmentOwner.user,
             counterparty=payload.counterparty,
             due_date=payload.due_date,
             priority=Priority.medium,
@@ -461,6 +456,9 @@ def confirm_action(
             source_id=payload.conversation_id,
             evidence=evidence,
             confidence=payload.confidence,
+            # Marker so the conversation inbox can distinguish follow-ups from
+            # open-loop commitments without a schema change.
+            reason=f"conversation:{kind.value}",
         )
         db.add(commitment)
         db.commit()
@@ -546,16 +544,13 @@ def list_conversation_inbox(db: Session, user_id: str) -> ConversationInboxRespo
             )
         )
     for c in commitments:
-        desc_lower = (c.description or "").lower()
-        kind = (
-            "follow_up"
-            if (
-                "跟进" in (c.description or "")
-                or "ask" in desc_lower
-                or "询问" in (c.description or "")
-            )
-            else "commitment"
-        )
+        desc = c.description or ""
+        desc_lower = desc.lower()
+        reason = c.reason or ""
+        if reason.endswith(":follow_up") or "跟进" in desc or "询问" in desc or "ask" in desc_lower:
+            kind = "follow_up"
+        else:
+            kind = "commitment"
         items.append(
             ConversationInboxItem(
                 id=c.id,
