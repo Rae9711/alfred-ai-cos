@@ -17,7 +17,9 @@ from datetime import UTC, datetime
 
 from google.auth.exceptions import RefreshError
 from sqlalchemy import or_, select
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import ObjectDeletedError, StaleDataError
 
 from app.core.config import get_settings
 from app.core.metrics import SYNC_RESULT
@@ -335,9 +337,7 @@ def _sync_account(
         SYNC_RESULT.labels(result="ok").inc()
     except Exception as exc:
         db.rollback()
-        account.sync_status = SyncStatus.error
-        account.sync_error = str(exc)[:500]
-        db.commit()
+        _flag_account_sync_error(db, account, exc)
         SYNC_RESULT.labels(result="error").inc()
         raise
     return SyncIngestResult(new_messages=new_messages, initial_backfill=initial_backfill)
@@ -391,6 +391,24 @@ def messages_to_process(
     return new_messages + pending
 
 
+def _flag_account_sync_error(db: Session, account: ConnectedAccount, exc: BaseException) -> bool:
+    """Best-effort persist of sync_status=error / sync_error on a mailbox.
+
+    Returns False when the account row was removed concurrently (the user disconnected
+    the mailbox mid-sync). In that case there is nothing to flag and the caller should
+    treat the mailbox as gone rather than 500 on the failed UPDATE. Without this, a
+    revoked-grant sync racing a DELETE /connected-accounts surfaces as StaleDataError
+    ("expected to update 1 row(s); 0 were matched") and breaks the whole /sync call."""
+    try:
+        account.sync_status = SyncStatus.error
+        account.sync_error = str(exc)[:500]
+        db.commit()
+        return True
+    except (StaleDataError, ObjectDeletedError, InvalidRequestError):
+        db.rollback()
+        return False
+
+
 def _is_reconnect_error(exc: BaseException) -> bool:
     """True when a sync failure is a revoked/expired Google grant (reconnect needed).
 
@@ -433,9 +451,10 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
                 any_initial = any_initial or result.initial_backfill
             except Exception as exc:
                 db.rollback()
-                account.sync_status = SyncStatus.error
-                account.sync_error = str(exc)[:500]
-                db.commit()
+                if not _flag_account_sync_error(db, account, exc):
+                    # Mailbox was disconnected mid-sync: it's gone, not errored. Skip it
+                    # rather than counting a phantom failure that could 502 the sync.
+                    continue
                 if not _is_reconnect_error(exc):
                     all_reconnect = False
                 label = account.provider_account_email or account.id

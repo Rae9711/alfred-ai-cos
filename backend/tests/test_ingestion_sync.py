@@ -340,6 +340,44 @@ def test_sync_raises_reconnect_when_grant_revoked(
     assert account.sync_status == SyncStatus.error
 
 
+def test_flag_account_sync_error_tolerates_deleted_row(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the mailbox row was removed concurrently, the error-flagging UPDATE matches
+    0 rows (StaleDataError). The helper must swallow it and report the account is gone
+    rather than letting the exception escape and 500 the whole /sync call."""
+    from sqlalchemy.orm.exc import StaleDataError
+
+    account = _connect(db, user)
+
+    def boom_commit() -> None:
+        raise StaleDataError("expected to update 1 row(s); 0 were matched")
+
+    monkeypatch.setattr(db, "commit", boom_commit)
+    assert ingestion._flag_account_sync_error(db, account, RuntimeError("revoked")) is False
+
+
+def test_sync_does_not_500_when_mailbox_disconnected_mid_sync(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revoked grant + a concurrent DELETE /connected-accounts must NOT raise. The
+    vanished mailbox is skipped and sync returns an empty (graceful) result."""
+    from google.auth.exceptions import RefreshError
+
+    _connect(db, user, history_id=None)
+
+    def revoked(*_a, **_k):
+        raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    monkeypatch.setattr(gmail, "list_recent_message_ids", revoked)
+    # Simulate the row being gone by the time we try to flag it (disconnected mid-sync).
+    monkeypatch.setattr(ingestion, "_flag_account_sync_error", lambda *_a, **_k: False)
+
+    result = ingestion.sync_messages(db, user.id)
+    assert result.new_messages == []
+    assert result.initial_backfill is False
+
+
 def test_ingest_skips_deleted_gmail_messages(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

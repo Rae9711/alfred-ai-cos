@@ -18,7 +18,11 @@ def normalize_sms_body_text(text: str) -> str:
     except json.JSONDecodeError:
         return stripped
     extracted = _extract_from_parsed(parsed)
-    return extracted if extracted else stripped
+    # Parsed as JSON but carried no usable text — e.g. the iOS Shortcut posted an empty
+    # dictionary {"body":"","text":"","shortcut_input":""} because its variable refs were
+    # stripped on import. Returning the raw JSON would show literal braces as the message
+    # (and store a spam-looking row); return "" so the caller rejects it as an empty body.
+    return extracted or ""
 
 
 def _extract_from_parsed(value: Any) -> str | None:

@@ -89,7 +89,11 @@ def sync_now(
         result, processed, commitments = run_mail_sync(
             db, user.id, ingest_only=ingest_only, reclassify=reclassify
         )
-    except TokenReconnectRequired:
+    except _RECONNECT_EXCEPTIONS:
+        # A revoked/expired grant (typed TokenReconnectRequired, or a raw RefreshError
+        # that escaped a path we didn't wrap) can never succeed on retry — degrade to a
+        # zeroed 200 so the home/inbox screens keep loading their cached data instead of
+        # surfacing a 502/500 outage. The mailbox's sync_status drives the reconnect prompt.
         return _reconnect_response()
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

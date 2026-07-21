@@ -70,10 +70,51 @@ def is_unknown_sms_sender(phone: str | None) -> bool:
     return normalize_phone(phone) == UNKNOWN_SMS_SENDER
 
 
-def _display_sender(*, phone: str, name: str | None) -> str:
+# Leading junk iOS prepends to some SMS bodies (object-replacement + zero-width chars).
+_SMS_BODY_JUNK = "\ufffc\u200b\u200c\u200d\u200e\u200f\ufeff \t"
+_BRACKET_SENDER_RE = re.compile(r"^\[([^\]]{1,40})\]")
+_ITS_SENDER_RE = re.compile(
+    r"^(?:hi|hello|hey)[,!\s]+(?:it['\u2019]s|this is)\s+"
+    r"([A-Za-z0-9][\w &.'\u2019-]{1,38}?)\s*[.!,:]",
+    re.IGNORECASE,
+)
+_COLON_SENDER_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9 &.'\u2019-]{1,38}?)\s*[:：]")
+
+
+def _sender_from_body(body: str | None) -> str | None:
+    """Derive a readable sender for A2P / business texts that embed their identity in
+    the message, used when the iOS Shortcut could supply neither phone nor contact name.
+
+    "Temu: Your $300 ..." -> "Temu"; "[TikTok] Verification ..." -> "TikTok";
+    "Hi, it's CVS Health. Reply ..." -> "CVS Health". Returns None for ordinary personal
+    texts (no leading sender marker) so they keep the neutral "Unknown sender" label."""
+    if not body:
+        return None
+    text = body.strip().lstrip(_SMS_BODY_JUNK).strip()
+    if not text:
+        return None
+    for pattern, max_words in (
+        (_ITS_SENDER_RE, 5),
+        (_BRACKET_SENDER_RE, 5),
+        (_COLON_SENDER_RE, 4),
+    ):
+        m = pattern.match(text)
+        if not m:
+            continue
+        name = m.group(1).strip(" .-'\u2019\t")
+        # A real sender label is a short brand/name, not a sentence fragment.
+        if name and len(name) <= 40 and 1 <= len(name.split()) <= max_words:
+            return name
+    return None
+
+
+def _display_sender(*, phone: str, name: str | None, body: str | None = None) -> str:
     if is_unknown_sms_sender(phone):
         if name and name.strip():
             return name.strip()
+        from_body = _sender_from_body(body)
+        if from_body:
+            return from_body
         return "Unknown sender"
     if name and name.strip():
         return f"{name.strip()} ({phone})"
@@ -188,7 +229,7 @@ def ingest_sms(
             is not None,
         )
 
-    sender = _display_sender(phone=phone, name=from_name)
+    sender = _display_sender(phone=phone, name=from_name, body=text)
     headers = _sms_headers(phone=phone, body=text)
     if backfill:
         headers["sms_backfill"] = True

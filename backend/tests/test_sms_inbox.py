@@ -137,6 +137,46 @@ def test_display_sender_uses_name_when_phone_unknown() -> None:
     assert _display_sender(phone=sms_inbox.UNKNOWN_SMS_SENDER, name=None) == "Unknown sender"
 
 
+def test_display_sender_derives_from_body_when_phone_and_name_missing() -> None:
+    from app.services.sms_inbox import UNKNOWN_SMS_SENDER, _display_sender
+
+    def label(body: str) -> str:
+        return _display_sender(phone=UNKNOWN_SMS_SENDER, name=None, body=body)
+
+    assert label("Temu: Your $300 Credits is ready! Shop now") == "Temu"
+    assert label("[TikTok] Verification code: 640100. Please sign in") == "TikTok"
+    assert label("Hi, it's CVS Health. Reply YES to opt into texts.") == "CVS Health"
+    assert label("\ufffcalexanderwang: extra 25% off sale just dropped") == "alexanderwang"
+    assert label("Neiman Marcus: Just for you: 25% off") == "Neiman Marcus"
+    # Ordinary personal texts have no sender marker → stay neutral.
+    assert label("are we still on for dinner tonight?") == "Unknown sender"
+    assert label("Yeah sounds good, see you then") == "Unknown sender"
+
+
+def test_display_sender_prefers_name_over_body() -> None:
+    from app.services.sms_inbox import UNKNOWN_SMS_SENDER, _display_sender
+
+    assert (
+        _display_sender(phone=UNKNOWN_SMS_SENDER, name="Mom", body="Temu: deal inside") == "Mom"
+    )
+
+
+def test_ingest_sms_labels_business_sender_from_body(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    result = sms_inbox.ingest_sms(
+        db,
+        user=user,
+        from_number=sms_inbox.UNKNOWN_SMS_SENDER,
+        body="Temu: Your $300 Credits is ready!",
+        message_id="brand-1",
+    )
+    msg = db.get(Message, result.message_id)
+    assert msg is not None
+    assert msg.sender == "Temu"
+
+
 def test_sms_webhook_accepts_body_only_payload(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -247,6 +287,30 @@ def test_sms_webhook_rejects_empty_json_body(
     with pytest.raises(HTTPException) as exc:
         asyncio.run(inbox_mod.sms_inbox_webhook(request, x_sms_token=token, db=db))
     assert exc.value.status_code == 400
+
+
+def test_sms_webhook_rejects_empty_stringified_json_body(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken shortcut posts body as a stringified dict with empty values. It must be
+    rejected with a clean 400 rather than storing '{"body":"",...}' as a garbage row."""
+    from fastapi import HTTPException
+
+    _patch_llm(monkeypatch, FakeLLM(commitments=[]))
+    token = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+
+    before = db.query(Message).count()
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            _post_sms_webhook(
+                token=token,
+                payload={"body": '{"body":"","text":"","shortcut_input":""}'},
+                db=db,
+            )
+        )
+    assert exc.value.status_code == 400
+    assert db.query(Message).count() == before
 
 
 def test_sms_webhook_accepts_array_from_number(

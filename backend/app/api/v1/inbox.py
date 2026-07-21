@@ -251,7 +251,10 @@ class SmsIn(BaseModel):
         )
         return {
             "from_number": resolve_sms_sender_phone(phone) if phone else UNKNOWN_SMS_SENDER,
-            "body": normalize_sms_body_text(body) if body else body,
+            # Coerce a missing/empty body to "" (not None) so the webhook returns a clean
+            # 400 "SMS body is required" instead of a pydantic validation 500 when a broken
+            # shortcut posts an empty payload like {"body":"","text":"","shortcut_input":""}.
+            "body": (normalize_sms_body_text(body) if body else "") or "",
             "from_name": from_name,
             "message_id": _coerce_optional_str(data.get("message_id") or data.get("messageId")),
             "received_at": data.get("received_at") or data.get("receivedAt"),
