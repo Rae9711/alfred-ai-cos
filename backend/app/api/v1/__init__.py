@@ -11,6 +11,7 @@ from app.api.v1 import (
     capture,
     commitments,
     compose,
+    conversations,
     dev,
     drafts,
     inbox,
@@ -43,6 +44,7 @@ api_router.include_router(messages.router)
 api_router.include_router(briefings.router)
 api_router.include_router(tasks.router)
 api_router.include_router(capture.router)
+api_router.include_router(conversations.router)
 api_router.include_router(waiting.router)
 api_router.include_router(me.router)
 api_router.include_router(billing.router)

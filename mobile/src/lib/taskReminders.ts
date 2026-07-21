@@ -62,6 +62,8 @@ export async function syncLocalRemindersForTasks(tasks: Task[]): Promise<void> {
 
   const keep = new Set<string>();
   for (const task of tasks) {
+    // Only schedule for tasks that already have a remind_at (user-confirmed or
+    // explicitly timed). Never notify just because AI extracted something.
     if (!task.remind_at) continue;
     const id = await scheduleLocalTaskReminder({
       taskId: task.id,

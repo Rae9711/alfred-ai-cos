@@ -59,6 +59,7 @@ class SourceType(enum.StrEnum):
     calendar = "calendar"
     manual = "manual"
     voice = "voice"
+    conversation = "conversation"
 
 
 # Action risk levels per PRD section 12.10. Levels 4-5 require strong confirmation.

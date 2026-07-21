@@ -27,10 +27,13 @@ from app.schemas.llm import (
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
+    ConversationActionsResult,
+    ConversationRepliesResult,
     DraftResult,
     ExtractedCommitment,
     ExtractedScheduleProposal,
     MeetingContextSummary,
+    NormalizedConversation,
     ThreadReconciliation,
 )
 from app.services.draft_revision import build_draft_user_content
@@ -194,6 +197,30 @@ _CHAT_SYSTEM = (
     "line is tagged [id:...] — cite the ids your answer is based on in cited_ids. If "
     "nothing in the context is relevant (a new or fully caught-up user), set "
     "has_context to false instead of guessing or apologizing."
+)
+_NORMALIZE_CONVERSATION_SYSTEM = (
+    "You are Alfred's conversation normalizer. The user pasted a multi-select chat copy "
+    "(usually WeChat). Split it into discrete messages with sender display names and "
+    "content. Preserve order. Mark is_noise=true for stickers, very short acknowledgements "
+    "with no actionable content (e.g. '已吃', '好', 'ok', '[动画表情]'), and system notices. "
+    "Do not invent messages. If a line is clearly a sender name followed by content on the "
+    "next line(s), keep that structure. Prefer source=wechat."
+)
+_CONVERSATION_REPLY_SYSTEM = (
+    "You are Alfred's reply agent for chat (WeChat/SMS-style). Write short replies that "
+    "match each requested tone. Stay grounded in the selected conversation context. "
+    "Never invent facts. Match the language of the conversation (Chinese or English). "
+    "Do not include a signature. Replies should be ready to paste into a chat input."
+)
+_CONVERSATION_ACTIONS_SYSTEM = (
+    "You are Alfred's action extractor for chat conversations. Find actionable items the "
+    "user should track: tasks they owe, calendar events with a concrete time, follow-ups "
+    "to check later, and commitments (promises). Quote verbatim evidence. Resolve relative "
+    "dates against the reference date and user timezone. For calendar_event, fill start/end "
+    "as ISO 8601 WITH timezone offset when a concrete time is clear; otherwise use "
+    "suggested_time (e.g. 'tonight') and leave start null. evidence_message_indexes are "
+    "0-based indexes into the numbered message list. Return an empty list when nothing "
+    "actionable is present. Prefer lower confidence over inventing actions."
 )
 
 
@@ -479,3 +506,63 @@ class AnthropicLLMClient:
             tool=_tool_for(AssistantChatReply, "record_reply", "Record the assistant reply."),
         )
         return AssistantChatReply.model_validate(raw)
+
+    def normalize_conversation(self, *, raw_text: str) -> NormalizedConversation:
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_NORMALIZE_CONVERSATION_SYSTEM,
+            user_content=f"Pasted chat:\n\n{raw_text}",
+            tool=_tool_for(
+                NormalizedConversation, "record_conversation", "Record the normalized conversation."
+            ),
+        )
+        return NormalizedConversation.model_validate(raw)
+
+    def draft_conversation_replies(
+        self,
+        *,
+        context: str,
+        goal: str,
+        tone_options: list[str],
+        user_name: str | None = None,
+    ) -> ConversationRepliesResult:
+        tones = ", ".join(tone_options) if tone_options else "natural, caring, brief"
+        name_line = f"User display name: {user_name}\n" if user_name else ""
+        raw = self._structured(
+            model=settings.llm_draft_model,
+            system=_CONVERSATION_REPLY_SYSTEM,
+            user_content=(
+                f"{name_line}Reply goal: {goal or 'natural continuation'}\n"
+                f"Produce one reply for each tone: {tones}\n\n"
+                f"Conversation context:\n{context}"
+            ),
+            tool=_tool_for(
+                ConversationRepliesResult, "record_replies", "Record the reply suggestions."
+            ),
+        )
+        return ConversationRepliesResult.model_validate(raw)
+
+    def extract_conversation_actions(
+        self,
+        *,
+        context: str,
+        reference_date: date,
+        user_timezone: str,
+        user_name: str | None = None,
+    ) -> ConversationActionsResult:
+        name_line = f"User display name: {user_name}\n" if user_name else ""
+        raw = self._structured(
+            model=settings.llm_extract_model,
+            system=_CONVERSATION_ACTIONS_SYSTEM,
+            user_content=(
+                f"{name_line}Reference date (today): {reference_date.isoformat()}.\n"
+                f"User timezone: {user_timezone}\n\n"
+                f"Numbered messages:\n{context}"
+            ),
+            tool=_tool_for(
+                ConversationActionsResult,
+                "record_actions",
+                "Record extracted conversation actions.",
+            ),
+        )
+        return ConversationActionsResult.model_validate(raw)

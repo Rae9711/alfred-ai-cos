@@ -25,3 +25,5 @@ class Task(Base):
     source_type: Mapped[SourceType] = mapped_column(String(16), default=SourceType.manual)
     source_id: Mapped[str | None] = mapped_column(String(64), index=True)
     confidence: Mapped[float | None] = mapped_column(Float)
+    # Verbatim quote from a conversation (or other source) supporting this task.
+    evidence: Mapped[str | None] = mapped_column(Text)

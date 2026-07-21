@@ -140,6 +140,8 @@ export interface Task {
   status: TaskStatus;
   source_type: SourceType;
   source_id: string | null;
+  evidence?: string | null;
+  confidence?: number | null;
 }
 
 export interface TaskCreateRequest {
@@ -410,4 +412,109 @@ export interface SessionToken {
 export interface AuthStartResponse {
   authorization_url: string;
   state: string;
+}
+
+// --- Conversation (WeChat paste workflow) ---
+
+export type ConversationSource = "wechat" | "unknown";
+export type MessageRole = "self" | "other" | "unknown";
+export type ConversationActionKind =
+  | "task"
+  | "calendar_event"
+  | "follow_up"
+  | "commitment";
+export type ConversationActionTier =
+  | "explicit_time"
+  | "action_no_time"
+  | "follow_up_suggestion";
+
+export interface ConversationParticipant {
+  name: string;
+  is_self: boolean;
+}
+
+export interface ConversationMessage {
+  id: string;
+  sender: string;
+  timestamp: string | null;
+  content: string;
+  role: MessageRole;
+  is_selected: boolean;
+  weight: number;
+}
+
+export interface ParsedConversation {
+  id: string;
+  source: ConversationSource;
+  participants: ConversationParticipant[];
+  messages: ConversationMessage[];
+  imported_at: string;
+}
+
+export interface ReplySuggestion {
+  tone: string;
+  body: string;
+}
+
+export interface ConversationAction {
+  id: string;
+  type: ConversationActionKind;
+  title: string;
+  due_date: string | null;
+  start: string | null;
+  end: string | null;
+  suggested_time: string | null;
+  confidence: number;
+  evidence: string;
+  evidence_message_ids: string[];
+  tier: ConversationActionTier;
+  status: string;
+}
+
+export interface ConversationAnalyzeResponse {
+  reply_suggestions: ReplySuggestion[];
+  actions: ConversationAction[];
+}
+
+export interface ConversationConfirmRequest {
+  type: ConversationActionKind;
+  title: string;
+  conversation_id?: string | null;
+  evidence?: string | null;
+  evidence_message_ids?: string[];
+  confidence?: number;
+  due_date?: string | null;
+  start?: string | null;
+  end?: string | null;
+  suggested_time?: string | null;
+  remind_at?: string | null;
+  set_reminder?: boolean;
+  description?: string | null;
+  counterparty?: string | null;
+  timezone?: string | null;
+}
+
+export interface ConversationConfirmResponse {
+  kind: string;
+  id: string;
+  title: string;
+  evidence: string | null;
+  remind_at: string | null;
+  detail: string | null;
+}
+
+export interface ConversationInboxItem {
+  id: string;
+  kind: string;
+  title: string;
+  evidence: string | null;
+  due_date: string | null;
+  remind_at: string | null;
+  created_at: string | null;
+  source_label: string;
+}
+
+export interface ConversationInboxResponse {
+  items: ConversationInboxItem[];
+  counts: Record<string, number>;
 }

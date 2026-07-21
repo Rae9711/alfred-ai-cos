@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting } from "@albert/shared-types";
+import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting, type ConversationInboxItem } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -88,6 +88,8 @@ export function HomeScreen() {
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
   const [todayData, setTodayData] = useState<TodayDashboard | null>(null);
   const [reminders, setReminders] = useState<Task[]>([]);
+  const [conversationItems, setConversationItems] = useState<ConversationInboxItem[]>([]);
+  const [conversationCounts, setConversationCounts] = useState<Record<string, number>>({});
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -106,24 +108,30 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming, today, upcomingReminders] = await Promise.all([
-        api.getMe().catch(() => null),
-        api.listPendingActions(),
-        api.listUpcomingMeetings(
+      const [profile, pending, upcoming, today, upcomingReminders, conversationInbox] =
+        await Promise.all([
+          api.getMe().catch(() => null),
+          api.listPendingActions(),
+          api.listUpcomingMeetings(
+            view === "day"
+              ? { today: true }
+              : view === "week"
+                ? { week: true }
+                : { month: true },
+          ),
+          view === "day" ? api.getToday(locale).catch(() => null) : Promise.resolve(null),
           view === "day"
-            ? { today: true }
-            : view === "week"
-              ? { week: true }
-              : { month: true },
-        ),
-        view === "day" ? api.getToday(locale).catch(() => null) : Promise.resolve(null),
-        view === "day" ? api.listTasks({ upcoming: true }).catch(() => [] as Task[]) : Promise.resolve([] as Task[]),
-      ]);
+            ? api.listTasks({ upcoming: true }).catch(() => [] as Task[])
+            : Promise.resolve([] as Task[]),
+          api.getConversationInbox().catch(() => ({ items: [], counts: {} })),
+        ]);
       setMe(profile);
       setPendingCount(pending.length);
       setMeetings(upcoming);
       setTodayData(today);
       setReminders(upcomingReminders);
+      setConversationItems(conversationInbox.items);
+      setConversationCounts(conversationInbox.counts);
       if (upcomingReminders.length > 0) {
         void syncLocalRemindersForTasks(upcomingReminders);
       }
@@ -593,6 +601,47 @@ export function HomeScreen() {
           </View>
         </View>
 
+        <View style={styles.conversationBlock}>
+          <View style={styles.conversationHead}>
+            <Text style={styles.butlerLabel}>{t.home.fromConversations}</Text>
+            <Pressable onPress={() => router.push("/import")} hitSlop={8}>
+              <Text style={styles.importLink}>{t.home.importConversation}</Text>
+            </Pressable>
+          </View>
+          {conversationItems.length > 0 ? (
+            <View style={styles.conversationCard}>
+              <Text style={styles.conversationSummary}>
+                {t.home.fromConversationsSummary(
+                  conversationCounts.tasks ?? 0,
+                  conversationCounts.follow_ups ?? 0,
+                  conversationCounts.commitments ?? 0,
+                )}
+              </Text>
+              {conversationItems.slice(0, 5).map((item) => (
+                <View key={`${item.kind}-${item.id}`} style={styles.conversationRow}>
+                  <Text style={styles.conversationKind}>
+                    {item.kind === "calendar_event"
+                      ? "📅"
+                      : item.kind === "follow_up"
+                        ? "↻"
+                        : "□"}
+                  </Text>
+                  <View style={styles.conversationBody}>
+                    <Text style={styles.conversationTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.conversationMeta} numberOfLines={1}>
+                      {item.evidence
+                        ? t.home.conversationEvidence(item.evidence)
+                        : item.source_label || t.home.conversationSource}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+
         {scheduleView === "day" ? (
           <PlanningSuggestionsCard
             data={todayData}
@@ -703,6 +752,27 @@ const styles = StyleSheet.create({
   headerText: { flex: 1 },
   searchBtn: { paddingTop: 8 },
   butlerBlock: { marginTop: spacing.lg, gap: 8 },
+  conversationBlock: { marginTop: spacing.lg, gap: 8 },
+  conversationHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  importLink: { fontSize: 13, color: colors.accent, fontWeight: "600" },
+  conversationCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    padding: spacing.md,
+    gap: 10,
+  },
+  conversationSummary: { fontSize: 14, color: colors.ink2, lineHeight: 20 },
+  conversationRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  conversationKind: { fontSize: 14, color: colors.ink3, marginTop: 2 },
+  conversationBody: { flex: 1, gap: 2 },
+  conversationTitle: { fontSize: 14, color: colors.ink, lineHeight: 20 },
+  conversationMeta: { fontSize: 12, color: colors.ink4, fontStyle: "italic" },
   butlerLabel: {
     fontFamily: fonts.mono,
     fontSize: 10,

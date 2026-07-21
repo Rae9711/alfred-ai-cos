@@ -19,6 +19,10 @@ import type {
   CommitmentStatus,
   ComposeDraft,
   ComposeDraftCreateRequest,
+  ConversationAnalyzeResponse,
+  ConversationConfirmRequest,
+  ConversationConfirmResponse,
+  ConversationInboxResponse,
   Draft,
   DraftCreateRequest,
   InboxView,
@@ -27,6 +31,7 @@ import type {
   Me,
   MeetingPrep,
   OnboardingPrefs,
+  ParsedConversation,
   SmsForwarding,
   SmsInstallOut,
   SmsIngestResult,
@@ -388,6 +393,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
+  parseConversation: (text: string) =>
+    request<ParsedConversation>("/conversations/parse", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  analyzeConversation: (body: {
+    conversation: ParsedConversation;
+    goal?: string;
+    tones?: string[];
+    timezone?: string;
+  }) =>
+    request<ConversationAnalyzeResponse>("/conversations/analyze", {
+      method: "POST",
+      body: JSON.stringify({
+        ...body,
+        timezone: body.timezone ?? deviceTimezone(),
+      }),
+    }),
+  confirmConversationAction: (body: ConversationConfirmRequest) =>
+    request<ConversationConfirmResponse>("/conversations/actions/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        ...body,
+        timezone: body.timezone ?? deviceTimezone(),
+      }),
+    }),
+  getConversationInbox: () =>
+    request<ConversationInboxResponse>("/conversations/inbox"),
   captureVoice: async (uri: string): Promise<CaptureResponse> => {
     const token = await getToken();
     const form = new FormData();
