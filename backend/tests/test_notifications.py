@@ -442,7 +442,9 @@ def test_stale_waiting_auto_followup_stages_risk3_proposal(
         subject="Your proposal",
         snippet="waiting to hear back",
         thread_id="thread-1",
-        sent_at=now - timedelta(days=6),
+        # Recent + unread so the read/old => handled rule doesn't suppress the loop.
+        sent_at=datetime.now(UTC),
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
     )
     db.add(msg)
     db.commit()

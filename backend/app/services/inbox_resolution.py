@@ -11,14 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentStatus, TaskStatus
 from app.db.models import Commitment, Message, Task
-from app.services.inbox_view import message_user_decided, user_replied_message_ids
+from app.services.inbox_view import message_is_handled, user_replied_message_ids
 
 
 def handled_message_ids(db: Session, user_id: str) -> set[str]:
-    """Message ids the user marked decided or replied to."""
+    """Message ids treated as handled for the purpose of surfacing commitments/tasks.
+
+    Includes messages the user explicitly marked decided or replied to, plus Gmail/email
+    that is already read or older than the age cutoff (message_is_handled). Any commitment
+    or task sourced solely from such a message drops out of Today, Waiting, the assistant,
+    and every reminder scan."""
     ids = user_replied_message_ids(db, user_id)
     for message in db.scalars(select(Message).where(Message.user_id == user_id)):
-        if message_user_decided(message):
+        if message_is_handled(message):
             ids.add(message.id)
     return ids
 

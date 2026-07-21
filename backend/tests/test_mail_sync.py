@@ -44,7 +44,7 @@ def _message(user_id: str, *, ext: str, qualifies: bool = False) -> Message:
         snippet="Need your signature",
         classification=MessageClassification.needs_reply,
         sender_classification="person",
-        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
         action_required=qualifies,
         priority=Priority.high if qualifies else Priority.low,
     )

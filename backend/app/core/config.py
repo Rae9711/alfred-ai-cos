@@ -76,6 +76,12 @@ class Settings(BaseSettings):
 
     mail_poll_interval_seconds: int = 60
 
+    # Gmail "already handled" age cutoff. Email older than this (by sent_at) is treated
+    # as already handled: not surfaced as needs-action and never generates reminders,
+    # mirroring the read=handled rule. Tune here; default 30 days. Gmail/email only —
+    # SMS/WhatsApp read semantics differ and are unaffected.
+    email_handled_age_days: int = 30
+
     # Gmail sync: first connect backfills Primary inbox; later syncs use history API.
     sync_initial_max_results: int = 50
     sync_incremental_fallback_max: int = 20

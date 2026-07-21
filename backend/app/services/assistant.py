@@ -22,8 +22,8 @@ from app.services.actions import propose_action_internal
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_view import (
     effective_inbox_category,
+    message_is_handled,
     message_needs_attention,
-    message_user_decided,
     user_replied_message_ids,
 )
 from app.services.today import build_today
@@ -424,7 +424,7 @@ def _format_inbox_context(db: Session, user_id: str, *, cited_ids: set[str]) -> 
         if not message_needs_attention(
             category=category,
             user_replied=m.id in replied,
-            user_decided=message_user_decided(m),
+            user_decided=message_is_handled(m),
         ):
             continue
         subj = m.subject or m.snippet or "(no subject)"

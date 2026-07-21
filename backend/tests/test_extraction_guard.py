@@ -5,7 +5,7 @@ tokens AND keeps the inbox visually clean."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
@@ -31,7 +31,8 @@ def _msg(user_id: str, *, sender: str, cls: str, ext: str = "m1") -> Message:
         recipients=[],
         subject="Sign the contract by Friday",
         snippet="Adam please sign the contract and confirm payment by Friday.",
-        sent_at=datetime(2026, 6, 5, tzinfo=UTC),
+        # Recent so the >30-day "already handled" rule doesn't short-circuit extraction.
+        sent_at=datetime.now(UTC) - timedelta(days=1),
         sender_classification=cls,
     )
 
@@ -139,7 +140,7 @@ def test_null_classification_extracts(
         recipients=[],
         subject="legacy",
         snippet="legacy",
-        sent_at=datetime(2026, 6, 5, tzinfo=UTC),
+        sent_at=datetime.now(UTC) - timedelta(days=1),
         # No sender_classification.
     )
     db.add(msg)

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.enums import MessageClassification, Priority
 from app.db.models import Message, OutboundReply
 from app.services.classification_adjust import (
@@ -103,6 +104,45 @@ def message_user_decided(message: Message) -> bool:
     """True when the user explicitly marked this message handled in the app."""
     headers = message.headers or {}
     return bool(headers.get("user_decided"))
+
+
+# Sources this rule applies to. Gmail is stored as "gmail"; "email" is accepted for
+# forward-compat with the forward-to-inbox path. SMS/WhatsApp are deliberately excluded
+# because their read semantics differ (see is_message_unread).
+_EMAIL_SOURCES = frozenset({"gmail", "email"})
+
+
+def gmail_read_or_stale(message: Message, *, now: datetime | None = None) -> bool:
+    """True when a Gmail/email message should be treated as already handled.
+
+    Two conditions, either of which qualifies (Gmail/email only):
+      - Read: Gmail dropped the UNREAD label (the user opened it). An email you read
+        but never replied to no longer nags you — the accepted tradeoff.
+      - Stale: older than settings.email_handled_age_days (default 30) by sent_at.
+
+    Unknown label state (gmail_labels is None) counts as unread, so we never treat a
+    message as read on missing data — only the age cutoff can apply then.
+    """
+    if (message.source or "gmail") not in _EMAIL_SOURCES:
+        return False
+    if not is_gmail_unread(message.gmail_labels):
+        return True
+    if message.sent_at is not None:
+        cutoff = (now or datetime.now(UTC)) - timedelta(
+            days=get_settings().email_handled_age_days
+        )
+        sent_at = message.sent_at if message.sent_at.tzinfo else message.sent_at.replace(tzinfo=UTC)
+        if sent_at < cutoff:
+            return True
+    return False
+
+
+def message_is_handled(message: Message, *, now: datetime | None = None) -> bool:
+    """True when a message should be excluded from needs-action and reminders.
+
+    Unifies the explicit "user decided/replied" mechanism with the Gmail read/old rule
+    so every needs-action and reminder surface can share one predicate."""
+    return message_user_decided(message) or gmail_read_or_stale(message, now=now)
 
 
 def _classification_storage_value(
@@ -253,7 +293,7 @@ def needs_action_message_ids(
             message,
             category=category,
             user_replied=message.id in replied,
-            user_decided=message_user_decided(message),
+            user_decided=message_is_handled(message),
         ):
             ids.add(message.id)
     return ids

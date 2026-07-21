@@ -41,7 +41,7 @@ def _gmail_message(
         snippet="Please review",
         sent_at=sent_at,
         classification=classification,
-        gmail_labels=labels or ["INBOX", "CATEGORY_PERSONAL"],
+        gmail_labels=labels or ["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
         sender_classification="person",
     )
     if action_required:

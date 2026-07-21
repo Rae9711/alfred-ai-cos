@@ -468,14 +468,14 @@ def test_list_inbox_needs_action_scope_returns_reply_and_decision_in_window(
         Message(
             user_id=user.id,
             source="gmail",
-            external_id="gmail:needs-decision-read",
+            external_id="gmail:needs-decision-unread",
             sender="ops@corp.com",
             subject="Approve budget",
             snippet="Need a decision",
             sent_at=now - timedelta(days=10),
             classification=MessageClassification.needs_decision,
             action_required=False,
-            gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+            gmail_labels=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
             sender_classification="person",
         )
     )

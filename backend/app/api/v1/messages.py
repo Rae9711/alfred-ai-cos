@@ -35,6 +35,7 @@ from app.services.inbox_view import (
     effective_inbox_category,
     is_message_unread,
     mark_message_user_decided,
+    message_is_handled,
     message_qualifies_for_needs_action_tab,
     message_user_decided,
     needs_action_cutoff_utc,
@@ -145,7 +146,7 @@ def list_inbox(
             m,
             category=category,
             user_replied=user_replied,
-            user_decided=message_user_decided(m),
+            user_decided=message_is_handled(m),
         ):
             continue
         messages.append(

@@ -27,8 +27,8 @@ from app.services.classification_adjust import (
 )
 from app.services.connected_accounts import get_google_account_for_message
 from app.services.crypto import decrypt_token
+from app.services.inbox_view import gmail_read_or_stale, message_user_decided
 from app.services.message_body import build_thread_summary
-from app.services.inbox_view import message_user_decided
 
 # Common filler words that carry no identity for a commitment. Two phrasings of the
 # same task ("retain Premium" vs "maintain Premium") differ only in filler/synonyms,
@@ -156,6 +156,12 @@ def process_message(
         raise ValueError("Missing user for extraction")
 
     if message_user_decided(message):
+        return []
+
+    # Already-read or >30-day-old Gmail/email is treated as handled: skip extraction so
+    # no new commitments (and therefore no reminders) are created from it. The Message
+    # row still persists for inbox/search. SMS/WhatsApp are unaffected (source-scoped).
+    if gmail_read_or_stale(message):
         return []
 
     # Extraction guard — applied before the LLM runs. The classifier ran at

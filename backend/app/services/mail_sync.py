@@ -63,8 +63,8 @@ def notify_new_mail(
     Generic new-mail and FYI arrivals are never pushed. Returns True if a push sent."""
     from app.services.inbox_view import (
         effective_inbox_category,
+        message_is_handled,
         message_qualifies_for_needs_action_tab,
-        message_user_decided,
         user_replied_message_ids,
     )
 
@@ -78,7 +78,7 @@ def notify_new_mail(
             message,
             category=effective_inbox_category(message),
             user_replied=message.id in replied,
-            user_decided=message_user_decided(message),
+            user_decided=message_is_handled(message),
         ):
             continue
         sender = (message.sender or "").split("<")[0].strip() or "Someone"

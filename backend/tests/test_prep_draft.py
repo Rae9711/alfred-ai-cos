@@ -41,7 +41,9 @@ def _email(user_id: str) -> tuple[Message, Commitment]:
         recipients=["prep@example.com"],
         subject="Contract terms",
         snippet="Adam, can you send the signed contract today?",
-        sent_at=NOW,
+        # Recent + unread so the read/old => handled rule doesn't suppress it.
+        sent_at=datetime.now(UTC),
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
     )
     c = Commitment(
         user_id=user_id,

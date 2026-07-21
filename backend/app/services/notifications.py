@@ -29,7 +29,11 @@ from app.db.models import (
     Notification,
     User,
 )
-from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
+from app.services.inbox_resolution import (
+    filter_actionable_commitments,
+    filter_actionable_tasks,
+    handled_message_ids,
+)
 
 # Notification types that may reach the user's device. Everything else is
 # still enqueued for in-app history but never pushed (distraction-minimal policy).
@@ -373,16 +377,19 @@ def scan_task_reminders(db: Session, user_id: str, *, now: datetime) -> int:
     from app.db.models import Task
 
     horizon = now + REMINDER_LEAD
-    tasks = list(
-        db.scalars(
-            select(Task).where(
-                Task.user_id == user_id,
-                Task.status == TaskStatus.open,
-                Task.remind_at.is_not(None),
-                Task.remind_at >= now,
-                Task.remind_at <= horizon,
+    tasks = filter_actionable_tasks(
+        list(
+            db.scalars(
+                select(Task).where(
+                    Task.user_id == user_id,
+                    Task.status == TaskStatus.open,
+                    Task.remind_at.is_not(None),
+                    Task.remind_at >= now,
+                    Task.remind_at <= horizon,
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user_id),
     )
     enqueued = 0
     for task in tasks:
@@ -638,13 +645,16 @@ def scan_top_priorities(db: Session, user: User, *, today: date_type) -> int:
     from app.services import prep_draft, priority
 
     context = priority.build_context(db, user)
-    open_commitments = list(
-        db.scalars(
-            select(Commitment).where(
-                Commitment.user_id == user.id,
-                Commitment.status == CommitmentStatus.open,
+    open_commitments = filter_actionable_commitments(
+        list(
+            db.scalars(
+                select(Commitment).where(
+                    Commitment.user_id == user.id,
+                    Commitment.status == CommitmentStatus.open,
+                )
             )
-        )
+        ),
+        handled_message_ids(db, user.id),
     )
     enqueued = 0
     for c in open_commitments:

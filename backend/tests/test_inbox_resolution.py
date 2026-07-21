@@ -51,7 +51,7 @@ def _message(user_id: str, **kwargs) -> Message:
         action_required=True,
         priority=Priority.high,
         sent_at=NOW - timedelta(hours=2),
-        gmail_labels=["INBOX", "CATEGORY_PERSONAL"],
+        gmail_labels=["INBOX", "CATEGORY_PERSONAL", "UNREAD"],
         sender_classification="person",
     )
     defaults.update(kwargs)
