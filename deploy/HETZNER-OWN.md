@@ -1,6 +1,7 @@
 # 自己开 Hetzner 部署 Albert
 
-在**你自己的** Hetzner VPS 上跑 Albert（不依赖 `89.167.84.193` 那台共享机器）。
+在**你自己的** Hetzner VPS 上跑 Albert（现在的生产环境就是这套：`alfredaitech.com`，
+不依赖任何共享机器）。
 
 推荐方案：**Docker Compose**（仓库里已有 `docker-compose.prod.yml`）+ **Caddy** 自动 HTTPS。
 
@@ -206,11 +207,8 @@ docker compose -p albert -f docker-compose.prod.yml logs -f albert_web --tail 50
 
 ## 8. 手机 App 指向你的 API
 
-当前 `mobile/app.json` 写的是 `https://albert.alfredassistants.com`。
-
-**二选一：**
-
-### A. 改代码 + OTA（推荐）
+当前 `mobile/app.json` 的 `extra.apiBaseUrl` 已经是 `https://alfredaitech.com`
+（生产环境的真实域名）。如果你用的是**别的**域名，改这一行再发 OTA：
 
 ```bash
 # mobile/app.json → extra.apiBaseUrl = "https://albert.yourdomain.com"
@@ -218,10 +216,6 @@ cd mobile && bun run update:preview -- "Point API to my Hetzner"
 ```
 
 手机上强制退出 App 再打开，拉 OTA。
-
-### B. 继续用旧域名
-
-只有当你把 **DNS `albert.alfredassistants.com` 指到你的 VPS**，或在 Cloudflare 把该子域名指过来时才行（需和 Adam 协调，避免两台机器抢域名）。
 
 ---
 
@@ -282,14 +276,21 @@ git fetch azzbee && git merge azzbee/master   # 或 checkout 合并后的 master
 
 ---
 
-## 与共享机器 `89.167.84.193` 的区别
+## 与旧共享机器的区别（历史）
 
-| | 共享机 (HETZNER.md) | 你自己的 VPS (本文) |
+早期计划把 Albert 塞进一台**共享机器**（`89.167.84.193`，systemd + uv、无 Docker、
+Cloudflare Tunnel、域名 `albert.alfredassistants.com`）。那套现在已**废弃/下线**
+（health 返回 530）。
+
+现在的生产环境就是本文描述的**你自己的 VPS**：`alfredaitech.com`（`5.161.58.191`），
+Docker Compose + Caddy，见 `deploy/HETZNER.md`。
+
+| | 旧共享机（已废弃） | 现在的 VPS（本文 / HETZNER.md） |
 |--|---------------------|---------------------|
-| 权限 | 需要 Adam 的 SSH | 你 root 全权 |
+| 权限 | 需要别人的 SSH | 你 root 全权 |
 | 运行时 | systemd + uv（无 Docker） | Docker Compose |
-| 域名 | `albert.alfredassistants.com` | 你自己的子域名 |
-| 文档 | `deploy/HETZNER.md` | `deploy/HETZNER-OWN.md` |
+| 域名 | `albert.alfredassistants.com`（已死） | `alfredaitech.com` |
+| 文档 | — | `deploy/HETZNER.md` / `deploy/HETZNER-OWN.md` |
 
 两套不要同时指同一个域名，除非你做迁移并停掉旧服务。
 

@@ -49,7 +49,7 @@ import { clearToken, getToken } from "./auth";
  *   • Native (Expo Go / device): production URL from app.json `extra.apiBaseUrl`.
  *   • Web dev: localhost:8000 — requests go through `scripts/dev-api-proxy.mjs`
  *     which adds CORS headers and forwards to production. The browser blocks
- *     direct cross-origin calls to albert.alfredassistants.com, so the proxy
+ *     direct cross-origin calls to alfredaitech.com, so the proxy
  *     is the only way to dev against prod from Expo web without setting up a
  *     full local backend.
  *   • Fallback: localhost:8000 for native against a local backend.

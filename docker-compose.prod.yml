@@ -1,9 +1,9 @@
-# Albert production stack for the shared Hetzner VPS (alongside Alfred + Paperclip).
+# Albert production stack for its dedicated Hetzner VPS (host alfred-ai, alfredaitech.com).
 #
 # Isolation: own network (albert_net), own volume (albert_pgdata), all containers
 # albert_*-prefixed, so `docker compose -p albert ... down` never touches other projects.
 # TLS is NOT handled here — the existing host Caddy reverse-proxies
-# https://albert.alfredassistants.com -> 127.0.0.1:${ALBERT_WEB_PORT} (default 8011).
+# https://alfredaitech.com -> 127.0.0.1:${ALBERT_WEB_PORT} (default 8011).
 #
 # Deploy:
 #   export ALBERT_TAG=$(git rev-parse --short HEAD)   # never :latest, so rollback = retag

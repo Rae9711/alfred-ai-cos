@@ -3,7 +3,7 @@
 **Date:** June 2026  
 **Source branch:** `Rae9711/alfred-ai-cos` `master` @ `6490d4c` (7 commits ahead of `Azzbee/alfred-ai-cos` `master`)  
 **Target:** `Azzbee/alfred-ai-cos` `master`  
-**Production API:** `https://albert.alfredassistants.com` (not yet updated with this code)
+**Production API:** `https://alfredaitech.com` (own Hetzner VPS `5.161.58.191`, Docker Compose)
 
 This document is for whoever merges, deploys, and continues the work (Adam / Azzbee team).
 
@@ -15,7 +15,7 @@ This document is for whoever merges, deploys, and continues the work (Adam / Azz
 |------|--------|
 | Code pushed to `github.com/Rae9711/alfred-ai-cos` | ✅ |
 | PR into `Azzbee/alfred-ai-cos` | Open (see PR link in GitHub) |
-| Production Hetzner deploy | ❌ Blocked — needs SSH to `89.167.84.193` |
+| Production Hetzner deploy | ✅ Unblocked — own box `alfredaitech.com` via `deploy/hetzner-ship.sh` |
 | Mobile OTA (Expo preview) | ✅ Published earlier; app talks to prod API |
 | Ask “general chat” | ❌ Not implemented — `/assistant/ask` only books calendar |
 
@@ -113,20 +113,21 @@ Integrate carefully — do not force-push either side.
 
 ## Deploy checklist (production)
 
-- **Your own Hetzner VPS:** `deploy/HETZNER-OWN.md` + `deploy/hetzner-bootstrap.sh` + `deploy/hetzner-ship.sh`
-- **Shared box (89.167.84.193):** `deploy/HETZNER.md` (needs Adam’s SSH)
+The live production box is the **own Hetzner VPS** `alfredaitech.com` (`5.161.58.191`),
+running Docker Compose (project `albert`, `docker-compose.prod.yml`) behind Caddy
+(`alfredaitech.com` → `127.0.0.1:8011`). See `deploy/HETZNER-OWN.md` (canonical) and
+`deploy/HETZNER.md` for the full runbook.
 
 ```bash
-# From laptop with SSH to Hetzner
-git archive --format=tar.gz -o /tmp/albert-src.tar.gz master
-scp /tmp/albert-src.tar.gz root@89.167.84.193:/tmp/
-ssh root@89.167.84.193 'set -e
-  cd /root/albert && find . -mindepth 1 -maxdepth 1 ! -name backend -exec rm -rf {} + 2>/dev/null || true
-  tar -xzf /tmp/albert-src.tar.gz -C /root/albert
-  cd backend && /root/.local/bin/uv sync --no-dev
-  /root/.local/bin/uv run alembic upgrade head
-  systemctl restart albert-web albert-worker albert-beat'
+# From laptop (SSH key already trusted by the box):
+export HETZNER_HOST=root@alfredaitech.com
+./deploy/hetzner-ship.sh
 ```
+
+`hetzner-ship.sh` git-archives `master`, rsyncs/extracts into `/opt/albert/repo`
+(preserving the live `.env`), then runs `ALBERT_TAG=<sha> ./deploy/albert-deploy.sh`
+which does `docker compose build && up -d`, waits for Postgres healthy, and runs
+`alembic upgrade head`.
 
 **Migrations to apply:**
 1. `d4e5f6a7b8c9` — `gmail_history_id` on connected accounts
@@ -134,8 +135,8 @@ ssh root@89.167.84.193 'set -e
 
 **Verify:**
 ```bash
-curl -s https://albert.alfredassistants.com/health
-journalctl -u albert-web -n 30 --no-pager
+curl -s https://alfredaitech.com/health
+docker compose -p albert -f /opt/albert/repo/docker-compose.prod.yml logs --tail 30 albert_web
 ```
 
 ---
@@ -177,14 +178,12 @@ uv run python scripts/test_reply_flow.py --account USER@EMAIL.com
 | **Ask general chat** | `POST /assistant/ask` only interprets calendar booking. PRD 10.2 queries (“what am I forgetting?”) need a new `/assistant/chat` endpoint with `/today` + inbox context. |
 | **Misleading Ask greeting** | Static copy in `mobile/src/i18n/locales.ts`, not from `/today`. |
 | **Stale classifications** | Deploy alone does not fix already-classified messages. |
-| **Production not deployed** | Phone testing against prod API still runs **old** backend until Hetzner deploy. |
-| **SSH access** | Deploy was blocked during Rae’s session (permission denied to `root@89.167.84.193`). |
 
 ---
 
 ## Mobile / Expo
 
-- API base URL: `mobile/app.json` → `extra.apiBaseUrl` = `https://albert.alfredassistants.com`
+- API base URL: `mobile/app.json` → `extra.apiBaseUrl` = `https://alfredaitech.com`
 - OTA updates: `cd mobile && bun run update:preview -- "your message"`
 - Standalone iOS build: `bun run device:ios` (see `mobile/EAS.md`)
 - Web dev uses CORS proxy on `localhost:8000` (`mobile/scripts/dev-api-proxy.mjs`)
@@ -223,7 +222,7 @@ cd mobile && bun run test && bunx tsc --noEmit
 
 ## Next priorities (product)
 
-1. **Deploy backend** to Hetzner (unblocks real phone testing)
+1. **Deploy backend** to `alfredaitech.com` on each change (`HETZNER_HOST=root@alfredaitech.com ./deploy/hetzner-ship.sh`)
 2. **Merge** this PR with Azzbee PRD work
 3. **Re-classify** prod mail or add sync-time reclassify flag
 4. **Build `/assistant/chat`** — multi-turn + today/inbox context (see conversation in PR description)

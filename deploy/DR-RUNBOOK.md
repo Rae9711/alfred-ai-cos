@@ -4,6 +4,11 @@ Operational guide for recovering Albert after a host loss, data-corruption event
 bad deploy. Keep a copy off the production host (it references the very secrets whose
 loss would block recovery).
 
+**Production setup:** own Hetzner VPS `alfredaitech.com` (`5.161.58.191`, hostname
+`alfred-ai`), Docker Compose (project `albert`, `docker-compose.prod.yml`) at
+`/opt/albert/repo`, behind Caddy (`alfredaitech.com` → `127.0.0.1:8011`). Postgres runs
+in-compose as `albert_postgres` (`pgvector/pgvector:pg16`, data volume `albert_pgdata`).
+
 ---
 
 ## 1. Triggers & severity
@@ -14,7 +19,7 @@ loss would block recovery).
 | **SEV-2** | Bad deploy, app crash-looping, migration failure | Rollback (§6) — no data restore needed |
 | **SEV-3** | Degraded (Gmail sync failing, Sentry error spike) | Investigate; usually no DR action |
 
-Declare SEV-1 if the Caddy health check (`https://<APP_BASE_URL>/health`) has been
+Declare SEV-1 if the Caddy health check (`https://alfredaitech.com/health`) has been
 failing for >10 min and a restart does not recover it.
 
 ## 2. Contacts & access
@@ -23,15 +28,15 @@ failing for >10 min and a restart does not recover it.
 - **Hosting:** Hetzner Cloud console — _<account/login location>_
 - **DNS:** _<registrar / Cloudflare account>_
 - **Secrets vault (offsite):** _<where `TOKEN_ENCRYPTION_KEY`, `.env`, backups live>_
-- **SSH:** `ssh root@<host-ip>` (key in _<location>_). Bootstrap key is in the Hetzner
-  project; see `deploy/hetzner-cloud-init.yaml`.
+- **SSH:** `ssh root@alfredaitech.com` (`5.161.58.191`, key in _<location>_). Bootstrap key
+  is in the Hetzner project; see `deploy/hetzner-cloud-init.yaml`.
 
 ## 3. What must exist to recover
 
 You cannot recover without **all three**:
 
 1. The latest **Postgres backup** (`albert-*.sql.gz`, from `deploy/albert-backup.sh`).
-2. The **`/opt/albert/.env`** file — specifically `TOKEN_ENCRYPTION_KEY`.
+2. The **`/opt/albert/repo/.env`** file — specifically `TOKEN_ENCRYPTION_KEY`.
 3. A pinned **image tag** (git sha) known to be healthy.
 
 > [!CAUTION]
@@ -48,7 +53,7 @@ You cannot recover without **all three**:
 1. **Provision a host.** Recreate the VPS from `deploy/hetzner-cloud-init.yaml` (or run
    `deploy/hetzner-bootstrap.sh` on a fresh Ubuntu box). This installs Docker + Caddy and
    creates `/opt/albert`.
-2. **Restore secrets.** Copy the offsite `.env` to `/opt/albert/.env`. Confirm
+2. **Restore secrets.** Copy the offsite `.env` to `/opt/albert/repo/.env`. Confirm
    `TOKEN_ENCRYPTION_KEY` matches the value in effect when the backup was taken (a
    mismatch bricks all encrypted tokens — see §3). Verify DB creds match `DATABASE_URL`.
 3. **Get the code.** Clone the repo to `/opt/albert/repo` (or restore it) and `cd` in.
@@ -74,7 +79,7 @@ You cannot recover without **all three**:
 
 ## 5. Verification checklist
 
-- [ ] `curl -fsS https://<APP_BASE_URL>/health` returns `{"status":"ok"}`.
+- [ ] `curl -fsS https://alfredaitech.com/health` returns `{"status":"ok"}`.
 - [ ] `docker compose -p albert -f docker-compose.prod.yml ps` — all services healthy.
 - [ ] `select count(*) from users;` > 0 (the restore drill, §8, automates this).
 - [ ] A test user can sign in and their inbox loads (tokens decrypt → key is correct).

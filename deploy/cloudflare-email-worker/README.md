@@ -21,9 +21,9 @@ Worker's secret.
 ### 2. Add the secret to Albert on the VPS
 
 ```
-ssh root@89.167.84.193
-echo "FORWARD_INBOX_SECRET=<paste>" >> /opt/albert/.env
-systemctl restart albert-web
+ssh root@alfredaitech.com
+echo "FORWARD_INBOX_SECRET=<paste>" >> /opt/albert/repo/.env
+docker compose -p albert -f /opt/albert/repo/docker-compose.prod.yml restart albert_web
 ```
 
 (After this, the webhook returns 401 on a wrong secret and 503 with no secret.)
@@ -59,7 +59,7 @@ bun install
 bunx wrangler login          # one-time, opens browser
 bunx wrangler deploy
 bunx wrangler secret put FORWARD_INBOX_SECRET
-# paste the same value you set in /opt/albert/.env
+# paste the same value you set in /opt/albert/repo/.env
 ```
 
 ### 6. Point the routing rule at the Worker
@@ -75,7 +75,8 @@ your Albert Today / Inbox. The worker logs (`bunx wrangler tail`) will show
 the POST.
 
 If it doesn't land:
-- `journalctl -u albert-web -n 50` on the VPS — look for `/api/v1/inbox/forward` calls.
+- `docker compose -p albert -f /opt/albert/repo/docker-compose.prod.yml logs --tail 50 albert_web`
+  on the VPS — look for `/api/v1/inbox/forward` calls.
 - `bunx wrangler tail` — look for the email Worker's logs.
 - 401 means the secrets don't match.
 - 503 means Albert's `.env` is missing the secret.

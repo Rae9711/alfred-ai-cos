@@ -23,7 +23,7 @@ local `eas-cli` so the version always matches `eas.json`'s `cli.version`.
 ## Web dev proxy — `start:web` + `proxy`
 
 Expo can run as a web app (`expo start --web`). The browser blocks cross-
-origin requests from `http://localhost:8081` to `https://albert.alfredassistants.com`,
+origin requests from `http://localhost:8081` to `https://alfredaitech.com`,
 which kills login and every API call.
 
 `dev-api-proxy.mjs` is a 95-line HTTP server on `:8000` that:

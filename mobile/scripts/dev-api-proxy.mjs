@@ -2,7 +2,7 @@
 /**
  * Dev-only API proxy for Expo web preview.
  *
- * Browser CORS blocks http://localhost:8081 → https://albert.alfredassistants.com.
+ * Browser CORS blocks http://localhost:8081 → https://alfredaitech.com.
  * This tiny server listens on :8000, adds CORS headers, and forwards /api/v1/*
  * to the production backend so web dev login + API calls work without a full
  * local Postgres/Redis stack.
@@ -16,7 +16,7 @@ import https from "node:https";
 
 const PROXY_PORT = Number(process.env.ALBERT_PROXY_PORT ?? 8000);
 const TARGET_HOST =
-  process.env.ALBERT_PROXY_TARGET ?? "albert.alfredassistants.com";
+  process.env.ALBERT_PROXY_TARGET ?? "alfredaitech.com";
 
 /** Origins allowed during local web dev (Expo web + alternate ports). */
 const ALLOWED_ORIGINS = new Set([

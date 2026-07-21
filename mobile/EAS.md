@@ -41,7 +41,7 @@ native deps change; otherwise `eas update` and everyone has it in seconds.
 
 ## Notes
 
-- `apiBaseUrl` is already `https://albert.alfredassistants.com` (the durable backend), so
+- `apiBaseUrl` is already `https://alfredaitech.com` (the durable backend), so
   the built app talks to prod with no Mac involved.
 - runtimeVersion policy = appVersion: JS updates apply to builds sharing app version 0.1.0.
   Bump `version` in app.json when native changes require a fresh build.

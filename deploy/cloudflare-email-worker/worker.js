@@ -8,7 +8,7 @@
 // Deploy:
 //   cd deploy/cloudflare-email-worker
 //   bunx wrangler deploy
-//   bunx wrangler secret put FORWARD_INBOX_SECRET   # paste the value from /opt/albert/.env
+//   bunx wrangler secret put FORWARD_INBOX_SECRET   # paste the value from /opt/albert/repo/.env
 //
 // Bind: in Cloudflare dashboard → Email Routing → Routing Rules, add a custom
 // address `forward@in.alfredassistants.com` with action "Send to a Worker" →
@@ -16,7 +16,7 @@
 
 import PostalMime from "postal-mime";
 
-const ALBERT_ENDPOINT = "https://albert.alfredassistants.com/api/v1/inbox/forward";
+const ALBERT_ENDPOINT = "https://alfredaitech.com/api/v1/inbox/forward";
 
 export default {
   async email(message, env) {
