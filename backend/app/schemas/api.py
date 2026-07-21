@@ -15,6 +15,12 @@ from app.db.enums import (
     SourceType,
     TaskStatus,
 )
+from app.schemas.llm import (
+    ConversationActionKind,
+    ConversationActionTier,
+    ConversationSource,
+    MessageRole,
+)
 
 
 # --- Auth ---
@@ -362,6 +368,8 @@ class TaskOut(BaseModel):
     status: TaskStatus
     source_type: SourceType
     source_id: str | None
+    evidence: str | None = None
+    confidence: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -446,3 +454,108 @@ class CaptureRequest(BaseModel):
 class CaptureResponse(BaseModel):
     tasks: list[TaskOut]
     detected_project: str | None
+
+
+# --- Conversation (WeChat paste workflow) ---
+
+
+class ParticipantOut(BaseModel):
+    name: str
+    is_self: bool = False
+
+
+class ConversationMessageOut(BaseModel):
+    id: str
+    sender: str
+    timestamp: datetime | None = None
+    content: str
+    role: MessageRole = MessageRole.unknown
+    is_selected: bool = True
+    weight: float = 1.0
+
+
+class ParsedConversationOut(BaseModel):
+    id: str
+    source: ConversationSource
+    participants: list[ParticipantOut]
+    messages: list[ConversationMessageOut]
+    imported_at: datetime
+
+
+class ConversationParseRequest(BaseModel):
+    text: str
+
+
+class ReplySuggestionOut(BaseModel):
+    tone: str
+    body: str
+
+
+class ConversationActionOut(BaseModel):
+    id: str
+    type: ConversationActionKind
+    title: str
+    due_date: date | None = None
+    start: str | None = None
+    end: str | None = None
+    suggested_time: str | None = None
+    confidence: float
+    evidence: str
+    evidence_message_ids: list[str] = []
+    tier: ConversationActionTier
+    status: str = "suggested"
+
+
+class ConversationAnalyzeRequest(BaseModel):
+    conversation: ParsedConversationOut
+    goal: str = "custom"  # comfort | follow_up | confirm | custom
+    tones: list[str] | None = None
+    timezone: str | None = None
+
+
+class ConversationAnalyzeResponse(BaseModel):
+    reply_suggestions: list[ReplySuggestionOut]
+    actions: list[ConversationActionOut]
+
+
+class ConversationConfirmRequest(BaseModel):
+    type: ConversationActionKind
+    title: str
+    conversation_id: str | None = None
+    evidence: str | None = None
+    evidence_message_ids: list[str] = []
+    confidence: float = 0.0
+    due_date: date | None = None
+    start: str | None = None
+    end: str | None = None
+    suggested_time: str | None = None
+    remind_at: datetime | None = None
+    set_reminder: bool = False
+    description: str | None = None
+    counterparty: str | None = None
+    timezone: str | None = None
+
+
+class ConversationConfirmResponse(BaseModel):
+    kind: str
+    id: str
+    title: str
+    evidence: str | None = None
+    remind_at: datetime | None = None
+    detail: str | None = None
+
+
+class ConversationInboxItem(BaseModel):
+    id: str
+    kind: str  # task | follow_up | commitment | calendar_event
+    title: str
+    evidence: str | None = None
+    due_date: date | None = None
+    remind_at: datetime | None = None
+    created_at: datetime | None = None
+    source_label: str = "微信对话"
+
+
+class ConversationInboxResponse(BaseModel):
+    items: list[ConversationInboxItem]
+    counts: dict[str, int]

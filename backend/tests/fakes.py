@@ -11,11 +11,17 @@ from app.schemas.llm import (
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
+    ConversationActionsResult,
+    ConversationRepliesResult,
     DraftResult,
     ExtractedCommitment,
+    ExtractedConversationActionLLM,
     ExtractedScheduleProposal,
     MeetingContextSummary,
+    NormalizedConversation,
+    NormalizedConversationMessage,
     ParsedTask,
+    ReplySuggestion,
     ThreadReconciliation,
 )
 
@@ -35,6 +41,9 @@ class FakeLLM:
         chat_has_context: bool = True,
         schedule_candidate: bool = False,
         schedule_proposal: ExtractedScheduleProposal | None = None,
+        conversation_replies: list[ReplySuggestion] | None = None,
+        conversation_actions: list[ExtractedConversationActionLLM] | None = None,
+        normalized_conversation: NormalizedConversation | None = None,
     ) -> None:
         self._commitments = commitments or []
         self._capture_tasks = capture_tasks or []
@@ -48,6 +57,12 @@ class FakeLLM:
         self.chat_has_context = chat_has_context
         self._schedule_candidate = schedule_candidate
         self._schedule_proposal = schedule_proposal
+        self._conversation_replies = conversation_replies
+        self._conversation_actions = conversation_actions or []
+        self._normalized_conversation = normalized_conversation
+        self.normalize_calls: list[str] = []
+        self.conversation_reply_calls: list[dict] = []
+        self.conversation_action_calls: list[dict] = []
 
     def classify_message(
         self, *, subject: str | None, body: str, sender: str, user_email: str | None = None
@@ -169,6 +184,61 @@ class FakeLLM:
             cited_ids=self.chat_cited_ids,
             has_context=self.chat_has_context,
         )
+
+    def normalize_conversation(self, *, raw_text: str) -> NormalizedConversation:
+        self.normalize_calls.append(raw_text)
+        if self._normalized_conversation is not None:
+            return self._normalized_conversation
+        # Minimal fallback: treat each non-empty line as a message from "Unknown".
+        lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
+        msgs = [
+            NormalizedConversationMessage(sender="Unknown", content=ln) for ln in lines[:20]
+        ]
+        return NormalizedConversation(participants=["Unknown"], messages=msgs)
+
+    def draft_conversation_replies(
+        self,
+        *,
+        context: str,
+        goal: str,
+        tone_options: list[str],
+        user_name: str | None = None,
+    ) -> ConversationRepliesResult:
+        self.conversation_reply_calls.append(
+            {
+                "context": context,
+                "goal": goal,
+                "tone_options": tone_options,
+                "user_name": user_name,
+            }
+        )
+        if self._conversation_replies is not None:
+            return ConversationRepliesResult(replies=self._conversation_replies)
+        tones = tone_options or ["natural", "caring", "brief"]
+        return ConversationRepliesResult(
+            replies=[
+                ReplySuggestion(tone=t, body=f"[{t}] reply for goal={goal or 'default'}")
+                for t in tones
+            ]
+        )
+
+    def extract_conversation_actions(
+        self,
+        *,
+        context: str,
+        reference_date: date,
+        user_timezone: str,
+        user_name: str | None = None,
+    ) -> ConversationActionsResult:
+        self.conversation_action_calls.append(
+            {
+                "context": context,
+                "reference_date": reference_date,
+                "user_timezone": user_timezone,
+                "user_name": user_name,
+            }
+        )
+        return ConversationActionsResult(actions=list(self._conversation_actions))
 
 
 class FakeNotifier:

@@ -34,9 +34,11 @@ export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
 export const SourceType = {
   Gmail: "gmail",
+  Sms: "sms",
   Calendar: "calendar",
   Manual: "manual",
   Voice: "voice",
+  Conversation: "conversation",
 } as const;
 export type SourceType = (typeof SourceType)[keyof typeof SourceType];
 

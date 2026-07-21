@@ -16,10 +16,13 @@ from app.schemas.llm import (
     AssistantInterpretation,
     CaptureResult,
     ClassificationResult,
+    ConversationActionsResult,
+    ConversationRepliesResult,
     DraftResult,
     ExtractedCommitment,
     ExtractedScheduleProposal,
     MeetingContextSummary,
+    NormalizedConversation,
     ThreadReconciliation,
 )
 
@@ -142,4 +145,30 @@ class LLMClient(Protocol):
         history: list[dict[str, str]] | None = None,
     ) -> AssistantChatReply:
         """Answer a free-form question using Today/inbox/waiting context (PRD 10.2 chat)."""
+        ...
+
+    def normalize_conversation(self, *, raw_text: str) -> NormalizedConversation:
+        """Repair a messy pasted chat transcript into sender/content message rows."""
+        ...
+
+    def draft_conversation_replies(
+        self,
+        *,
+        context: str,
+        goal: str,
+        tone_options: list[str],
+        user_name: str | None = None,
+    ) -> ConversationRepliesResult:
+        """Draft several tone-labeled replies for a chat conversation."""
+        ...
+
+    def extract_conversation_actions(
+        self,
+        *,
+        context: str,
+        reference_date: date,
+        user_timezone: str,
+        user_name: str | None = None,
+    ) -> ConversationActionsResult:
+        """Extract tasks, calendar events, follow-ups, and commitments from a chat."""
         ...

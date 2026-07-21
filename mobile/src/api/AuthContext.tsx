@@ -13,6 +13,7 @@ import {
 
 import { api, setOnAuthExpired } from "@/api/client";
 import { clearToken, getToken } from "@/api/auth";
+import { syncAuthToAppGroup } from "@/lib/appGroupHandoff";
 import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 
 type AuthState = {
@@ -27,7 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   const refresh = useCallback(async () => {
-    setAuthed(Boolean(await getToken()));
+    const token = await getToken();
+    setAuthed(Boolean(token));
+    // Keep the keyboard App Group token in sync (including after cold start).
+    await syncAuthToAppGroup(token);
   }, []);
 
   const signOut = useCallback(async () => {

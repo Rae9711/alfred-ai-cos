@@ -59,6 +59,17 @@ export const translations = {
       habitBlockScheduled: "Added to your calendar.",
       habitBlockFailed: "Couldn't schedule — try again.",
       weekAheadLabel: "Week ahead",
+      fromConversations: "From conversations",
+      fromConversationsSummary: (tasks: number, followUps: number, commitments: number) => {
+        const parts: string[] = [];
+        if (tasks) parts.push(`${tasks} task${tasks === 1 ? "" : "s"}`);
+        if (followUps) parts.push(`${followUps} follow-up${followUps === 1 ? "" : "s"}`);
+        if (commitments) parts.push(`${commitments} commitment${commitments === 1 ? "" : "s"}`);
+        return parts.length ? parts.join(" · ") : "Nothing pending";
+      },
+      importConversation: "Import WeChat chat",
+      conversationEvidence: (quote: string) => `From: “${quote}”`,
+      conversationSource: "WeChat chat",
     },
     planning: {
       sectionLabel: "Planning",
@@ -469,6 +480,17 @@ export const translations = {
       habitBlockScheduled: "已加入日历。",
       habitBlockFailed: "无法预约 — 请重试。",
       weekAheadLabel: "下周预览",
+      fromConversations: "从对话中发现",
+      fromConversationsSummary: (tasks: number, followUps: number, commitments: number) => {
+        const parts: string[] = [];
+        if (tasks) parts.push(`${tasks} 个待办`);
+        if (followUps) parts.push(`${followUps} 个需要跟进`);
+        if (commitments) parts.push(`${commitments} 个承诺`);
+        return parts.length ? parts.join(" · ") : "暂无";
+      },
+      importConversation: "导入微信对话",
+      conversationEvidence: (quote: string) => `来自：「${quote}」`,
+      conversationSource: "微信对话",
     },
     planning: {
       sectionLabel: "时间块建议",

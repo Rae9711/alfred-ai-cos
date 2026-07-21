@@ -22,6 +22,15 @@
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": ["shortcuts"],
         "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.haoruiwang.alfred"
+        ],
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)com.haoruiwang.alfred",
+          "$(AppIdentifierPrefix)com.haoruiwang.alfred.shared"
+        ]
       }
     },
     "android": {
@@ -63,7 +72,8 @@
         {
           "contactsPermission": "Alfred looks up contacts when you ask to text someone by name."
         }
-      ]
+      ],
+      "./plugins/withAlfredKeyboard.js"
     ],
     "extra": {
       "apiBaseUrl": "https://alfredaitech.com",

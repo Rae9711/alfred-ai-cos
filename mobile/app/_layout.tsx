@@ -32,6 +32,7 @@ import { AuthProvider, useAuth } from "@/api/AuthContext";
 import { queryClient } from "@/api/queryClient";
 import { CompanionAvatarProvider } from "@/context/CompanionAvatarContext";
 import { handleSharedTextUrl } from "@/lib/shareIntent";
+import { startAppGroupHandoffListener } from "@/lib/appGroupHandoff";
 import { colors } from "@/theme/theme";
 import { View } from "react-native";
 
@@ -72,6 +73,9 @@ function DeepLinkHandler() {
     });
     return () => sub.remove();
   }, [refresh]);
+
+  // Drain keyboard-confirmed actions when returning to the app.
+  useEffect(() => startAppGroupHandoffListener(), []);
 
   // Route push taps to the embedded deep_link (e.g. "/approvals"). Set on both the
   // foreground/background tap stream and the cold-start response.

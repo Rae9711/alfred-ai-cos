@@ -25,6 +25,7 @@ def create_task(
     source_type: SourceType = SourceType.manual,
     source_id: str | None = None,
     confidence: float | None = None,
+    evidence: str | None = None,
 ) -> Task:
     task = Task(
         user_id=user_id,
@@ -36,6 +37,7 @@ def create_task(
         source_type=source_type,
         source_id=source_id,
         confidence=confidence,
+        evidence=evidence,
     )
     db.add(task)
     db.commit()
