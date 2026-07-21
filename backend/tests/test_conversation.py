@@ -39,6 +39,32 @@ SAMPLE_WITH_MEETING = """Alex
 好的，会议室见
 """
 
+SAMPLE_WITH_YESTERDAY_TS = """张三 昨天 21:05
+明天把合同发我
+
+李四 今天 09:30
+好，上午发给你
+"""
+
+SAMPLE_WITH_SYSTEM_NOISE = """— 昨天 —
+
+6330
+我需要审一下
+
+以上是历史消息
+
+Rui🌞
+[动画表情]
+
+Rui🌞
+一吃一堆
+"""
+
+SAMPLE_INLINE_COLON = """6330：我需要审一下
+Rui🌞：一吃一堆
+6330：昨晚的感觉还没消化
+"""
+
 
 @pytest.fixture
 def user(db: Session) -> User:
@@ -60,6 +86,40 @@ def test_parse_wechat_deterministic_extracts_messages() -> None:
     eaten = next(m for m in parsed.messages if m.content == "已吃")
     assert eaten.weight < 1.0
     assert eaten.is_selected is False
+
+
+def test_parse_yesterday_today_timestamps() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_YESTERDAY_TS)
+    assert parsed is not None
+    assert len(parsed.messages) == 2
+    assert parsed.messages[0].timestamp is not None
+    assert parsed.messages[1].timestamp is not None
+    # 昨天 should be earlier than 今天
+    assert parsed.messages[0].timestamp < parsed.messages[1].timestamp
+
+
+def test_parse_skips_system_and_media_placeholders() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_SYSTEM_NOISE)
+    assert parsed is not None
+    contents = [m.content for m in parsed.messages]
+    assert "我需要审一下" in contents
+    assert "一吃一堆" in contents
+    assert "以上是历史消息" not in contents
+    assert "[动画表情]" not in contents
+
+
+def test_parse_inline_colon_export_style() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_INLINE_COLON)
+    assert parsed is not None
+    assert len(parsed.messages) == 3
+    assert parsed.messages[0].sender == "6330"
+    assert parsed.messages[0].content == "我需要审一下"
+
+
+def test_parse_meeting_sample() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_MEETING)
+    assert parsed is not None
+    assert any("明天下午三点见" in m.content for m in parsed.messages)
 
 
 def test_parse_conversation_uses_deterministic_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -174,6 +234,29 @@ def test_confirm_follow_up_creates_commitment(db: Session, user: User) -> None:
     assert c is not None
     assert c.source_type == SourceType.conversation
     assert c.evidence == "我之后再告诉你"
+
+
+def test_confirm_follow_up_with_reminder_creates_task(db: Session, user: User) -> None:
+    res = conversation_service.confirm_action(
+        db,
+        user,
+        ConversationConfirmRequest(
+            type=ConversationActionKind.follow_up,
+            title="今晚询问对方状态",
+            conversation_id="conv-2b",
+            evidence="我之后再告诉你",
+            confidence=0.7,
+            set_reminder=True,
+            suggested_time="tonight",
+        ),
+        timezone="America/New_York",
+    )
+    assert res.kind == "task"
+    assert res.remind_at is not None
+    task = db.get(Task, res.id)
+    assert task is not None
+    assert task.evidence == "我之后再告诉你"
+    assert task.remind_at is not None
 
 
 def test_conversation_inbox_lists_open_items(db: Session, user: User) -> None:

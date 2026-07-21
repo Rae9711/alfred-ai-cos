@@ -90,47 +90,81 @@ function withKeyboardXcodeTarget(config) {
   return withXcodeProject(config, (cfg) => {
     const project = cfg.modResults;
     const bundleId = cfg.ios?.bundleIdentifier || "com.haoruiwang.alfred";
-    const keyboardBundleId = `${bundleId}${KEYBOARD_BUNDLE_SUFFIX.replace(/^\./, ".")}`;
-    // Ensure unique product name
     const targetName = KEYBOARD_NAME;
+    const keyboardBundleId = `${bundleId}.AlfredKeyboard`;
 
     // If the target already exists (re-prebuild), skip adding it again.
     const existing = project.pbxTargetByName?.(targetName);
     if (existing) {
+      cfg.modResults.__alfredKeyboard = {
+        targetName,
+        bundleId: keyboardBundleId,
+        appGroup: APP_GROUP,
+        wired: true,
+      };
       return cfg;
     }
 
-    // Expo's xcode helpers vary by version — use a documented PBX add pattern.
+    const iosRoot = cfg.modRequest.platformProjectRoot;
+    const markerPath = path.join(iosRoot, KEYBOARD_NAME, ".alfred-keyboard-target");
+
+    // Best-effort: some xcode package versions expose addTarget for app_extension.
+    let wired = false;
     try {
-      const targetUuid = project.generateUuid();
-      const productUuid = project.generateUuid();
-      // Minimal marker file so prebuild leaves a trail even if full PBX wiring
-      // needs a follow-up on a Mac with Xcode. The DangerousMod already copied sources.
-      const markerPath = path.join(
-        cfg.modRequest.platformProjectRoot,
-        KEYBOARD_NAME,
-        ".alfred-keyboard-target",
-      );
+      if (typeof project.addTarget === "function") {
+        const target = project.addTarget(
+          targetName,
+          "app_extension",
+          targetName,
+          keyboardBundleId,
+        );
+        if (target) {
+          wired = true;
+          // Add source files if helpers exist.
+          const keyboardDir = path.join(iosRoot, KEYBOARD_NAME);
+          if (fs.existsSync(keyboardDir) && typeof project.addSourceFile === "function") {
+            for (const file of fs.readdirSync(keyboardDir)) {
+              if (file.endsWith(".swift") || file.endsWith(".m")) {
+                try {
+                  project.addSourceFile(`${KEYBOARD_NAME}/${file}`, { target: target.uuid });
+                } catch {
+                  /* ignore per-file add failures — Xcode can still pick up the folder */
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[withAlfredKeyboard] addTarget failed; falling back to marker", e);
+    }
+
+    try {
+      ensureDir(path.dirname(markerPath));
       fs.writeFileSync(
         markerPath,
         [
           `target=${targetName}`,
-          `bundleId=${bundleId}.AlfredKeyboard`,
+          `bundleId=${keyboardBundleId}`,
           `appGroup=${APP_GROUP}`,
-          `productUuid=${productUuid}`,
-          `targetUuid=${targetUuid}`,
           `requestsOpenAccess=true`,
-        ].join("\n"),
+          `wired=${wired}`,
+          `note=${
+            wired
+              ? "PBX target added by config plugin — verify Embed Frameworks / App Groups in Xcode"
+              : "Sources copied; finish Custom Keyboard Extension target wiring in Xcode (see docs/KEYBOARD.md)"
+          }`,
+        ].join("\n") + "\n",
       );
     } catch (e) {
       console.warn("[withAlfredKeyboard] could not stamp keyboard target marker", e);
     }
 
-    // Store metadata for EAS / docs
     cfg.modResults.__alfredKeyboard = {
       targetName,
-      bundleId: `${bundleId}.AlfredKeyboard`,
+      bundleId: keyboardBundleId,
       appGroup: APP_GROUP,
+      wired,
     };
     return cfg;
   });

@@ -78,14 +78,22 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshClipboardBanner() {
+        if !hasFullAccess {
+            statusLabel.text = "请开启完全访问：设置 → 通用 → 键盘 → Alfred"
+            return
+        }
+        if AlfredAppGroup.authToken() == nil {
+            statusLabel.text = "请先在 Alfred App 登录（会话会同步到键盘）"
+            return
+        }
         let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let lines = text.split(whereSeparator: \.isNewline).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         if looksLikeChat(text) {
-            statusLabel.text = "检测到 \(max(lines.count / 2, 1)) 条聊天消息"
-        } else if AlfredAppGroup.authToken() == nil {
-            statusLabel.text = "请先在 Alfred App 登录，并开启键盘完全访问"
-        } else {
+            statusLabel.text = "检测到 \(max(lines.count / 2, 1)) 条聊天消息 · 点「导入对话」"
+        } else if text.isEmpty {
             statusLabel.text = "复制微信多选消息后点「导入对话」"
+        } else {
+            statusLabel.text = "剪贴板有内容，但不像聊天记录 — 仍可尝试导入"
         }
     }
 
@@ -99,10 +107,14 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func importTapped() {
+        if !hasFullAccess {
+            statusLabel.text = "无完全访问 — 无法读剪贴板。设置 → 通用 → 键盘 → Alfred → 允许完全访问"
+            return
+        }
         guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty
         else {
-            statusLabel.text = "剪贴板是空的"
+            statusLabel.text = "剪贴板是空的 — 先在微信多选复制"
             return
         }
         statusLabel.text = "正在解析…"
@@ -297,7 +309,11 @@ final class KeyboardViewController: UIInputViewController {
             ])
             actions.removeAll { $0.id == action.id }
             renderResults()
-            statusLabel.text = "已加入 Alfred"
+            if let remind = res.remind_at, !remind.isEmpty {
+                statusLabel.text = "已加入 Alfred · 回 App 后会设本地提醒"
+            } else {
+                statusLabel.text = "已加入 Alfred · 回首页可看「从对话中发现」"
+            }
         } catch {
             statusLabel.text = "保存失败：\(error.localizedDescription)"
         }

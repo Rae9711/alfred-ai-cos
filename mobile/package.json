@@ -5,8 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "ios": "expo start --ios",
-    "android": "expo start --android",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
     "start:web": "bash scripts/start-web.sh",
     "proxy": "node scripts/dev-api-proxy.mjs",
     "login": "node ../node_modules/eas-cli/bin/run login",
@@ -15,6 +15,8 @@
     "install:ios": "bash scripts/standalone-ios.sh install",
     "update:preview": "bash scripts/standalone-ios.sh update preview",
     "update:production": "bash scripts/standalone-ios.sh update production",
+    "prebuild:ios": "npx expo prebuild --platform ios && node scripts/wire-alfred-keyboard.cjs",
+    "wire:keyboard": "node scripts/wire-alfred-keyboard.cjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run && node --test scripts/dev-api-proxy.test.mjs"

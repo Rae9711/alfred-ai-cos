@@ -56,10 +56,29 @@ _NOISE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# WeChat system / meta lines — skip as messages (not real chat content).
+_SYSTEM_LINE_RE = re.compile(
+    r"^("
+    r"以上是历史消息|"
+    r".*撤回了一条消息|"
+    r".*拍了拍.*|"
+    r"消息已发出，但被对方拒收|"
+    r"\[图片\]|\[视频\]|\[语音\]|\[文件\]|\[动画表情\]|\[贴纸\]|"
+    r"—"  # date separators like "— 昨天 —" handled separately
+    r")$"
+)
+
+_DATE_SEPARATOR_RE = re.compile(r"^[\-—–]+\s*(昨天|今天|星期[一二三四五六日天]|\d{1,2}月\d{1,2}日).*$")
+
 # WeChat-ish sender line: optional timestamp after the name.
 # Examples: "6330", "Rui🌞", "张三 12:43", "Alex 昨天 21:05"
 _SENDER_LINE_RE = re.compile(
     r"^(?P<sender>.+?)(?:\s+(?P<ts>\d{1,2}:\d{2}|昨天\s*\d{1,2}:\d{2}|今天\s*\d{1,2}:\d{2}))?$"
+)
+
+# Fallback: "Name：message" / "Name: message" on one line (some export styles).
+_INLINE_SENDER_RE = re.compile(
+    r"^(?P<sender>[^:：\n]{1,40})[:：]\s*(?P<content>.+)$"
 )
 
 _DEFAULT_TONES = ["natural", "caring", "brief"]
@@ -80,14 +99,32 @@ def _parse_optional_timestamp(raw: str | None) -> datetime | None:
     if not raw:
         return None
     raw = raw.strip()
+    today = datetime.now(UTC).date()
     # HH:MM only — attach today's UTC date as a best-effort placeholder.
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", raw)
     if m:
-        today = datetime.now(UTC).date()
         return datetime(
             today.year, today.month, today.day, int(m.group(1)), int(m.group(2)), tzinfo=UTC
         )
+    # 昨天 21:05 / 今天 09:30
+    m = re.fullmatch(r"(昨天|今天)\s*(\d{1,2}):(\d{2})", raw)
+    if m:
+        day = today if m.group(1) == "今天" else today - timedelta(days=1)
+        return datetime(
+            day.year, day.month, day.day, int(m.group(2)), int(m.group(3)), tzinfo=UTC
+        )
     return None
+
+
+def _is_system_or_media_placeholder(content: str) -> bool:
+    text = content.strip()
+    if not text:
+        return True
+    if _DATE_SEPARATOR_RE.match(text):
+        return True
+    if _SYSTEM_LINE_RE.match(text):
+        return True
+    return False
 
 
 def _is_probable_sender(line: str) -> bool:
@@ -96,8 +133,10 @@ def _is_probable_sender(line: str) -> bool:
         return False
     if any(ch in line for ch in "。！？.!?，,"):
         return False
-    # Pure timestamps are not senders.
+    # Pure timestamps / date separators are not senders.
     if re.fullmatch(r"\d{1,2}:\d{2}", line):
+        return False
+    if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
         return False
     return True
 
@@ -126,42 +165,24 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
     Or:
         Sender 12:43
         message content
+
+    Also accepts single-line "Name：content" / "Name: content" when blank-line
+    blocks are sparse (some export / long-press copy styles).
     """
     text = text.strip()
     if not text:
         return None
-    if not _looks_like_wechat_blocks(text):
-        return None
 
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
     messages: list[ConversationMessageOut] = []
     names: list[str] = []
 
-    for block in blocks:
-        lines = [ln.rstrip() for ln in block.splitlines() if ln.strip()]
-        if not lines:
-            continue
-        first = lines[0].strip()
-        m = _SENDER_LINE_RE.match(first)
-        if m and _is_probable_sender(m.group("sender").strip()):
-            sender = m.group("sender").strip()
-            ts_raw = m.group("ts")
-            content = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
-            if not content:
-                # Single-line block: treat whole thing as content from unknown if
-                # it doesn't look like name-only.
-                continue
-        else:
-            sender = "Unknown"
-            ts_raw = None
-            content = "\n".join(lines).strip()
-
-        if not content:
-            continue
+    def _append(sender: str, content: str, ts_raw: str | None) -> None:
+        content = content.strip()
+        if not content or _is_system_or_media_placeholder(content):
+            return
         if sender not in names and sender != "Unknown":
             names.append(sender)
-
-        weight = 0.3 if _NOISE_RE.match(content.strip()) else 1.0
+        weight = 0.3 if _NOISE_RE.match(content) else 1.0
         messages.append(
             ConversationMessageOut(
                 id=str(uuid.uuid4()),
@@ -173,6 +194,39 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
                 weight=weight,
             )
         )
+
+    if _looks_like_wechat_blocks(text):
+        blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
+        for block in blocks:
+            lines = [ln.rstrip() for ln in block.splitlines() if ln.strip()]
+            if not lines:
+                continue
+            first = lines[0].strip()
+            if _DATE_SEPARATOR_RE.match(first) and len(lines) == 1:
+                continue
+            m = _SENDER_LINE_RE.match(first)
+            if m and _is_probable_sender(m.group("sender").strip()):
+                sender = m.group("sender").strip()
+                ts_raw = m.group("ts")
+                content = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+                if not content:
+                    continue
+                _append(sender, content, ts_raw)
+            else:
+                _append("Unknown", "\n".join(lines), None)
+    else:
+        # Inline "Name：message" fallback for dense pastes without blank lines.
+        inline_hits = 0
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or _DATE_SEPARATOR_RE.match(line):
+                continue
+            m = _INLINE_SENDER_RE.match(line)
+            if m and _is_probable_sender(m.group("sender").strip()):
+                _append(m.group("sender").strip(), m.group("content"), None)
+                inline_hits += 1
+        if inline_hits < 2:
+            return None
 
     if len(messages) < 1:
         return None
@@ -444,6 +498,37 @@ def confirm_action(
         )
 
     if kind in (ConversationActionKind.follow_up, ConversationActionKind.commitment):
+        # Timed follow-ups become Tasks so local reminders can fire after confirm.
+        # Untimed follow-ups / commitments stay as Commitments in the conversation inbox.
+        wants_reminder = bool(payload.set_reminder) or bool(payload.remind_at)
+        if kind == ConversationActionKind.follow_up and wants_reminder:
+            remind_at = payload.remind_at
+            if remind_at is None:
+                remind_at = _resolve_suggested_time(payload.suggested_time, tz=tz)
+                if remind_at is None:
+                    remind_at = _resolve_suggested_time("tonight", tz=tz)
+            task = task_service.create_task(
+                db,
+                user.id,
+                title=title,
+                description=payload.description,
+                due_date=payload.due_date,
+                remind_at=remind_at,
+                priority=Priority.medium,
+                source_type=SourceType.conversation,
+                source_id=payload.conversation_id,
+                confidence=payload.confidence,
+                evidence=evidence,
+            )
+            return ConversationConfirmResponse(
+                kind="task",
+                id=task.id,
+                title=task.title,
+                evidence=evidence,
+                remind_at=task.remind_at,
+                detail="Saved to Alfred with reminder",
+            )
+
         commitment = Commitment(
             user_id=user.id,
             description=title,

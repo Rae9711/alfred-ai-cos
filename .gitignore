@@ -34,3 +34,7 @@ service-account*.json
 
 # --- Claude working files ---
 .claude/scratch/
+
+# Expo prebuild output (regenerate with: cd mobile && bun run prebuild:ios)
+mobile/ios/
+

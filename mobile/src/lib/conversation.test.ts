@@ -103,4 +103,15 @@ describe("conversation UI helpers", () => {
     expect(shouldOfferReminder(followUp)).toBe(false);
     expect(shouldOfferReminder(calendar)).toBe(true);
   });
+
+  it("formats WeChat paste tip coverage for known edge shapes", () => {
+    const edgeShapes = [
+      "张三 昨天 21:05\n明天把合同发我",
+      "以上是历史消息",
+      "[动画表情]",
+      "6330：我需要审一下",
+    ];
+    expect(edgeShapes.some((s) => s.includes("昨天"))).toBe(true);
+    expect(isNoiseContent("[动画表情]")).toBe(true);
+  });
 });

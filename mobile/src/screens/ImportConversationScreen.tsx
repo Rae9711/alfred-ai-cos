@@ -150,6 +150,8 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
   const confirmAction = useCallback(
     async (action: ConversationAction, opts?: { setReminder?: boolean }) => {
       try {
+        const setReminder =
+          opts?.setReminder ?? action.tier === "explicit_time";
         const res = await api.confirmConversationAction({
           type: action.type,
           title: action.title,
@@ -161,7 +163,7 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
           start: action.start,
           end: action.end,
           suggested_time: action.suggested_time,
-          set_reminder: opts?.setReminder ?? action.tier === "explicit_time",
+          set_reminder: setReminder,
         });
         setConfirmedActionIds((prev) => new Set(prev).add(action.id));
         // Local notifications only for confirmed, time-bearing actions.
@@ -171,6 +173,15 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
             title: res.title,
             remindAt: res.remind_at,
           });
+          const when = new Date(res.remind_at).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          Alert.alert("已加入 Alfred", `已设本地提醒 · ${when}\n可在首页「从对话中发现」查看证据。`);
+        } else {
+          Alert.alert("已加入 Alfred", "可在首页「从对话中发现」查看证据。");
         }
       } catch (e) {
         Alert.alert("保存失败", e instanceof Error ? e.message : "请稍后再试");
@@ -273,6 +284,16 @@ function PastePhase({
         在微信里多选最近几条关键消息并复制，然后点导入。Alfred
         会整理上下文、生成回复，并找出待办、日程和跟进。
       </Text>
+
+      <View style={styles.tipBox}>
+        <Text style={styles.tipTitle}>复制小提示</Text>
+        <Text style={styles.tipBody}>
+          · 长按气泡 → 多选 → 复制（带发送者姓名效果最好）{"\n"}
+          · 表情 / 「已读」「好」等短回复会自动降权{"\n"}
+          · 系统提示、「以上是历史消息」会被忽略{"\n"}
+          · 键盘导入需开启「完全访问」才能读剪贴板
+        </Text>
+      </View>
 
       <Btn
         label={busy ? "读取中…" : "从剪贴板导入"}
@@ -455,12 +476,28 @@ function ResultsPhase({
                           onPress={() => onConfirm(a)}
                         />
                       ) : a.type === "follow_up" ? (
-                        <Btn
-                          label="添加跟进"
-                          kind="accent"
-                          tiny
-                          onPress={() => onConfirm(a)}
-                        />
+                        <>
+                          <Btn
+                            label="添加跟进"
+                            kind="accent"
+                            tiny
+                            onPress={() => onConfirm(a)}
+                          />
+                          <Btn
+                            label="今晚提醒"
+                            kind="ghost"
+                            tiny
+                            onPress={() =>
+                              onConfirm(
+                                {
+                                  ...a,
+                                  suggested_time: a.suggested_time ?? "tonight",
+                                },
+                                { setReminder: true },
+                              )
+                            }
+                          />
+                        </>
                       ) : (
                         <>
                           <Btn
@@ -546,6 +583,23 @@ const styles = StyleSheet.create({
   block: { gap: 4 },
   heading: { marginTop: 8, maxWidth: 320, lineHeight: 34 },
   sub: { color: colors.ink3, fontSize: 14, lineHeight: 21, marginVertical: 12 },
+  tipBox: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair,
+    padding: 12,
+    marginBottom: 14,
+    gap: 6,
+  },
+  tipTitle: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: colors.ink3,
+  },
+  tipBody: { color: colors.ink2, fontSize: 13, lineHeight: 20 },
   or: {
     textAlign: "center",
     color: colors.ink4,
