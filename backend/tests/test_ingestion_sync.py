@@ -315,6 +315,31 @@ def test_incremental_catchup_skips_messages_pending_in_session(
     assert db.query(Message).count() == 2
 
 
+def test_sync_raises_reconnect_when_grant_revoked(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A revoked Google grant surfaces as TokenReconnectRequired (not a raw error), so
+    the API can degrade gracefully instead of 502ing the inbox refresh."""
+    from google.auth.exceptions import RefreshError
+
+    from app.services.connected_accounts import TokenReconnectRequired
+
+    _connect(db, user, history_id=None)
+
+    def revoked(*_a, **_k):
+        raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    # First Gmail call on the initial-backfill path; mirrors Google auto-refresh failing.
+    monkeypatch.setattr(gmail, "list_recent_message_ids", revoked)
+
+    with pytest.raises(TokenReconnectRequired):
+        ingestion.sync_messages(db, user.id)
+
+    account = db.scalar(select(ConnectedAccount).where(ConnectedAccount.user_id == user.id))
+    assert account is not None
+    assert account.sync_status == SyncStatus.error
+
+
 def test_ingest_skips_deleted_gmail_messages(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

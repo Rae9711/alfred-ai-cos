@@ -7,6 +7,7 @@ calendar_only=true syncs Google Calendar without touching Gmail (fast home refre
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from google.auth.exceptions import RefreshError
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -14,10 +15,30 @@ from app.db.base import get_db
 from app.db.models import User
 from app.schemas.api import SyncResponse
 from app.services import calendar
+from app.services.connected_accounts import TokenReconnectRequired
 from app.services.mail_sync import run_mail_sync
 from app.workers.tasks import classify_pending_messages, sync_user
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+
+# A revoked/expired Google grant can surface either as our typed TokenReconnectRequired
+# (raised by the sync pipeline) or as a raw RefreshError bubbling out of a Calendar call.
+_RECONNECT_EXCEPTIONS = (TokenReconnectRequired, RefreshError)
+
+
+def _reconnect_response() -> SyncResponse:
+    """Graceful sync result when the Google grant needs reconnecting.
+
+    The affected mailbox already carries sync_status=error / sync_error for the UI's
+    reconnect prompt, so returning zeros here keeps the inbox screen loading its cached
+    mail instead of turning a re-auth condition into a 502 that reads as an outage."""
+    return SyncResponse(
+        ingested=0,
+        processed=0,
+        commitments_found=0,
+        events_synced=0,
+        initial_backfill=False,
+    )
 
 
 @router.post("", response_model=SyncResponse)
@@ -52,7 +73,10 @@ def sync_now(
         )
 
     if calendar_only:
-        events = calendar.sync_calendar(db, user.id)
+        try:
+            events = calendar.sync_calendar(db, user.id)
+        except _RECONNECT_EXCEPTIONS:
+            return _reconnect_response()
         return SyncResponse(
             ingested=0,
             processed=0,
@@ -65,11 +89,18 @@ def sync_now(
         result, processed, commitments = run_mail_sync(
             db, user.id, ingest_only=ingest_only, reclassify=reclassify
         )
+    except TokenReconnectRequired:
+        return _reconnect_response()
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     if ingest_only:
         classify_pending_messages.delay(user.id)
-    events = calendar.sync_calendar(db, user.id) if not ingest_only else []
+    events = []
+    if not ingest_only:
+        try:
+            events = calendar.sync_calendar(db, user.id)
+        except _RECONNECT_EXCEPTIONS:
+            events = []
     return SyncResponse(
         ingested=len(result.new_messages),
         processed=processed,

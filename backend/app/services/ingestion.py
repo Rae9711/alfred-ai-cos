@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from google.auth.exceptions import RefreshError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -25,7 +26,11 @@ from app.db.enums import MessageClassification, SyncStatus
 from app.db.models import ConnectedAccount, Message, User
 from app.services import gmail, sender_class
 from app.services.classification_adjust import subject_implies_action_required
-from app.services.connected_accounts import list_google_accounts, refresh_google_token
+from app.services.connected_accounts import (
+    TokenReconnectRequired,
+    list_google_accounts,
+    refresh_google_token,
+)
 from app.services.extraction import _EXTRACTION_BLOCKED_CLASSES
 from app.services.gmail import HistoryExpiredError, use_gmail_credentials
 from app.services.inbox_filter import message_in_primary_inbox
@@ -386,6 +391,22 @@ def messages_to_process(
     return new_messages + pending
 
 
+def _is_reconnect_error(exc: BaseException) -> bool:
+    """True when a sync failure is a revoked/expired Google grant (reconnect needed).
+
+    Walks the cause/context chain because the RefreshError is raised deep in the Google
+    client (auto-refresh on a 401) and may be re-wrapped on the way up. Retrying such a
+    grant can never succeed — only the user re-authenticating fixes it."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (TokenReconnectRequired, RefreshError)):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> SyncIngestResult:
     """Ingest new Gmail messages for every connected Google mailbox."""
     accounts = list_google_accounts(db, user_id)
@@ -395,6 +416,7 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
     all_new: list[Message] = []
     any_initial = False
     errors: list[str] = []
+    all_reconnect = True
     for account in accounts:
         # Per-mailbox lock: the beat poller (every 60s) and an interactive POST
         # /sync can otherwise sync the same mailbox concurrently, doubling Gmail
@@ -414,9 +436,17 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
                 account.sync_status = SyncStatus.error
                 account.sync_error = str(exc)[:500]
                 db.commit()
+                if not _is_reconnect_error(exc):
+                    all_reconnect = False
                 label = account.provider_account_email or account.id
                 errors.append(f"{label}: {exc}")
     if errors and not all_new and len(errors) == len(accounts):
+        # Every mailbox failed. If all failures are revoked/expired grants, surface a
+        # typed TokenReconnectRequired so the API can degrade gracefully (the cached
+        # inbox still loads and the UI prompts a reconnect) instead of returning a 502
+        # that looks like a server outage. Retrying a revoked grant never succeeds.
+        if all_reconnect:
+            raise TokenReconnectRequired("; ".join(errors))
         raise ValueError("; ".join(errors))
     return SyncIngestResult(new_messages=all_new, initial_backfill=any_initial)
 
