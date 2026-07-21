@@ -24,6 +24,8 @@
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.2",
     "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@sentry/react-native": "^8.19.0",
+    "@tanstack/react-query": "^5.90.0",
     "expo": "~54.0.34",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "~7.0.11",

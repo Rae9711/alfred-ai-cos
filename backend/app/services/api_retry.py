@@ -20,6 +20,8 @@ from typing import Any, Protocol
 from googleapiclient.errors import HttpError
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from app.core.metrics import GMAIL_ERRORS
+
 
 class _Executable(Protocol):
     def execute(self) -> Any: ...
@@ -29,7 +31,10 @@ def _is_retryable(exc: BaseException) -> bool:
     if not isinstance(exc, HttpError):
         return False
     status = getattr(exc.resp, "status", None)
-    return status == 429 or (status is not None and 500 <= status < 600)
+    retryable = status == 429 or (status is not None and 500 <= status < 600)
+    if retryable:
+        GMAIL_ERRORS.labels(status=str(status)).inc()
+    return retryable
 
 
 _retry_policy = retry(

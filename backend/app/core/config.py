@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
 
+    # Observability (Sentry). Empty DSN disables Sentry entirely (init is a no-op), so
+    # dev/test never phone home. traces_sample_rate keeps perf tracing cheap by default.
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.1
+
     # Postgres / Redis
     database_url: str
     redis_url: str
@@ -24,6 +29,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 43_200
     token_encryption_key: str
+    # Comma-separated older Fernet keys, kept only so tokens encrypted with a
+    # previous key still decrypt during a key rotation. New tokens are always
+    # encrypted with token_encryption_key (the primary). Leave empty when not
+    # rotating. See app.services.crypto and SECURITY.md ("Key rotation").
+    token_encryption_key_previous: str = ""
 
     # Google OAuth
     google_client_id: str = ""
@@ -54,6 +64,11 @@ class Settings(BaseSettings):
     # is refused (gets numbers banned). See docs/integrations/whatsapp.md.
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
+    # Inbound webhook auth: Meta signs each POST with the app secret (X-Hub-Signature-256)
+    # and echoes verify_token on the one-time GET subscription handshake. Empty disables
+    # the /inbox/whatsapp endpoint.
+    whatsapp_app_secret: str = ""
+    whatsapp_verify_token: str = ""
 
     # Forward-to-inbox: shared secret the Cloudflare Email Worker presents in
     # X-Forward-Secret. Empty disables the endpoint entirely (returns 503).

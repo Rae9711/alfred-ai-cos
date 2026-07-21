@@ -20,28 +20,39 @@ if a worker re-runs."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
 from app.db.models import Commitment, Message, User
 
-Event = Literal["act", "dismiss", "snooze", "open"]
+Event = Literal["act", "dismiss", "snooze", "open", "correct"]
 
 # Per-event score delta. Asymmetric: "act" gives a stronger signal than "open",
-# and "dismiss" is the only negative one because snoozing means "later", not
-# "no". The values are tuned so ~5 acts ≈ +5 score on the next item.
+# and "dismiss" is the only routine negative one because snoozing means "later",
+# not "no". "correct" is the strongest negative: an explicit correction (the user
+# dismissed a schedule proposal, marked a notification not-useful, or decided a
+# message we surfaced) is a clear "you got this wrong" and outweighs a plain
+# dismiss. The values are tuned so ~5 acts ≈ +5 score on the next item.
 _DELTAS: dict[Event, float] = {
     "act": 1.5,
     "dismiss": -1.0,
     "snooze": 0.0,  # intentional: park, not vote
     "open": 0.3,  # opened the detail = mild signal
+    "correct": -1.5,  # explicit correction: strong negative
 }
 
 # Bounds prevent runaway in either direction. ±15 keeps learning meaningful
 # without letting it dominate the baseline ranker.
 _BOUND = 15.0
+
+# Anti-overfit: a sender/category must have at least this many recorded events
+# before its learned delta is trusted enough to shift the ranker. Below it, one
+# stray act/dismiss can't move a sender's score. Grandfather clause in
+# `adjustment_for`: a key with no recorded count at all (hand-built views, legacy
+# data) still applies, so only genuinely under-sampled keys are held back.
+_MIN_SAMPLES = 3
 
 
 @dataclass
@@ -50,6 +61,9 @@ class LearningView:
 
     by_sender: dict[str, float]
     by_category: dict[str, float]
+    # How many events fed each learned delta (the min-sample gate reads these).
+    sender_counts: dict[str, int] = field(default_factory=dict)
+    category_counts: dict[str, int] = field(default_factory=dict)
 
 
 # ---------- read ----------
@@ -60,17 +74,31 @@ def get_learning(user: User) -> LearningView:
     return LearningView(
         by_sender={str(k): float(v) for k, v in (raw.get("by_sender") or {}).items()},
         by_category={str(k): float(v) for k, v in (raw.get("by_category") or {}).items()},
+        sender_counts={str(k): int(v) for k, v in (raw.get("sender_counts") or {}).items()},
+        category_counts={str(k): int(v) for k, v in (raw.get("category_counts") or {}).items()},
     )
+
+
+def _passes_threshold(counts: dict[str, int], key: str) -> bool:
+    """True when a learned key is trusted: either we have no sample count for it
+    (grandfathered) or it has met the minimum-sample bar."""
+    if key not in counts:
+        return True
+    return counts[key] >= _MIN_SAMPLES
 
 
 def adjustment_for(learning: LearningView, *, sender: str | None, categories: list[str]) -> float:
     """Combined score adjustment for one commitment. Bounded so the sum of all
-    learned signals can't blow past ±20 on a single item."""
+    learned signals can't blow past ±20 on a single item. Sub-threshold senders /
+    categories contribute 0 so a single event can't move the ranker."""
     total = 0.0
     if sender:
-        total += learning.by_sender.get(sender.lower(), 0.0)
+        key = sender.lower()
+        if _passes_threshold(learning.sender_counts, key):
+            total += learning.by_sender.get(key, 0.0)
     for cat in categories:
-        total += learning.by_category.get(cat, 0.0)
+        if _passes_threshold(learning.category_counts, cat):
+            total += learning.by_category.get(cat, 0.0)
     # The hard cap on the *combined* signal mirrors the per-axis bound, so even
     # if every dimension fires the worst case is bounded and explainable.
     return max(-20.0, min(20.0, total))
@@ -94,12 +122,40 @@ def _apply(value: float, delta: float) -> float:
     return max(-_BOUND, min(_BOUND, _decay(value) + delta))
 
 
+def _attribution(
+    db: Session, commitment: Commitment | None, message: Message | None
+) -> tuple[str | None, list[str]]:
+    """Resolve the sender + keyword categories to attribute an event to.
+
+    A commitment (preferred) resolves through its source message; a bare message
+    (schedule-proposal dismiss, notification not-useful, message user-decided) uses
+    its own sender + subject/snippet. Either way we mirror the ranker's keyword
+    detection so learning and scoring agree on an item's category."""
+    if commitment is not None and commitment.source_id:
+        msg = db.get(Message, commitment.source_id)
+        sender = msg.sender.lower() if msg and msg.sender else None
+        text = f"{commitment.description or ''} {commitment.evidence or ''}"
+        return sender, _categories_in(text)
+    if message is not None:
+        sender = message.sender.lower() if message.sender else None
+        text = f"{message.subject or ''} {message.snippet or ''}"
+        return sender, _categories_in(text)
+    return None, []
+
+
 def record_event(
-    db: Session, user: User, *, event: Event, commitment: Commitment | None = None
+    db: Session,
+    user: User,
+    *,
+    event: Event,
+    commitment: Commitment | None = None,
+    message: Message | None = None,
 ) -> None:
-    """Update the learning state for one user-event. Resolves the commitment's
-    sender (via Message.sender) and the keyword categories the ranker would
-    apply, so the same signals the ranker rewards are the ones learning shifts.
+    """Update the learning state for one user-event. Resolves the sender (via the
+    commitment's source message, or a directly-supplied message) and the keyword
+    categories the ranker would apply, so the same signals the ranker rewards are
+    the ones learning shifts. Also bumps a per-key sample count that gates the
+    min-sample threshold in `adjustment_for`.
 
     Idempotency: callers that may double-fire should pass a unique id through
     a separate dedup layer. This function itself is monotonic — calling it
@@ -109,31 +165,35 @@ def record_event(
     if delta == 0.0:
         return
 
-    sender: str | None = None
-    categories: list[str] = []
-
-    if commitment is not None and commitment.source_id:
-        msg = db.get(Message, commitment.source_id)
-        if msg and msg.sender:
-            sender = msg.sender.lower()
-        # Mirror the ranker's keyword detection so learning and scoring agree
-        # on what category an item belongs to.
-        text = f"{commitment.description or ''} {commitment.evidence or ''}"
-        categories = _categories_in(text)
+    sender, categories = _attribution(db, commitment, message)
 
     prefs = dict(user.preferences or {})
     learning = dict(prefs.get("learning") or {})
     by_sender = dict(learning.get("by_sender") or {})
     by_cat = dict(learning.get("by_category") or {})
+    sender_counts = dict(learning.get("sender_counts") or {})
+    category_counts = dict(learning.get("category_counts") or {})
 
     if sender:
         by_sender[sender] = _apply(float(by_sender.get(sender, 0.0)), delta)
+        sender_counts[sender] = int(sender_counts.get(sender, 0)) + 1
     for cat in categories:
         by_cat[cat] = _apply(float(by_cat.get(cat, 0.0)), delta)
+        category_counts[cat] = int(category_counts.get(cat, 0)) + 1
 
     learning["by_sender"] = by_sender
     learning["by_category"] = by_cat
+    learning["sender_counts"] = sender_counts
+    learning["category_counts"] = category_counts
     prefs["learning"] = learning
+    user.preferences = prefs
+    db.commit()
+
+
+def reset_learning(db: Session, user: User) -> None:
+    """Clear all learned preferences for a user (the "start fresh" escape hatch)."""
+    prefs = dict(user.preferences or {})
+    prefs.pop("learning", None)
     user.preferences = prefs
     db.commit()
 

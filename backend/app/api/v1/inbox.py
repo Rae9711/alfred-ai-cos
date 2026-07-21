@@ -19,14 +19,15 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.base import get_db
 from app.schemas.api import SmsIngestOut
-from app.services import forward_inbox, sms_inbox
+from app.services import forward_inbox, sms_inbox, whatsapp_inbox
 from app.services.sms_body import normalize_sms_body_text
 from app.services.sms_inbox import UNKNOWN_SMS_SENDER, resolve_sms_sender_phone
 
@@ -332,3 +333,68 @@ async def sms_inbox_webhook(
         deduped=result.deduped,
         draft_created=result.draft_created,
     )
+
+
+class WhatsAppOut(BaseModel):
+    ingested: int
+    message_ids: list[str]
+
+
+@router.get("/whatsapp")
+def whatsapp_verify(
+    hub_mode: str | None = Query(default=None, alias="hub.mode"),
+    hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
+) -> PlainTextResponse:
+    """Meta's one-time subscription handshake — echo the challenge on a token match."""
+    settings = get_settings()
+    if not settings.whatsapp_verify_token:
+        raise HTTPException(status_code=503, detail="WhatsApp inbound is not configured")
+    challenge = whatsapp_inbox.verify_challenge(
+        verify_token=settings.whatsapp_verify_token,
+        mode=hub_mode,
+        token=hub_verify_token,
+        challenge=hub_challenge,
+    )
+    if challenge is None:
+        raise HTTPException(status_code=403, detail="Verification failed")
+    return PlainTextResponse(content=challenge)
+
+
+@router.post("/whatsapp", response_model=WhatsAppOut)
+async def whatsapp_inbox_webhook(
+    request: Request,
+    x_hub_signature_256: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> WhatsAppOut:
+    settings = get_settings()
+    if not settings.whatsapp_app_secret:
+        raise HTTPException(status_code=503, detail="WhatsApp inbound is not configured")
+
+    raw_bytes = await request.body()
+    if not whatsapp_inbox.verify_signature(
+        app_secret=settings.whatsapp_app_secret,
+        raw_body=raw_bytes,
+        signature_header=x_hub_signature_256,
+    ):
+        raise HTTPException(status_code=401, detail="Invalid WhatsApp signature")
+
+    try:
+        payload = json.loads(raw_bytes.decode("utf-8") if raw_bytes else "{}")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Malformed JSON body") from exc
+
+    message_ids: list[str] = []
+    for inbound in whatsapp_inbox.parse_inbound(payload):
+        user = whatsapp_inbox.find_whatsapp_user(db, inbound.business_phone_number_id)
+        if user is None:
+            # Meta retries on non-2xx; unknown recipients are dropped (acked) so a
+            # misrouted number doesn't wedge the whole delivery in a retry loop.
+            logger.warning(
+                "WhatsApp inbound for unrecognised business number=%s",
+                inbound.business_phone_number_id[:24],
+            )
+            continue
+        message_ids.append(whatsapp_inbox.ingest_inbound(db, user=user, inbound=inbound))
+
+    return WhatsAppOut(ingested=len(message_ids), message_ids=message_ids)

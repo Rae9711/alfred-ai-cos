@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import structlog
 from sqlalchemy import select
 
 from app.db.base import SessionLocal
@@ -40,6 +41,7 @@ def classify_pending_messages(user_id: str, *, limit: int = 30) -> int:
 def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
     """Ingest new Gmail for a user, sync calendar, and classify pending messages."""
     del max_results  # policy lives in ingestion.sync_messages / settings
+    structlog.contextvars.bind_contextvars(task="sync_user", user_id=user_id)
     db = SessionLocal()
     try:
         result, processed, commitments = run_mail_sync(db, user_id)
@@ -62,6 +64,7 @@ def sync_user(user_id: str, max_results: int = 25) -> dict[str, int]:
 @celery_app.task(name="albert.poll_all_mailboxes")  # type: ignore[untyped-decorator]
 def poll_all_mailboxes() -> dict[str, int]:
     """Beat entry: sync every connected Gmail mailbox and push on new Primary mail."""
+    structlog.contextvars.bind_contextvars(task="poll_all_mailboxes")
     db = SessionLocal()
     notifier = get_notifier()
     users_synced = ingested_total = pushed = 0
@@ -70,6 +73,7 @@ def poll_all_mailboxes() -> dict[str, int]:
             user = db.get(User, user_id)
             if user is None:
                 continue
+            structlog.contextvars.bind_contextvars(user_id=user_id)
             stats = sync_user_and_notify(db, user, provider=notifier, notify=True)
             users_synced += 1
             ingested_total += stats["ingested"]
@@ -191,6 +195,9 @@ def scan_notifications() -> dict[str, int]:
         for user in users:
             enqueued += notifications.scan_upcoming_meetings(db, user.id, now=now_dt)
             enqueued += notifications.scan_task_reminders(db, user.id, now=now_dt)
+            # Chase loops where someone owes the user: nudge + stage an approval-gated
+            # follow-up send (never auto-sends).
+            enqueued += notifications.scan_stale_waiting(db, user, now=now_dt)
             result = notifications.dispatch_pending(db, user, now=now_t, provider=notifier)
             sent += result["sent"]
             held += result["held"]

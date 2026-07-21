@@ -56,6 +56,21 @@ MEETING_PREP_LEAD = timedelta(minutes=35)
 # nudge. Skips items with an imminent due date — those already trigger deadline_risk.
 WAITING_AGING_DAYS = 3
 
+# How long a "someone owes YOU" loop can sit before we nudge the user to chase it.
+# Mirrors WAITING_AGING_DAYS so the two follow-up rails fire on the same rhythm.
+STALE_WAITING_DAYS = 3
+
+
+def _notification_exists(db: Session, user_id: str, dedup_key: str) -> bool:
+    return (
+        db.scalar(
+            select(Notification.id).where(
+                Notification.user_id == user_id, Notification.dedup_key == dedup_key
+            )
+        )
+        is not None
+    )
+
 
 def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
     """Enqueue an approval_needed notification for proposals that have been waiting on
@@ -114,6 +129,11 @@ def scan_upcoming_meetings(db: Session, user_id: str, *, now: datetime) -> int:
     )
     enqueued = 0
     for e in events:
+        dedup_key = f"prep:{e.id}"
+        # Pre-check so we don't burn an LLM brief regenerating for an event we've already
+        # notified about across overlapping scan windows.
+        if _notification_exists(db, user_id, dedup_key):
+            continue
         title = e.title or "(untitled meeting)"
         assert e.start_time is not None
         # SQLite drops tzinfo on round-trip even with DateTime(timezone=True); treat the
@@ -121,18 +141,41 @@ def scan_upcoming_meetings(db: Session, user_id: str, *, now: datetime) -> int:
         start = e.start_time if e.start_time.tzinfo else e.start_time.replace(tzinfo=UTC)
         minutes = max(1, int((start - now).total_seconds() // 60))
         body = f"Starts in {minutes} min" + (f" at {e.location}" if e.location else "")
+        payload: dict[str, Any] = {"event_id": e.id, "deep_link": f"/meeting/{e.id}"}
+        # If the meeting has no prep yet, generate a short brief and carry it in the
+        # notification so the user walks in prepared (best-effort, risk 0).
+        brief = _maybe_meeting_brief(db, user_id, e)
+        if brief:
+            payload["brief"] = brief
+            body = f"{body} — {brief}"[:160]
         created = enqueue(
             db,
             user_id,
             ntype=NotificationType.meeting_prep,
             title=f"Prep: {title[:50]}",
             body=body[:160],
-            payload={"event_id": e.id, "deep_link": f"/meeting/{e.id}"},
-            dedup_key=f"prep:{e.id}",
+            payload=payload,
+            dedup_key=dedup_key,
         )
         if created is not None:
             enqueued += 1
     return enqueued
+
+
+def _maybe_meeting_brief(db: Session, user_id: str, event: CalendarEvent) -> str | None:
+    """Generate a one-line meeting brief when the event has attendees we can find context
+    for. Returns None (no LLM call) for attendee-less events, and swallows any generation
+    error so a flaky LLM never blocks the prep push."""
+    if not event.attendees:
+        return None
+    from app.services import meeting_prep
+
+    try:
+        summary = meeting_prep.prepare(db, user_id, event)
+    except Exception:  # noqa: BLE001 - brief is optional; the push still fires
+        return None
+    text = (summary.summary or "").strip()
+    return text[:180] or None
 
 
 # Importance of each notification type. Below the user's threshold => batched.
@@ -442,6 +485,83 @@ def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
             body=body[:160],
             payload={"commitment_id": c.id, "deep_link": "/waiting"},
             dedup_key=f"aging:{c.id}",
+        )
+        if created is not None:
+            enqueued += 1
+    return enqueued
+
+
+def _prepare_follow_up_action(db: Session, user: User, commitment: Commitment) -> str | None:
+    """Auto-draft a chase reply (internal prep, risk 1) and stage a SEND as a risk-3
+    ActionProposal that requires user approval. Returns the proposal id, or None when no
+    draft could be generated. Never auto-sends: the send flows through the normal
+    execution spine only after the user approves.
+
+    Best-effort — a failure here must not stop the notification from going out."""
+    from app.db.enums import ActionType
+    from app.services import prep_draft
+    from app.services.actions import propose_action_internal
+
+    try:
+        draft_id = prep_draft.ensure_draft_for(db, user, commitment=commitment)
+        if draft_id is None:
+            return None
+        proposal = propose_action_internal(
+            db,
+            user,
+            action_type=ActionType.send_email,
+            target={"draft_reply_id": draft_id},
+            reason=(
+                f"Follow up with {commitment.counterparty or 'them'} on: "
+                f"{commitment.description[:80]}"
+            ),
+        )
+        return proposal.id
+    except Exception:  # noqa: BLE001 - proactivity is a nice-to-have, never a blocker
+        db.rollback()
+        return None
+
+
+def scan_stale_waiting(
+    db: Session, user: User, *, now: datetime, auto_follow_up: bool = True
+) -> int:
+    """Nudge the user to chase loops where SOMEONE OWES THEM and the item has been open
+    for STALE_WAITING_DAYS+ days (the `you_are_waiting_on` direction of build_waiting).
+
+    For each newly-nudged item we also auto-draft a follow-up and stage a risk-3 send
+    proposal for approval (see _prepare_follow_up_action). Deduped per commitment id, so
+    the draft/proposal is created at most once per stale loop."""
+    from app.services.waiting import build_waiting
+
+    view = build_waiting(db, user.id)
+    enqueued = 0
+    for entry in view.you_are_waiting_on:
+        c = entry.commitment
+        # Recompute age against the caller's `now` (build_waiting ages against wall-clock),
+        # so the beat and tests agree on staleness.
+        created_at = c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=UTC)
+        age = max((now - created_at).days, 0)
+        if age < STALE_WAITING_DAYS:
+            continue
+        dedup_key = f"chase:{c.id}"
+        if _notification_exists(db, user.id, dedup_key):
+            continue
+        title = f"Chase {c.counterparty}" if c.counterparty else "Chase a stalled reply"
+        body = f"{age} days waiting: {c.description[:80]}"
+        payload: dict[str, Any] = {"commitment_id": c.id, "deep_link": "/waiting"}
+        if auto_follow_up:
+            proposal_id = _prepare_follow_up_action(db, user, c)
+            if proposal_id is not None:
+                payload["action_id"] = proposal_id
+                payload["deep_link"] = "/approvals"
+        created = enqueue(
+            db,
+            user.id,
+            ntype=NotificationType.follow_up_due,
+            title=title[:80],
+            body=body[:160],
+            payload=payload,
+            dedup_key=dedup_key,
         )
         if created is not None:
             enqueued += 1

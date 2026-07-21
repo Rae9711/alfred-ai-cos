@@ -38,7 +38,7 @@ messaging, and documented refusals for browser automation and food delivery). Se
         │ today      │                                                          │
         └─────┬──────┘                                                          │
               │                                                                 │
-        ┌─────▼─────────────────── Postgres (pgvector) ──────────────────┐      │
+        ┌─────▼─────────────────────── Postgres ─────────────────────────┐      │
         │ users · connected_accounts · messages · calendar_events ·      │◄─────┘
         │ commitments · tasks · draft_replies · action_proposals ·       │
         │ execution_logs                                                 │
@@ -91,9 +91,10 @@ SECURITY.md.
 
 Internal preparation (creating a draft, classifying, extracting) is risk level 1 and
 needs no approval. Anything that touches the outside world is level 3+ and must exist as
-an `ActionProposal`, be approved, then produce an `ExecutionLog`. The slice's one
-external action is pushing a draft into Gmail. Sending email outright is deliberately not
-built: it needs the `gmail.send` scope and stronger confirmation.
+an `ActionProposal`, be approved, then produce an `ExecutionLog`. External actions include
+pushing/sending a Gmail draft, sending email (`gmail.send`), and creating/updating/deleting
+calendar events (`calendar.events`) — each is approval-gated and audited. See SECURITY.md
+for the scope list and the execution-layer guarantees.
 
 ### Data model scope
 

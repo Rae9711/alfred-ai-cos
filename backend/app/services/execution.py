@@ -13,15 +13,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.capabilities import get_capability
 from app.capabilities.base import CapabilityError, ExecutionResult
+from app.core.redaction import _SENSITIVE_KEYS, redact_structure
 from app.db.enums import ActionStatus, RiskLevel
 from app.db.models import ActionProposal, AuditLog, SpendLimit, User
+
+# Re-exported for callers/tests that referenced these on this module before the redaction
+# logic moved to app.core.redaction (single source of truth).
+__all__ = ["_SENSITIVE_KEYS", "_redact"]
+
+_redact = redact_structure
 
 
 class ExecutionBlocked(Exception):
@@ -71,27 +77,6 @@ def check_spend(db: Session, user_id: str, amount_minor: int, *, lock: bool = Fa
             f"Spend limit exceeded: {amount_minor} requested, {remaining} remaining "
             f"of {limit.cap_minor} {limit.currency}."
         )
-
-
-_SENSITIVE_KEYS = {
-    "body",
-    "content",
-    "card_number",
-    "token",
-    "message",
-    "payment_method",
-    "to",
-    "description",
-}
-
-
-def _redact(value: Any) -> Any:
-    """Recursively strip sensitive content before writing the audit payload."""
-    if isinstance(value, dict):
-        return {k: "[redacted]" if k in _SENSITIVE_KEYS else _redact(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_redact(v) for v in value]
-    return value
 
 
 def _proposal_amount(proposal: ActionProposal) -> int:

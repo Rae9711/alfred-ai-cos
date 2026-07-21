@@ -168,6 +168,9 @@ def snooze_commitment(
         )
 
     snooze_service.snooze(db, commitment, spec=spec)
+    # Feed the learning loop, mirroring the /status route: the dedicated snooze path
+    # should record the same behavior signal (currently neutral by design).
+    learning.record_event(db, user, event="snooze", commitment=commitment)
     return SnoozeOut(
         commitment=CommitmentOut.model_validate(commitment),
         interpreted_as=spec.interpreted_as,

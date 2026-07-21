@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.models import Device, Notification, User
+from app.db.models import Commitment, Device, Message, Notification, User
 from app.schemas.api import (
     DeviceRegisterRequest,
     NotificationFeedbackRequest,
     NotificationOut,
     NotificationPrefs,
 )
+from app.services import learning
 
 router = APIRouter(tags=["notifications"])
 
@@ -62,6 +63,23 @@ def notification_feedback(
         raise HTTPException(status_code=404, detail="Notification not found")
     row.useful = payload.useful
     db.commit()
+    # A "not useful" verdict is a correction: the notification surfaced something the
+    # user didn't care about. Attribute it to whatever the notification pointed at
+    # (commitment → its source message; or a message directly) when the payload says so.
+    if payload.useful is False:
+        commitment = message = None
+        commitment_id = row.payload.get("commitment_id")
+        message_id = row.payload.get("message_id")
+        if commitment_id:
+            commitment = db.get(Commitment, str(commitment_id))
+            if commitment is not None and commitment.user_id != user.id:
+                commitment = None
+        elif message_id:
+            message = db.get(Message, str(message_id))
+            if message is not None and message.user_id != user.id:
+                message = None
+        if commitment is not None or message is not None:
+            learning.record_event(db, user, event="correct", commitment=commitment, message=message)
     return row
 
 

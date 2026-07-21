@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
 from app.db.base import get_db
-from app.db.models import User
+from app.db.models import Message, User
 from app.schemas.api import AcceptScheduleProposalRequest, AcceptScheduleProposalResponse
+from app.services import learning
 from app.services import schedule_proposal as schedule_service
 
 router = APIRouter(prefix="/schedule-proposals", tags=["schedule-proposals"])
@@ -42,7 +43,12 @@ def dismiss_proposal(
     db: Session = Depends(get_db),
 ) -> dict[str, bool]:
     try:
-        schedule_service.dismiss_proposal(db, user.id, proposal_id)
+        proposal = schedule_service.dismiss_proposal(db, user.id, proposal_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Correction signal: dismissing an inferred invite means we surfaced something the
+    # user didn't want. Attribute it to the source message's sender/category.
+    source = db.get(Message, proposal.source_message_id)
+    if source is not None:
+        learning.record_event(db, user, event="correct", message=source)
     return {"dismissed": True}

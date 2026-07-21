@@ -179,3 +179,95 @@ def test_status_change_records_learning(db: Session, user: User) -> None:
     update_status(commitment_id=c.id, status=CommitmentStatus.done, user=user, db=db)
     view = learning.get_learning(user)
     assert view.by_sender["ceo@buyer.co"] > 0
+
+
+# --- snooze route records a (neutral) learning event ---
+
+
+def test_snooze_route_records_event(db: Session, user: User, monkeypatch) -> None:
+    from app.api.v1 import commitments as commitments_api
+    from app.schemas.api import SnoozeRequest
+
+    msg = _msg(user.id, "later@buyer.co", ext="m-snooze")
+    db.add(msg)
+    db.commit()
+    c = _commit(user.id, source_id=msg.id)
+    db.add(c)
+    db.commit()
+
+    calls: list[str] = []
+    real = learning.record_event
+
+    def _spy(*args, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append(kwargs.get("event", ""))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(commitments_api.learning, "record_event", _spy)
+    commitments_api.snooze_commitment(
+        commitment_id=c.id,
+        payload=SnoozeRequest(phrase="tomorrow"),
+        user=user,
+        db=db,
+    )
+    assert "snooze" in calls
+
+
+# --- correction signal lowers score more than a plain dismiss ---
+
+
+def test_correct_event_pulls_negative(db: Session, user: User) -> None:
+    msg = _msg(user.id, "invite@vendor.co", ext="m-correct")
+    db.add(msg)
+    db.commit()
+    # Meet the min-sample threshold so the learned delta actually applies.
+    for _ in range(_min_events()):
+        learning.record_event(db, user, event="correct", message=msg)
+    view = learning.get_learning(user)
+    assert view.by_sender["invite@vendor.co"] < 0
+
+
+def _min_events() -> int:
+    return learning._MIN_SAMPLES
+
+
+# --- sub-threshold learned deltas are a no-op in the ranker ---
+
+
+def test_sub_threshold_is_noop() -> None:
+    # Two dismiss events (below the 3-sample threshold) → no adjustment applied.
+    view = learning.LearningView(
+        by_sender={"cold@x.co": -3.0},
+        by_category={},
+        sender_counts={"cold@x.co": 2},
+    )
+    assert learning.adjustment_for(view, sender="cold@x.co", categories=[]) == 0.0
+    # At the threshold it applies.
+    view_ok = learning.LearningView(
+        by_sender={"cold@x.co": -3.0},
+        by_category={},
+        sender_counts={"cold@x.co": 3},
+    )
+    assert learning.adjustment_for(view_ok, sender="cold@x.co", categories=[]) == -3.0
+
+
+# --- exploration mode resurfaces suppressed items ---
+
+
+def test_explore_skips_negative_delta(db: Session, user: User) -> None:
+    msg = _msg(user.id, "muted@news.co", ext="m-explore")
+    db.add(msg)
+    db.commit()
+    c = _commit(user.id, source_id=msg.id, desc="Webinar invitation")
+    db.add(c)
+    db.commit()
+    for _ in range(3):
+        learning.record_event(db, user, event="dismiss", commitment=c)
+
+    normal = p.score_commitment(
+        c, today=TODAY, context=p.build_context(db, user, now=NOW, explore=False)
+    )
+    explore = p.score_commitment(
+        c, today=TODAY, context=p.build_context(db, user, now=NOW, explore=True)
+    )
+    # In explore mode the negative learned delta is withheld, so the score is higher.
+    assert explore.score >= normal.score

@@ -14,11 +14,17 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.security import create_session_token, get_current_user
+from app.core.security import (
+    create_session_token,
+    decode_session_token,
+    get_current_user,
+    revoke_session,
+)
 from app.db.base import get_db
 from app.db.enums import Provider, SyncStatus
 from app.db.models import ConnectedAccount, User
@@ -28,6 +34,7 @@ from app.services.crypto import encrypt_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+_bearer = HTTPBearer(auto_error=True)
 
 # The native app deep link. Used when the app doesn't supply its own redirect.
 _DEFAULT_REDIRECT = "albert://auth"
@@ -180,6 +187,17 @@ def google_callback(
     # `?`/`&` join handles both albert://auth and exp://host/--/auth (which has a path).
     sep = "&" if "?" in redirect_target else "?"
     return RedirectResponse(url=f"{redirect_target}{sep}token={session}")
+
+
+@router.post("/logout", status_code=204)
+def logout(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> None:
+    """Revoke the caller's current session so its JWT stops working immediately.
+
+    Decoding first (which also rejects already-revoked/invalid tokens) means a
+    valid caller can only revoke their own token, and we get the jti + exp needed
+    to add a self-expiring denylist entry."""
+    payload = decode_session_token(creds.credentials)
+    revoke_session(payload)
 
 
 @router.post("/dev-session", response_model=SessionToken)

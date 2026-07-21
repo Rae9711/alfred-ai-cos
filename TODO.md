@@ -46,11 +46,17 @@ Gate green throughout: ruff, mypy strict, 73 pytest, tsc (shared + mobile).
 
 ### Security (see SECURITY.md)
 
-- [ ] OAuth access-token refresh + re-encryption on expiry.
-- [ ] Bind OAuth `state` to the initiating client (PKCE-style).
+- [x] OAuth access-token refresh + re-encryption on expiry. *(Centralized in
+      `connected_accounts.refresh_google_token`: refreshes when expired, re-encrypts +
+      persists the rotated token, and raises `TokenReconnectRequired` on a revoked grant.)*
+- [x] Session revocation / logout. *(JWT `jti` + Redis denylist + `POST /auth/logout`;
+      `get_current_user` rejects revoked jtis. Fails open if Redis is down.)*
+- [x] `TOKEN_ENCRYPTION_KEY` rotation path. *(`MultiFernet` + `TOKEN_ENCRYPTION_KEY_PREVIOUS`;
+      see SECURITY.md "Key rotation".)*
+- [ ] Bind OAuth `state` to the initiating client (PKCE-style). *(Note: `state` is already a
+      signed, expiring JWT — see SECURITY.md "OAuth CSRF binding".)*
 - [ ] Log redaction policy: scrub email content, tokens, PII from logs.
 - [ ] API and Gmail-call rate limiting.
-- [ ] `TOKEN_ENCRYPTION_KEY` rotation path.
 - [ ] Role-based backend access.
 
 ### Correctness and quality
@@ -76,12 +82,10 @@ Gate green throughout: ruff, mypy strict, 73 pytest, tsc (shared + mobile).
       Both the design doc and /plan-eng-review independently rediscovered that SMS
       (`sms_inbox.py`, `sms_shortcut.py`, 8+ mobile files) is a deep, already-wired third
       channel, after the fact. P2, effort S. *(Added via /plan-eng-review 2026-07-02.)*
-- [ ] **Per-account sync lock.** Nothing prevents two Celery workers from syncing the
-      same account concurrently — during the planned concierge test (3-5 more accounts
-      within 2 weeks), simultaneous syncs of one account could double-hit Gmail's rate
-      limit right as the new retry/backoff logic depends on that limit behaving
-      predictably. Pre-existing gap, not introduced by this plan, but real at pilot
-      scale. P2. *(Added via /plan-eng-review 2026-07-02.)*
+- [x] **Per-account sync lock.** `ingestion.sync_messages` now wraps each mailbox's sync in
+      a Redis lock (`app/core/redis.py::redis_lock`) keyed on the connected-account id, so
+      the 60s beat poller and an interactive `POST /sync` can't sync one mailbox
+      concurrently. The lock auto-expires and fails open if Redis is unreachable.
 - [ ] **Generalize the "announce state changes, not routine ticks" a11y pattern.**
       The level-up-only accessibility announcement (see avatar/XP feedback spec) should
       become the standard rule for any future meaningful-but-infrequent avatar state

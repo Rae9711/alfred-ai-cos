@@ -6,10 +6,28 @@ And the beat scheduler (periodic sync, daily briefing) with:
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
+from app.core.metrics import start_worker_metrics_server
+from app.core.observability import init_sentry
+
+# Configure Sentry + structured logging in the worker process too (mirrors main.py).
+init_sentry()
+configure_logging()
 
 settings = get_settings()
+
+
+@worker_process_init.connect  # type: ignore[untyped-decorator]
+def _start_worker_metrics(**_kwargs: object) -> None:
+    """Expose the worker's Prometheus metrics (queue backlog + shared counters) on :9100.
+
+    Started per worker process rather than at import time so ``celery beat`` and CLI
+    imports don't bind the port; the first worker wins, later ones skip on EADDRINUSE."""
+    start_worker_metrics_server(9100)
+
 
 celery_app = Celery(
     "albert",

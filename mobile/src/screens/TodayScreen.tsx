@@ -15,15 +15,19 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  CommitmentStatus,
-  TaskStatus,
-  type Me,
-  type Task,
-  type TodayDashboard,
-} from "@albert/shared-types";
+import { useQueryClient } from "@tanstack/react-query";
+import { CommitmentStatus, TaskStatus, type Task } from "@albert/shared-types";
 
-import { api } from "@/api/client";
+import {
+  invalidateToday,
+  useMe,
+  usePendingActions,
+  useSync,
+  useTasks,
+  useToday,
+  useUpdateCommitmentStatus,
+  useUpdateTaskStatus,
+} from "@/api/queries";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { Ic } from "@/components/icons";
@@ -61,13 +65,33 @@ export function TodayScreen() {
   const router = useRouter();
   const { openSheet, showToast } = useShell();
   const { meta, state } = useCompanionAvatar();
-  const [me, setMe] = useState<Me | null>(null);
-  const [data, setData] = useState<TodayDashboard | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const qc = useQueryClient();
+
+  // Reads come from React Query: cached, deduped, and refetched via invalidation after
+  // any write or sync (no manual load()/useEffect fetch scaffolding).
+  const todayQ = useToday();
+  const pendingQ = usePendingActions();
+  const tasksQ = useTasks();
+  const meQ = useMe();
+  const sync = useSync();
+  const updateCommitment = useUpdateCommitmentStatus();
+  const updateTask = useUpdateTaskStatus();
+
+  const data = todayQ.data ?? null;
+  const me = meQ.data ?? null;
+  const tasks: Task[] = tasksQ.data ?? [];
+  const pendingCount = pendingQ.data?.length ?? 0;
+  const loading = todayQ.isLoading;
+  const syncing = sync.isPending;
+
+  // Local error surface for writes/sync; read errors surface via the query itself.
   const [error, setError] = useState<string | null>(null);
+  const displayError =
+    error ?? (todayQ.error instanceof Error ? todayQ.error.message : null);
+
+  // Refetch the whole Today data set (dashboard + tasks + pending approvals).
+  const refresh = useCallback(() => invalidateToday(qc), [qc]);
+
   // Ids tapped-done locally: the check fills + the row/card fades immediately. The
   // real API write is deferred (see commitTimers) so an Undo can cancel it before it
   // commits — a misclick on "done" is fully reversible during the grace window.
@@ -96,41 +120,15 @@ export function TodayScreen() {
     return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
-  const load = useCallback(async () => {
-    try {
-      setError(null);
-      const [dashboard, pending, taskList, profile] = await Promise.all([
-        api.getToday(),
-        api.listPendingActions(),
-        api.listTasks().catch(() => [] as Task[]),
-        api.getMe().catch(() => null),
-      ]);
-      setData(dashboard);
-      setPendingCount(pending.length);
-      setTasks(taskList);
-      setMe(profile);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   const onSync = useCallback(async () => {
-    setSyncing(true);
+    setError(null);
     try {
-      await api.sync();
-      await load();
+      // useSync invalidates the Today queries on success, which refetches them.
+      await sync.mutateAsync();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed");
-    } finally {
-      setSyncing(false);
     }
-  }, [load]);
+  }, [sync]);
 
   const markPriorityDone = useCallback(
     (id: string) => {
@@ -138,9 +136,8 @@ export function TodayScreen() {
       setCompleting((s) => new Set(s).add(id));
       const timer = setTimeout(() => {
         commitTimers.current.delete(id);
-        api
-          .updateCommitmentStatus(id, CommitmentStatus.Done)
-          .then(() => load())
+        updateCommitment
+          .mutateAsync({ id, status: CommitmentStatus.Done })
           .catch((e: unknown) => {
             undoComplete(id);
             setError(e instanceof Error ? e.message : "Couldn't update");
@@ -152,7 +149,7 @@ export function TodayScreen() {
         duration: 4000,
       });
     },
-    [load, showToast, undoComplete],
+    [updateCommitment, showToast, undoComplete],
   );
 
   const snoozePriority = useCallback(
@@ -164,23 +161,25 @@ export function TodayScreen() {
         <SnoozeSheet
           commitmentId={id}
           onDone={() => {
-            void load();
+            void refresh();
           }}
         />,
       );
     },
-    [load, openSheet],
+    [refresh, openSheet],
   );
 
   const dismissPriority = useCallback(
     async (id: string) => {
       // "Not important" → dismissed. The ranker uses this as negative learning
       // signal (g) so future items from this sender drift down.
-      await api.updateCommitmentStatus(id, CommitmentStatus.Dismissed);
+      await updateCommitment.mutateAsync({
+        id,
+        status: CommitmentStatus.Dismissed,
+      });
       showToast("Got it. I'll stop bringing this up.");
-      await load();
     },
-    [load, showToast],
+    [updateCommitment, showToast],
   );
 
   const completeQuickWin = useCallback(
@@ -189,9 +188,8 @@ export function TodayScreen() {
       setCompleting((s) => new Set(s).add(task.id));
       const timer = setTimeout(() => {
         commitTimers.current.delete(task.id);
-        api
-          .updateTaskStatus(task.id, TaskStatus.Done)
-          .then(() => load())
+        updateTask
+          .mutateAsync({ id: task.id, status: TaskStatus.Done })
           .catch((e: unknown) => {
             undoComplete(task.id);
             setError(e instanceof Error ? e.message : "Couldn't update task");
@@ -203,7 +201,7 @@ export function TodayScreen() {
         duration: 4000,
       });
     },
-    [load, showToast, undoComplete],
+    [updateTask, showToast, undoComplete],
   );
 
   if (loading) {
@@ -293,7 +291,7 @@ export function TodayScreen() {
         </Pressable>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {displayError ? <Text style={styles.error}>{displayError}</Text> : null}
 
       {/* What matters today */}
       <SectionTitle
@@ -312,7 +310,7 @@ export function TodayScreen() {
                   <ApprovalSheet
                     commitmentId={item.id}
                     recipient={item.counterparty ?? "them"}
-                    onDone={() => void load()}
+                    onDone={() => void refresh()}
                   />,
                 )
               }

@@ -19,16 +19,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.metrics import SYNC_RESULT
+from app.core.redis import redis_lock
 from app.db.enums import MessageClassification, SyncStatus
 from app.db.models import ConnectedAccount, Message, User
 from app.services import gmail, sender_class
-from app.services.connected_accounts import list_google_accounts
-from app.services.crypto import decrypt_token, encrypt_token
+from app.services.classification_adjust import subject_implies_action_required
+from app.services.connected_accounts import list_google_accounts, refresh_google_token
 from app.services.extraction import _EXTRACTION_BLOCKED_CLASSES
 from app.services.gmail import HistoryExpiredError, use_gmail_credentials
-from app.services.google_oauth import fresh_credentials
 from app.services.inbox_filter import message_in_primary_inbox
-from app.services.classification_adjust import subject_implies_action_required
 
 
 @dataclass(frozen=True)
@@ -258,8 +258,10 @@ def _sync_account(
     db: Session, account: ConnectedAccount, *, incremental: bool = True
 ) -> SyncIngestResult:
     settings = get_settings()
-    stored_token = decrypt_token(account.token_ciphertext)
-    creds, token = fresh_credentials(stored_token)
+    # Refresh + persist the access token up front through the single choke point.
+    # Raises TokenReconnectRequired if the grant was revoked, which the caller
+    # turns into a clean "reconnect your mailbox" sync error.
+    creds, token = refresh_google_token(db, account)
 
     # Clear stale "syncing" left by a crashed worker.
     if (
@@ -323,14 +325,15 @@ def _sync_account(
         account.sync_status = SyncStatus.ok
         account.last_synced_at = datetime.now(UTC)
         account.sync_error = None
-        if token != stored_token:
-            account.token_ciphertext = encrypt_token(token)
+        # Token rotation was already persisted by refresh_google_token above.
         db.commit()
+        SYNC_RESULT.labels(result="ok").inc()
     except Exception as exc:
         db.rollback()
         account.sync_status = SyncStatus.error
         account.sync_error = str(exc)[:500]
         db.commit()
+        SYNC_RESULT.labels(result="error").inc()
         raise
     return SyncIngestResult(new_messages=new_messages, initial_backfill=initial_backfill)
 
@@ -393,17 +396,26 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
     any_initial = False
     errors: list[str] = []
     for account in accounts:
-        try:
-            result = _sync_account(db, account, incremental=incremental)
-            all_new.extend(result.new_messages)
-            any_initial = any_initial or result.initial_backfill
-        except Exception as exc:
-            db.rollback()
-            account.sync_status = SyncStatus.error
-            account.sync_error = str(exc)[:500]
-            db.commit()
-            label = account.provider_account_email or account.id
-            errors.append(f"{label}: {exc}")
+        # Per-mailbox lock: the beat poller (every 60s) and an interactive POST
+        # /sync can otherwise sync the same mailbox concurrently, doubling Gmail
+        # API traffic and racing on gmail_history_id. Hold the lock only for this
+        # account's sync; a short blocking_timeout means an interactive caller
+        # waits briefly for an in-flight background sync, then skips it (the other
+        # worker is already pulling this mailbox's new mail).
+        with redis_lock(f"sync:account:{account.id}") as acquired:
+            if not acquired:
+                continue
+            try:
+                result = _sync_account(db, account, incremental=incremental)
+                all_new.extend(result.new_messages)
+                any_initial = any_initial or result.initial_backfill
+            except Exception as exc:
+                db.rollback()
+                account.sync_status = SyncStatus.error
+                account.sync_error = str(exc)[:500]
+                db.commit()
+                label = account.provider_account_email or account.id
+                errors.append(f"{label}: {exc}")
     if errors and not all_new and len(errors) == len(accounts):
         raise ValueError("; ".join(errors))
     return SyncIngestResult(new_messages=all_new, initial_backfill=any_initial)

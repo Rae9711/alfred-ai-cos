@@ -11,7 +11,7 @@ No Docker (the box doesn't use it). Public at **https://albert.alfredassistants.
 
 - Code: `/root/albert` (backend at `/root/albert/backend`), deps via `uv sync`.
 - Secrets: `/root/albert/backend/.env` (mode 600, root). `ENVIRONMENT=production`.
-- DB: local Postgres, role+db `albert`, `vector` extension. Redis db index `/3`.
+- DB: local Postgres, role+db `albert`. Redis db index `/3`.
 - Web: uvicorn on `127.0.0.1:8100` (8000 is alfred-wecom; 8081 is alfred).
 - Edge: Cloudflare Tunnel `fca23ba2-…`, ingress rule `albert.alfredassistants.com →
 localhost:8100` (added before the 404 catch-all in `/root/.cloudflared/config.yml`).

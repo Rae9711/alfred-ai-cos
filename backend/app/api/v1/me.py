@@ -37,7 +37,7 @@ from app.schemas.api import (
     SmsIngestOut,
     SmsInstallOut,
 )
-from app.services import google_oauth, sms_inbox
+from app.services import google_oauth, learning, sms_inbox
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
 from app.services.message_read import account_has_gmail_modify
@@ -106,6 +106,24 @@ def get_me(
     sms_inbox.ensure_sms_forward_token(user)
     db.commit()
     return _me(db, user)
+
+
+@router.get("/me/learning")
+def get_learned_preferences(
+    user: User = Depends(get_current_user),
+) -> dict[str, dict[str, float]]:
+    """Read-only view of what Albert has learned about this user's priorities."""
+    view = learning.get_learning(user)
+    return {"by_sender": view.by_sender, "by_category": view.by_category}
+
+
+@router.delete("/me/learning", status_code=204)
+def reset_learned_preferences(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """Clear all learned preferences (start fresh)."""
+    learning.reset_learning(db, user)
 
 
 @router.get("/me/sms-forwarding", response_model=SmsForwardingOut)

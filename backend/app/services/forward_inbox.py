@@ -16,13 +16,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Message, User
-from app.services import extraction, sender_class
+from app.db.models import User
+from app.services import channel_ingest
 
 # Forwarded bodies typically start with "---------- Forwarded message ----------"
 # followed by "From: ...", "Date: ...", etc. Pull the original sender out so the
@@ -83,43 +83,21 @@ def ingest_forward(
         digest_src = f"{subject or ''}|{(body or '')[:200]}"
         external_id = f"fwd:{abs(hash(digest_src))}"
 
-    existing = db.scalar(
-        select(Message).where(Message.user_id == user.id, Message.external_id == external_id)
-    )
-    if existing is not None:
-        return ForwardResult(message_id=existing.id, commitments_extracted=0, deduped=True)
-
+    # The original author lives inside the forwarded body; use it as the Message
+    # sender so the ranker attributes the item to whoever actually wrote it.
     original_sender = _parse_original_sender(body) or forwarder_email
-    snippet = (body or "")[:200]
-    # Forwarded messages don't carry the original headers, so the classifier
-    # works from the parsed sender + subject + snippet only. Still better than
-    # leaving the column NULL.
-    cls = sender_class.classify(
-        sender=original_sender,
-        subject=subject,
-        snippet=snippet,
-        headers=None,
+    result = channel_ingest.ingest_channel_message(
+        db,
         user=user,
-    )
-    message = Message(
-        user_id=user.id,
         source="forwarded",
         external_id=external_id,
-        thread_id=None,
         sender=original_sender,
-        recipients=[forwarder_email],
+        body=body or "",
         subject=subject,
-        snippet=snippet,
-        sent_at=received_at or datetime.now(UTC),
-        sender_classification=cls.cls,
+        received_at=received_at,
     )
-    db.add(message)
-    db.flush()  # populate message.id before extraction reads it
-
-    commitments = extraction.process_message(db, message, body=body or "")
-    db.commit()
     return ForwardResult(
-        message_id=message.id,
-        commitments_extracted=len(commitments),
-        deduped=False,
+        message_id=result.message_id,
+        commitments_extracted=result.commitments_extracted,
+        deduped=result.deduped,
     )

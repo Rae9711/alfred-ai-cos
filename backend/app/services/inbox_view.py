@@ -79,6 +79,9 @@ def is_message_unread(message: Message) -> bool:
         from app.services.sms_inbox import is_sms_unread
 
         return is_sms_unread(message)
+    if message.source == "whatsapp":
+        # No label system on inbound WhatsApp; mirror the SMS read-flag model.
+        return (message.headers or {}).get("whatsapp_read") is not True
     return is_gmail_unread(message.gmail_labels)
 
 

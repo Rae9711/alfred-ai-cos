@@ -1,16 +1,15 @@
 """Alembic environment. Reads DATABASE_URL from settings and registers all models'
-metadata for autogenerate. Ensures the pgvector extension exists before migrating."""
+metadata for autogenerate."""
 
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool, text
-
-from app.core.config import get_settings
-from app.db.base import Base
+from sqlalchemy import engine_from_config, pool
 
 # Import models so they register on Base.metadata for autogenerate.
 import app.db.models  # noqa: F401
+from app.core.config import get_settings
+from app.db.base import Base
 
 config = context.config
 if config.config_file_name is not None:
@@ -38,12 +37,6 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        # pgvector is optional for local dev Postgres without the extension installed.
-        try:
-            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            connection.commit()
-        except Exception:
-            connection.rollback()
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()

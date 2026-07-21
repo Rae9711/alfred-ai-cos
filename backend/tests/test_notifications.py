@@ -396,6 +396,79 @@ def test_aging_push_deduped(db: Session, user: User) -> None:
     assert db.query(Notification).count() == 1
 
 
+# --- stale-waiting (someone owes YOU): nudge to chase + staged approval-gated follow-up ---
+
+
+def test_stale_waiting_nudges_to_chase(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(
+        _stale_commitment(
+            user.id, age_days=5, now=now, owner=CommitmentOwner.counterparty, counterparty="Vendor"
+        )
+    )
+    db.commit()
+    assert n.scan_stale_waiting(db, user, now=now, auto_follow_up=False) == 1
+    notif = db.query(Notification).one()
+    assert notif.type == NotificationType.follow_up_due
+    assert notif.payload["deep_link"] == "/waiting"
+
+
+def test_stale_waiting_skipped_when_fresh(db: Session, user: User) -> None:
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    db.add(
+        _stale_commitment(
+            user.id, age_days=1, now=now, owner=CommitmentOwner.counterparty, counterparty="Vendor"
+        )
+    )
+    db.commit()
+    assert n.scan_stale_waiting(db, user, now=now, auto_follow_up=False) == 0
+
+
+def test_stale_waiting_auto_followup_stages_risk3_proposal(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.db.models import Message
+    from tests.fakes import FakeLLM
+
+    # ensure_draft_for calls the LLM to draft the follow-up; keep it offline.
+    monkeypatch.setattr("app.services.prep_draft.get_llm", lambda: FakeLLM())
+
+    now = datetime(2026, 6, 2, 12, 0, tzinfo=UTC)
+    msg = Message(
+        user_id=user.id,
+        external_id="stale-1",
+        sender="vendor@acme.co",
+        recipients=[user.email],
+        subject="Your proposal",
+        snippet="waiting to hear back",
+        thread_id="thread-1",
+        sent_at=now - timedelta(days=6),
+    )
+    db.add(msg)
+    db.commit()
+    c = _stale_commitment(
+        user.id, age_days=5, now=now, owner=CommitmentOwner.counterparty, counterparty="Vendor"
+    )
+    c.source_id = msg.id
+    db.add(c)
+    db.commit()
+
+    assert n.scan_stale_waiting(db, user, now=now, auto_follow_up=True) == 1
+
+    proposals = db.query(ActionProposal).all()
+    assert len(proposals) == 1
+    proposal = proposals[0]
+    # A SEND proposal, risk 3, approval-gated — staged, NOT auto-sent.
+    assert proposal.action_type == ActionType.send_email
+    assert proposal.risk_level == 3
+    assert proposal.approval_required is True
+    assert proposal.status == ActionStatus.proposed
+    # The nudge deep-links to the approval queue and references the proposal.
+    notif = db.query(Notification).filter(Notification.type == NotificationType.follow_up_due).one()
+    assert notif.payload["action_id"] == proposal.id
+    assert notif.payload["deep_link"] == "/approvals"
+
+
 # --- top-priorities push: only fires for ranker-confirmed critical items ---
 
 

@@ -23,14 +23,30 @@ import {
   Geist_600SemiBold,
 } from "@expo-google-fonts/geist";
 
+import { QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import * as Sentry from "@sentry/react-native";
+
 import { setToken } from "@/api/auth";
 import { AuthProvider, useAuth } from "@/api/AuthContext";
+import { queryClient } from "@/api/queryClient";
 import { CompanionAvatarProvider } from "@/context/CompanionAvatarContext";
 import { handleSharedTextUrl } from "@/lib/shareIntent";
 import { colors } from "@/theme/theme";
 import { View } from "react-native";
 
 void SplashScreen.preventAutoHideAsync();
+
+// Crash + error reporting. A blank DSN (the default in app config) disables Sentry, so
+// dev/local builds never phone home. PII is scrubbed at the source in api/client.ts.
+const sentryDsn = Constants.expoConfig?.extra?.sentryDsn as string | undefined;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: __DEV__ ? "development" : "production",
+    sendDefaultPii: false,
+  });
+}
 
 function DeepLinkHandler() {
   const { refresh } = useAuth();
@@ -78,7 +94,7 @@ function DeepLinkHandler() {
   return <Slot />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     InstrumentSerif_400Regular,
     GeistMono_400Regular,
@@ -109,15 +125,21 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      {/* Hoisted from (tabs)/index.tsx (design: docs/designs/2026-07-02-avatar-
-          interaction-space.md, T4). approvals.tsx is a top-level route sibling to
-          (tabs), reachable directly from a cold-start push-notification deep link
-          (see DeepLinkHandler above) — it needs avatar/XP access before the tab
-          shell ever mounts, not after. One provider instance for the whole app. */}
-      <CompanionAvatarProvider>
-        <DeepLinkHandler />
-      </CompanionAvatarProvider>
-    </AuthProvider>
+    // QueryClientProvider wraps everything so every screen (and the deep-link-reachable
+    // approvals route) shares one React Query cache.
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        {/* Hoisted from (tabs)/index.tsx (design: docs/designs/2026-07-02-avatar-
+            interaction-space.md, T4). approvals.tsx is a top-level route sibling to
+            (tabs), reachable directly from a cold-start push-notification deep link
+            (see DeepLinkHandler above) — it needs avatar/XP access before the tab
+            shell ever mounts, not after. One provider instance for the whole app. */}
+        <CompanionAvatarProvider>
+          <DeepLinkHandler />
+        </CompanionAvatarProvider>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

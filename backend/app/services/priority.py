@@ -108,9 +108,15 @@ class ScoringContext:
     # The ranker adds adjustment_for(...) to the final score so learning shows up
     # as a small, explainable shift on top of the deterministic rules.
     learning: LearningView | None = None
+    # Exploration mode (anti echo-chamber): when True, the negative learned delta is
+    # NOT applied, so items the user usually suppresses periodically resurface and
+    # can't be buried forever by past behavior. Positive learning still applies.
+    explore: bool = False
 
 
-def build_context(db: Session, user: User, *, now: datetime | None = None) -> ScoringContext:
+def build_context(
+    db: Session, user: User, *, now: datetime | None = None, explore: bool = False
+) -> ScoringContext:
     """Compute the per-user signal lookups for ranking. Cheap: 3 SQL queries
     regardless of how many commitments exist."""
     now = now or datetime.now(UTC)
@@ -118,6 +124,7 @@ def build_context(db: Session, user: User, *, now: datetime | None = None) -> Sc
     user_email = (user.email or "").lower()
     ctx = ScoringContext()
     ctx.learning = get_learning(user)
+    ctx.explore = explore
 
     # 1) Messages in the recent window: drive inbound_count, thread_depth, and
     # user_replies_to. One scan, all three indexes.
@@ -348,6 +355,10 @@ def score_commitment(
             sender, _ = context.commitment_context.get(commitment.source_id, (None, None))
         cats = _categories_in(text)
         learn_delta = adjustment_for(context.learning, sender=sender, categories=cats)
+        # Exploration: skip the negative delta so suppressed items resurface. The
+        # positive signal (things the user acts on) is never suppressed.
+        if context.explore and learn_delta < 0:
+            learn_delta = 0.0
         if abs(learn_delta) >= 1.0:
             score += learn_delta
             if learn_delta > 0:

@@ -24,6 +24,7 @@ from app.schemas.api import (
     MessageReadOut,
     MessageRemindLaterOut,
 )
+from app.services import learning
 from app.services import tasks as task_service
 from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
@@ -94,6 +95,8 @@ def list_inbox(
     )
     if scope == "sms":
         stmt = stmt.where(Message.source == "sms").limit(synced_limit)
+    elif scope == "whatsapp":
+        stmt = stmt.where(Message.source == "whatsapp").limit(synced_limit)
     elif scope == "today":
         stmt = stmt.where(Message.sent_at >= today_start)
     elif scope == "unread":
@@ -101,8 +104,8 @@ def list_inbox(
     elif scope == "needs_action":
         stmt = stmt.where(Message.sent_at >= needs_action_start).limit(unread_limit)
     else:
-        # synced = Email tab: Gmail only, not forwarded texts.
-        stmt = stmt.where(Message.source != "sms").limit(synced_limit * 3)
+        # synced = Email tab: Gmail only, not the messaging channels.
+        stmt = stmt.where(Message.source.notin_(("sms", "whatsapp"))).limit(synced_limit * 3)
 
     rows = list(db.scalars(stmt))
 
@@ -113,15 +116,19 @@ def list_inbox(
             break
         if scope == "unread" and len(messages) >= unread_limit:
             break
-        if scope == "sms" and len(messages) >= synced_limit:
+        if scope in ("sms", "whatsapp") and len(messages) >= synced_limit:
             break
         if scope == "needs_action" and len(messages) >= synced_limit:
             break
-        if filter_account_id and scope != "sms" and m.connected_account_id != filter_account_id:
+        if (
+            filter_account_id
+            and scope not in ("sms", "whatsapp")
+            and m.connected_account_id != filter_account_id
+        ):
             continue
-        if scope in ("synced", "unread") and m.source == "sms":
+        if scope in ("synced", "unread") and m.source in ("sms", "whatsapp"):
             continue
-        if scope != "sms" and m.source != "sms":
+        if scope not in ("sms", "whatsapp") and m.source not in ("sms", "whatsapp"):
             if not message_in_primary_inbox(m):
                 filtered += 1
                 continue
@@ -246,6 +253,9 @@ def mark_decided(
         message.body_summary = "Marked as decided."
     resolve_derivatives_for_message(db, user.id, message.id)
     db.commit()
+    # Correction signal: the user closed a message we surfaced as actionable without
+    # replying — a mild "you got this wrong" attributed to the sender/category.
+    learning.record_event(db, user, event="correct", message=message)
     try:
         message, gmail_synced = mark_message_read(db, user, message)
     except (ValueError, Exception):

@@ -54,9 +54,7 @@ def build_day_overview(
         return "，".join(parts) + "。"
     parts_en: list[str] = []
     if meeting_count > 0:
-        parts_en.append(
-            f"{meeting_count} meeting{'s' if meeting_count != 1 else ''} today"
-        )
+        parts_en.append(f"{meeting_count} meeting{'s' if meeting_count != 1 else ''} today")
     if pending_proposals:
         who, title = pending_proposals[0]
         label = f"{who}: {title}" if who else title
@@ -68,9 +66,7 @@ def build_day_overview(
     return ", ".join(parts_en) + "."
 
 
-def build_today(
-    db: Session, user_id: str, *, today: date, locale: str = "en"
-) -> TodayDashboard:
+def build_today(db: Session, user_id: str, *, today: date, locale: str = "en") -> TodayDashboard:
     open_commitments = filter_actionable_commitments(
         list(
             db.scalars(
@@ -86,7 +82,11 @@ def build_today(
     # it. The context captures VIP/stranger/engagement/dismissal/thread signals so
     # the truly important items rise to the top, not just the ones with deadlines.
     user = db.get(User, user_id)
-    context = build_context(db, user) if user is not None else None
+    # Anti echo-chamber: one day in seven, don't apply negative learned deltas so
+    # items the user habitually suppresses resurface and can be re-evaluated. Keyed
+    # on the ordinal date so a given day is stable across repeated renders.
+    explore = today.toordinal() % 7 == 0
+    context = build_context(db, user, explore=explore) if user is not None else None
     scored = sorted(
         (score_commitment(c, today=today, context=context) for c in open_commitments),
         key=lambda s: s.score,
@@ -142,9 +142,7 @@ def build_today(
         if event.prep_required
     ]
 
-    suggestions, quick_wins = build_planning_suggestions(
-        db, user_id, today=today, scored=scored
-    )
+    suggestions, quick_wins = build_planning_suggestions(db, user_id, today=today, scored=scored)
 
     pending_schedule = list_pending_proposals(db, user_id, limit=5)
     message_ids = {p.source_message_id for p in pending_schedule}
@@ -189,9 +187,7 @@ def build_today(
     )
 
     week_ahead = None
-    if user is not None and is_week_boundary_prominent(
-        datetime.now(UTC), timezone=user.timezone
-    ):
+    if user is not None and is_week_boundary_prominent(datetime.now(UTC), timezone=user.timezone):
         week_ahead = build_week_ahead(
             db, user_id, today=today, locale=locale, now=datetime.now(UTC)
         )

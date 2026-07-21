@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Alfred · UI 设计 Brief（短版）</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12pt; line-height: 1.55; color: #19171a; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 18pt; margin: 0 0 20px; }
+  h2 { font-size: 13pt; margin: 24px 0 8px; color: #16264a; }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 22px; }
+  li { margin: 0 0 6px; }
+  .tip { background: #f4f1ea; padding: 10px 12px; margin-bottom: 18px; font-size: 10.5pt; color: #3b3a3e; }
+</style>
+</head>
+<body>
+
+<p class="tip"><b>粘贴到 Google Docs：</b>⌘A 全选 → ⌘C 复制 → 打开 Google Doc → ⌘V 粘贴。粘贴后可删掉本提示。</p>
+
+<h1>Alfred · 给设计师的 Brief</h1>
+
+<h2>我们要什么</h2>
+<p>为忙碌的首席助理做一面「打开就能快速处理」的手机界面：一天只打开几次，三秒内知道该干什么。底部保留 5 个 Tab（Today / Inbox / 中间 Capture / Ask / You）。不要做成数据仪表盘，不要堆 KPI 和密密麻麻的卡片墙。</p>
+
+<h2>风格</h2>
+<p>主旋律是<strong>纸白 + 墨黑</strong>的克制编辑感（浅奶白纸底、深墨文字），辅以一点靛蓝强调和陶土色警示即可，整体偏安静杂志，不走暗黑科技、不走紫渐变 SaaS。视觉上<strong>突出管家元素</strong>——Alfred 这个管家形象是品牌与情绪锚点，温暖得体、不卖萌、不吵；信息仍以事务为主，管家点缀而不是抢戏。</p>
+
+<h2>Avatar 动画要做什么</h2>
+<p>管家会出现在底部中间按钮，以及 Today / Ask 等关键位置。请设计一组可读的小情绪：平静待机、专注、思考（Ask 加载时）、成功、出错、偶尔休息；中间钮点击要有短暂「在听」反馈。动作宜小、短、清楚，让人一眼感到「他在帮我」，而不是大型特效秀。当前 App 里还是立绘+轻微呼吸；你先出关键表情与落点故事板；若同时接动效，再交付 Lottie。</p>
+
+<h2>请交付</h2>
+<ul>
+  <li>Figma 链接（可评论）：建议分页 Tokens / 现况 / 改版 / Handoff</li>
+  <li>主屏改版（含：空态、加载、1 条内容、10+ 条、错误）</li>
+  <li>管家 Avatar：落点尺寸 + 上述情绪关键帧 + 中间钮点击流程</li>
+  <li>Dev handoff 标注（字号、色、间距、组件状态）</li>
+  <li>一页说明：改了什么、为什么更适合「快速处理」</li>
+</ul>
+
+<p>验收：在已安装的 Alfred Preview 上对照可走通；问题用标注截图反馈即可，无需看代码。</p>
+
+</body>
+</html>

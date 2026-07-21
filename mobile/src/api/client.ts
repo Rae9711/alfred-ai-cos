@@ -3,6 +3,7 @@
 
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import * as Sentry from "@sentry/react-native";
 import type {
   ActionProposal,
   AppNotification,
@@ -65,6 +66,16 @@ function resolveBaseUrl(): string {
 
 const BASE_URL: string = resolveBaseUrl();
 
+// Correlates a client request with the backend's structured logs (X-Request-ID). RN has
+// no guaranteed crypto.randomUUID, so a v4-shaped id from Math.random is enough here.
+function requestId(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // The device's IANA timezone (e.g. "Europe/Paris"), via Hermes' Intl. Falls back to
 // UTC if unavailable. Sent with assistant requests so booked times match the user's clock.
 function deviceTimezone(): string {
@@ -99,6 +110,8 @@ async function request<T>(
         "Content-Type": "application/json",
         // Skip ngrok's free-tier interstitial so the app gets JSON, not the warning page.
         "ngrok-skip-browser-warning": "true",
+        // Correlate with backend logs; the API echoes/consumes X-Request-ID.
+        "X-Request-ID": requestId(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -110,7 +123,9 @@ async function request<T>(
         await clearToken();
         onAuthExpired?.();
       }
-      const detail = await res.text();
+      // Truncate the server detail before it becomes the error message: an API error body
+      // can echo email/subject fragments, and this string flows into Sentry below.
+      const detail = (await res.text()).slice(0, 120);
       throw new Error(`API ${res.status}: ${detail}`);
     }
     if (res.status === 204) {
@@ -125,6 +140,9 @@ async function request<T>(
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error("Request timed out — try again");
     }
+    // Report to Sentry (no-op when DSN is blank). The message is already truncated above,
+    // so no raw server detail leaves the device.
+    Sentry.captureException(e);
     throw e;
   } finally {
     if (timer != null) clearTimeout(timer);
@@ -152,6 +170,10 @@ export const api = {
         method: "POST",
       },
     ),
+  // Revoke the current session server-side (adds its jti to the denylist) so the token
+  // can't be reused even before its 30-day expiry. The bearer token is attached by
+  // request(); a short timeout keeps sign-out snappy even on a bad connection.
+  logout: () => request<void>("/auth/logout", { method: "POST" }, 8_000),
   sync: (opts?: {
     ingestOnly?: boolean;
     calendarOnly?: boolean;
@@ -175,7 +197,7 @@ export const api = {
   getToday: (locale?: "en" | "zh") =>
     request<TodayDashboard>(`/today${locale ? `?locale=${locale}` : ""}`),
   getInbox: (opts?: {
-    scope?: "needs_action" | "unread" | "today" | "synced" | "sms";
+    scope?: "needs_action" | "unread" | "today" | "synced" | "sms" | "whatsapp";
     mailbox?: string;
   }) => {
     const params = new URLSearchParams();

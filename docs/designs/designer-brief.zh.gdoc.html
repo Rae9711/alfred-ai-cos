@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Alfred 移动端 · UI 设计 Brief</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.5; color: #19171a; max-width: 720px; margin: 32px auto; padding: 0 16px; }
+  h1 { font-size: 20pt; margin: 0 0 18px; }
+  h2 { font-size: 14pt; margin: 28px 0 10px; color: #16264a; }
+  h3 { font-size: 12pt; margin: 18px 0 8px; }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px; padding-left: 22px; }
+  li { margin: 0 0 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 14px; font-size: 10.5pt; }
+  th, td { border: 1px solid #c8c4bb; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #ebe7dd; font-weight: 700; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 10pt; }
+  hr { border: none; border-top: 1px solid #d8d4cb; margin: 22px 0; }
+  .tip { background: #f4f1ea; padding: 10px 12px; margin-bottom: 20px; font-size: 10pt; color: #3b3a3e; }
+</style>
+</head>
+<body>
+
+<p class="tip"><b>粘贴到 Google Docs：</b>在浏览器中打开本页 → 全选（⌘A）→ 复制（⌘C）→ 打开空白 Google Doc → 粘贴（⌘V）。表格与标题会保留，可直接在 Doc 里改。</p>
+
+<h1>Alfred 移动端 · UI 设计 Brief</h1>
+
+<h2>你负责什么</h2>
+
+<p>你负责：</p>
+<ul>
+  <li>信息架构与视觉层级（哪块最重、扫一眼能否抓住重点）</li>
+  <li>主屏与组件外观（卡片、按钮、Pill、空态、错误态等）</li>
+  <li>关键帧（加载中、成功、失败、无数据）</li>
+  <li><b>Companion Avatar 的版式、尺寸、落点与表情状态故事板</b>（见下方「Avatar」）</li>
+  <li>Figma 组件化与 Auto Layout</li>
+  <li>Dev handoff 标注（字号、色值、间距、状态）</li>
+</ul>
+
+<p>你不负责：</p>
+<ul>
+  <li>写代码 / 进 GitHub</li>
+  <li>后端逻辑、API、账号体系、XP / 升级数值实现</li>
+  <li>After Effects / Lottie 工程导出（除非另行约定为动效交付）</li>
+  <li>自行改产品能力边界（例如加新功能入口需先对齐）</li>
+  <li>最终上线实现（由工程对照 Preview 落地）</li>
+</ul>
+
+<p>合作方式：你在真机 Preview 里体验 → 在 Figma 出稿 → 工程实现 → 你再在 Preview 上验收。</p>
+
+<hr />
+
+<h2>目标用户</h2>
+
+<p>忙碌的<b>首席助理使用者</b>（或同级别、高信息密度的个人决策者）：</p>
+<ul>
+  <li>一天打开 App <b>几次</b></li>
+  <li>目标是<b>快速处理</b>：看清今天最要紧的事、扫邮件、问一句、记下一条</li>
+  <li>不是长时间浏览、不是运营后台、不是数据看板</li>
+</ul>
+
+<p>设计成功标准：打开后 <b>3 秒内知道该处理什么</b>；完成一次操作尽量少跳转。</p>
+
+<hr />
+
+<h2>设计约束（必须遵守）</h2>
+
+<ol>
+  <li><b>保留 serif / mono 层级</b>：标题用 serif 表达「被关照」；eyebrow / pill / meta 用 mono；正文用系统无衬线</li>
+  <li><b>保留底部 5 Tab</b>：Today · Inbox · 中间 Capture · Ask · You（Settings）</li>
+  <li><b>不要做成信息仪表盘</b>：禁止 stats 墙、多 KPI 条、卡片堆叠成后台感、第一屏塞满次要信息</li>
+  <li><b>气质</b>：冷静、得体的管家感——温暖但不可爱过头，精致但不装饰炫技</li>
+</ol>
+
+<p>参考视觉方向：浅色编辑杂志风（奶油纸底 + 靛蓝强调 + 陶土警示），不是暗色科技风，不是紫色渐变 SaaS。</p>
+
+<hr />
+
+<h2>现有设计 Tokens（请直接建进 Figma Styles）</h2>
+
+<table>
+  <tr><th>Token</th><th>色值</th><th>用途</th></tr>
+  <tr><td>paper</td><td><code>#f4f1ea</code></td><td>页面背景</td></tr>
+  <tr><td>paper2</td><td><code>#ebe7dd</code></td><td>引用块、次级底、列表行底</td></tr>
+  <tr><td>paper3</td><td><code>#e0dccf</code></td><td>预留更深层底</td></tr>
+  <tr><td>card</td><td><code>#fbf9f4</code></td><td>卡片表面</td></tr>
+  <tr><td>ink</td><td><code>#19171a</code></td><td>主文字 / 主按钮底</td></tr>
+  <tr><td>ink2</td><td><code>#3b3a3e</code></td><td>正文</td></tr>
+  <tr><td>ink3</td><td><code>#6c6a70</code></td><td>次要 / meta</td></tr>
+  <tr><td>ink4</td><td><code>#a3a09c</code></td><td>更淡的 meta、未完成勾选描边</td></tr>
+  <tr><td>hair</td><td><code>rgba(25,23,26,0.08)</code></td><td>细分割线</td></tr>
+  <tr><td>hair2</td><td><code>rgba(25,23,26,0.14)</code></td><td>扁平卡片/输入框描边</td></tr>
+  <tr><td>accent</td><td><code>#3a5da8</code></td><td>主强调（靛蓝）</td></tr>
+  <tr><td>accentSoft</td><td><code>#dde0ec</code></td><td>强调软底（pill）</td></tr>
+  <tr><td>accentInk</td><td><code>#16264a</code></td><td>强调文字 / 标题里的斜体强调</td></tr>
+  <tr><td>warn</td><td><code>#b8543b</code></td><td>紧急 / 危险</td></tr>
+  <tr><td>warnSoft</td><td><code>#f4dccb</code></td><td>警示软底</td></tr>
+  <tr><td>success</td><td><code>#4a7a4e</code></td><td>已同步等成功态</td></tr>
+</table>
+
+<p><b>字体</b></p>
+<ul>
+  <li><b>Serif</b>：Instrument Serif — 问候语、大标题、优先事项标题、Briefing、转录斜体</li>
+  <li><b>Mono</b>：Geist Mono — eyebrow（11px / 大写）、pill、tab 标签、WHY 标签</li>
+  <li><b>Sans</b>：系统默认 — 正文、区块小标题、按钮</li>
+</ul>
+
+<p><b>间距与圆角（常规密度）</b><br />
+水平边距 18 · 卡片间距 12 · 区块间距 22 · 卡片内边距 16<br />
+圆角：卡片 18 · 扁平卡 14 · pill 100 · 输入/sheet 内 12–16 · 底部 sheet 顶角 26</p>
+
+<hr />
+
+<h2>现有主屏</h2>
+
+<ol>
+  <li><b>Today</b> — 日期 eyebrow、问候、今日优先、等人回复、小快赢、Alfred 建议</li>
+  <li><b>Inbox</b> — 「What matters」、分类条、邮件卡（可展开：Alfred 解读 + 操作）</li>
+  <li><b>Ask</b> — 对话气泡、建议问法、底部输入</li>
+  <li><b>Capture</b>（中间 Tab）— Speak / Type / Snap / Forward；语音 idle / 录音 / 解析确认</li>
+  <li><b>You（Settings）</b> — 档案、集成、偏好、审批等级、账号</li>
+  <li><b>Sheet</b>：MeetingPrep、Approval（邮件草稿审批）</li>
+</ol>
+
+<hr />
+
+<h2>Companion Avatar（管家形象 / 动画）</h2>
+
+<h3>产品角色（一句话）</h3>
+<p>Alfred 的后台工作大多「看不见」。Avatar 让工作<b>可见、有温度</b>：一眼知道「他在忙 / 在想 / 搞定了」，并随使用成长（等级光环）。<b>化妆性装饰永远不挡功能</b>；不需要 onboarding。</p>
+
+<h3>现状 vs 目标</h3>
+<table>
+  <tr><th></th><th>现状（Preview 里能看到）</th><th>目标（后续动效包）</th></tr>
+  <tr><td>呈现</td><td>静态立绘 + 表情 overlay + 轻微呼吸/浮动</td><td>单时间轴 Lottie，按状态播片段</td></tr>
+  <tr><td>你的工作</td><td>版式、尺寸、落点、表情帧与交互故事</td><td>接能动效：见下方「动效交付」；wave（打开 App / Today 打招呼）</td></tr>
+</table>
+
+<h3>出现位置（设计时必须画进布局）</h3>
+<ol>
+  <li><b>底部中间 Tab（中心钮）</b> — 主落点；点击应有「在听」反馈（短暂 thinking）</li>
+  <li><b>Today</b> — 问候陪伴感（可有轻量打招呼）</li>
+  <li><b>Ask</b> — 请求进行中切到 thinking；成功/失败要能闪一下对应情绪</li>
+</ol>
+<p>不要做成第二个聊天机器人主页；交互仍锚定<b>真实事务</b>（记下、提问、处理），不是无拘束陪聊。</p>
+
+<h3>情绪状态（必须出齐表情/pose）</h3>
+<table>
+  <tr><th>状态</th><th>循环？</th><th>感觉</th></tr>
+  <tr><td><code>idle</code></td><td>循环</td><td>平静悬浮、偶尔眨眼</td></tr>
+  <tr><td><code>focused</code></td><td>循环</td><td>更专注、眯眼、浮动更紧</td></tr>
+  <tr><td><code>thinking</code></td><td>循环</td><td>抬眼思索、节奏稍快（Ask 加载时）</td></tr>
+  <tr><td><code>success</code></td><td>单次 → 回 idle</td><td>开心弹一下 / 完成感</td></tr>
+  <tr><td><code>error</code></td><td>循环</td><td>低落、可有汗滴，不要夸张崩溃</td></tr>
+  <tr><td><code>sleep</code></td><td>循环</td><td>闭眼、变暗、慢呼吸（低频使用）</td></tr>
+</table>
+
+<h3>气质约束</h3>
+<ul>
+  <li>Light Airy Butler：轻、稳、得体；动作小、短、可读</li>
+  <li>不要卖萌过头、不要大型特效遮挡 Tab / 正文</li>
+  <li>Avatar <b>永不遮挡</b>主任务信息；失败/成功反馈服务事务结果，不抢戏</li>
+</ul>
+
+<h3>你需交付（Avatar 部分）</h3>
+<ol>
+  <li>Figma：各落点的尺寸、边距、与 Tab / 标题的对齐关系</li>
+  <li>上述 <b>6 个情绪</b> 的关键静态帧（可用组件变体）+ 打开 App / Today 打招呼</li>
+  <li>中心 Tab 点击 → thinking → 进入 Capture/交互 的简短流程帧</li>
+</ol>
+<p>参考图由工程侧另发（设计 sheet / Preview 录屏），<b>不开放源码</b>。</p>
+
+<h3>若同时接 Lottie 动效</h3>
+<p>交付：Lottie JSON（+ 最好有 <code>.aep</code>）· 每状态预览 MP4/GIF · LottieFiles 链接</p>
+<p>技术要点（工程会再对口）：单时间轴分段 · 30fps · 画布 512×512 透明底 · 纯矢量 · 文件尽量 ≤200KB · 强调色图层需稳定命名以便运行时换色。</p>
+<p>中心 Tab「小房子 / 云窝」可另做小件：<code>home_idle</code> / <code>home_occupied</code>。</p>
+
+<hr />
+
+<h2>必须覆盖的状态</h2>
+
+<p>每个你负责的屏，至少出齐：</p>
+<table>
+  <tr><th>状态</th><th>要求</th></tr>
+  <tr><td>空态</td><td>无内容时仍有方向感，不空洞到「什么都没有」</td></tr>
+  <tr><td>加载</td><td>明确在拉取，不闪白、不误触</td></tr>
+  <tr><td>1 条内容</td><td>少量内容时版面不散、不空</td></tr>
+  <tr><td>10+ 条内容</td><td>可扫读、层级清楚、不挤成仪表盘</td></tr>
+  <tr><td>错误</td><td>失败可理解、可重试（或说明下一步）</td></tr>
+</table>
+<p>另请顺带考虑：按压态、禁用态（按钮）。</p>
+
+<hr />
+
+<h2>交付</h2>
+<ol>
+  <li><b>Figma 链接</b>（可评论）<br />建议分页：Tokens / Current（现况）/ Proposed（改版）/ Handoff</li>
+  <li><b>关键帧</b>（加载 / 空 / 少内容 / 多内容 / 错误）</li>
+  <li><b>Dev handoff 标注</b>：字号、行高、色 token 名、间距、圆角、组件状态</li>
+</ol>
+<p>附一页短说明：「改了什么 / 为什么这样更适合快速处理」。</p>
+
+<hr />
+
+<h2>验收</h2>
+<ul>
+  <li>在你已安装的 <b>Alfred Preview App</b> 上，和设计稿对照可走通同一路径</li>
+  <li>视觉不得偏离色板与 serif/mono 层级</li>
+  <li>底部仍是 5 Tab；第一屏不是仪表盘</li>
+  <li>工程实现后，你再用 Preview 点验；问题用标注截图反馈（无需看代码）</li>
+</ul>
+
+<hr />
+
+<h2>协作节奏（建议）</h2>
+<ol>
+  <li>Kickoff：真机走一遍，锁定本周主屏</li>
+  <li>出稿：现状 vs 改版并排</li>
+  <li>评审：必须改 / 可选 / 不做</li>
+  <li>标注交稿 → 工程实现 → Preview 验收</li>
+</ol>
+<p>有产品边界疑问先问，不要自行扩 scope。</p>
+
+</body>
+</html>

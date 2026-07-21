@@ -15,7 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.db.enums import MessageClassification
 from app.db.models import DraftReply, Message, User
 from app.llm import get_llm
-from app.services import extraction, sender_class
+from app.services import channel_ingest
 from app.services.message_body import build_draft_context
 from app.services.sms_body import normalize_sms_body_text
 from app.services.writing_style import format_writing_style_prompt, get_writing_style
@@ -189,34 +189,38 @@ def ingest_sms(
         )
 
     sender = _display_sender(phone=phone, name=from_name)
-    cls = sender_class.classify(
-        sender=sender,
-        subject=None,
-        snippet=text[:200],
-        headers=None,
-        user=user,
-    )
     headers = _sms_headers(phone=phone, body=text)
     if backfill:
         headers["sms_backfill"] = True
 
-    message = Message(
-        user_id=user.id,
+    # Core ingest (dedup, classify, persist, extract) via the shared channel path; the
+    # SMS-specific bits — backfill spam softening and the auto-drafted reply — layer on top.
+    result = channel_ingest.ingest_channel_message(
+        db,
+        user=user,
         source="sms",
         external_id=external_id,
-        thread_id=phone,
         sender=sender,
-        recipients=[],
-        subject=None,
-        snippet=text[:200],
-        sent_at=received_at or datetime.now(UTC),
-        sender_classification=cls.cls,
+        body=text,
+        thread_id=phone,
+        received_at=received_at,
         headers=headers,
     )
-    db.add(message)
-    db.flush()
+    message = result.message
+    if result.deduped:
+        return SmsIngestResult(
+            message_id=message.id,
+            commitments_extracted=0,
+            deduped=True,
+            draft_created=db.scalar(
+                select(DraftReply.id).where(
+                    DraftReply.user_id == user.id,
+                    DraftReply.message_id == message.id,
+                )
+            )
+            is not None,
+        )
 
-    commitments = extraction.process_message(db, message, body=text)
     if backfill and message.classification == MessageClassification.spam_noise:
         message.classification = MessageClassification.informational
     had_draft = False
@@ -237,7 +241,7 @@ def ingest_sms(
 
     return SmsIngestResult(
         message_id=message.id,
-        commitments_extracted=len(commitments),
+        commitments_extracted=result.commitments_extracted,
         deduped=False,
         draft_created=had_draft,
     )

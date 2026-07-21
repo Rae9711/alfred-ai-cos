@@ -25,16 +25,23 @@ See [TODO.md](./TODO.md) for what is built and what remains, and
 
 ```
 backend/              FastAPI app, Postgres models, AI pipeline, Celery workers
-  app/api/v1/         HTTP routes (auth, sync, today, commitments, drafts, actions,
-                        meetings, briefings, tasks, capture, waiting, me, notifications)
+  app/api/v1/         HTTP routes (auth+logout, sync, today, commitments, waiting, drafts,
+                        compose, actions, meetings, briefings, tasks, capture, messages,
+                        inbox, search, senders, schedule_proposals, assistant, me,
+                        notifications, billing, integrations, dev)
+  app/core/           Config, security (JWT + revocation), shared Redis (locks + denylist)
   app/db/             SQLAlchemy models + enums
   app/llm/            Provider-agnostic LLM interface; Anthropic impl isolated in providers/
   app/transcription/  Provider-agnostic transcription seam (voice capture)
-  app/capabilities/   CapabilityProvider framework + providers (gmail draft, task, Stripe,
-                        WhatsApp, refused stubs)
-  app/services/       OAuth, Gmail, calendar, ingestion, extraction, priority, today,
-                        meeting prep, briefing, tasks, capture, waiting, notifications, execution
-  app/workers/        Celery app + tasks (sync, briefings, notification scan) + beat schedule
+  app/capabilities/   CapabilityProvider framework + providers (gmail draft, send email,
+                        calendar event mutate, task, Stripe, WhatsApp, refused stubs)
+  app/services/       OAuth+token refresh, Gmail, calendar, ingestion, extraction, priority,
+                        today, sender classification, inbox filtering/resolution, meeting prep,
+                        briefing, tasks, capture, waiting, notifications, learning, habits,
+                        writing style, compose, schedule proposals, week-ahead, planning,
+                        snooze, search, SMS ingestion, crypto, execution
+  app/workers/        Celery app + tasks (sync, briefings, notification scan, habits,
+                        writing-style refresh) + beat schedule
   migrations/         Alembic
 mobile/               React Native / Expo app (Expo Router, tab navigator)
   app/                Routes: (tabs)/{index,capture,waiting,settings}, connect, onboarding,

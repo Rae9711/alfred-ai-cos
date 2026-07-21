@@ -21,6 +21,7 @@ from anthropic.types import (
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.metrics import LLM_LATENCY, LLM_TOKENS, record_llm_usage
 from app.schemas.llm import (
     AssistantChatReply,
     AssistantInterpretation,
@@ -206,6 +207,21 @@ class AnthropicLLMClient:
     def __init__(self) -> None:
         self._client = Anthropic(api_key=settings.anthropic_api_key)
 
+    def _meter_usage(self, model: str, usage: Any) -> None:
+        """Record token counts and stash the usage object as the single source of truth.
+
+        Later stages (e.g. per-call cost accounting) read this back via
+        ``metrics.last_llm_usage()`` rather than re-counting tokens themselves."""
+        if usage is None:
+            return
+        record_llm_usage(usage)
+        input_tokens = getattr(usage, "input_tokens", None)
+        output_tokens = getattr(usage, "output_tokens", None)
+        if input_tokens is not None:
+            LLM_TOKENS.labels(model=model, kind="input").inc(input_tokens)
+        if output_tokens is not None:
+            LLM_TOKENS.labels(model=model, kind="output").inc(output_tokens)
+
     def _structured(
         self,
         *,
@@ -215,14 +231,18 @@ class AnthropicLLMClient:
         tool: ToolParam,
     ) -> dict[str, Any]:
         """Force a single tool and return its validated raw input dict."""
-        response = self._client.messages.create(
-            model=model,
-            max_tokens=2048,
-            system=[TextBlockParam(type="text", text=system, cache_control={"type": "ephemeral"})],
-            tools=[tool],
-            tool_choice=ToolChoiceToolParam(type="tool", name=tool["name"]),
-            messages=[MessageParam(role="user", content=user_content)],
-        )
+        with LLM_LATENCY.labels(method="structured", model=model).time():
+            response = self._client.messages.create(
+                model=model,
+                max_tokens=2048,
+                system=[
+                    TextBlockParam(type="text", text=system, cache_control={"type": "ephemeral"})
+                ],
+                tools=[tool],
+                tool_choice=ToolChoiceToolParam(type="tool", name=tool["name"]),
+                messages=[MessageParam(role="user", content=user_content)],
+            )
+        self._meter_usage(model, response.usage)
         for block in response.content:
             if block.type == "tool_use":
                 return cast(dict[str, Any], block.input)
@@ -290,9 +310,7 @@ class AnthropicLLMClient:
                 f"The user's email address is {user_email}.\n"
                 f"From: {sender}\nSubject: {subject or '(none)'}\n\n{body}"
             ),
-            tool=_tool_for(
-                _Wrapper, "record_schedule", "Record the extracted schedule proposal."
-            ),
+            tool=_tool_for(_Wrapper, "record_schedule", "Record the extracted schedule proposal."),
         )
         parsed = _Wrapper.model_validate(raw)
         return parsed.proposal if parsed.has_event and parsed.proposal is not None else None
@@ -336,11 +354,7 @@ class AnthropicLLMClient:
         writing_style_prompt: str | None = None,
     ) -> DraftResult:
         first_name = recipient_name.strip().split()[0] if recipient_name.strip() else recipient_name
-        name_line = (
-            f"\nSign off as: {user_name}"
-            if user_name
-            else "\nOmit the signature line."
-        )
+        name_line = f"\nSign off as: {user_name}" if user_name else "\nOmit the signature line."
         style_line = f"\n\n{writing_style_prompt}" if writing_style_prompt else ""
         user_content = (
             f"Tone: {tone}{name_line}{style_line}\n\n"
@@ -359,21 +373,26 @@ class AnthropicLLMClient:
         return DraftResult.model_validate(raw)
 
     def generate_daily_briefing(self, *, today_payload: dict[str, Any]) -> str:
-        response = self._client.messages.create(
-            model=settings.llm_extract_model,
-            max_tokens=600,
-            system=[
-                TextBlockParam(
-                    type="text",
-                    text=(
-                        "You are Albert. Write a calm morning briefing in under 90 seconds of "
-                        "reading. Lead with what matters today. No more than 5 priorities."
-                    ),
-                    cache_control={"type": "ephemeral"},
-                )
-            ],
-            messages=[MessageParam(role="user", content=json.dumps(today_payload, default=str))],
-        )
+        model = settings.llm_extract_model
+        with LLM_LATENCY.labels(method="briefing", model=model).time():
+            response = self._client.messages.create(
+                model=model,
+                max_tokens=600,
+                system=[
+                    TextBlockParam(
+                        type="text",
+                        text=(
+                            "You are Albert. Write a calm morning briefing in under 90 seconds of "
+                            "reading. Lead with what matters today. No more than 5 priorities."
+                        ),
+                        cache_control={"type": "ephemeral"},
+                    )
+                ],
+                messages=[
+                    MessageParam(role="user", content=json.dumps(today_payload, default=str))
+                ],
+            )
+        self._meter_usage(model, response.usage)
         return "".join(b.text for b in response.content if b.type == "text")
 
     def summarize_meeting_context(

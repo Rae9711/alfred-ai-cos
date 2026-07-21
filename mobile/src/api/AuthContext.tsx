@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { setOnAuthExpired } from "@/api/client";
+import { api, setOnAuthExpired } from "@/api/client";
 import { clearToken, getToken } from "@/api/auth";
 import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 
@@ -31,6 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Revoke server-side first (best effort). If it fails — offline, or the token is
+    // already invalid — we still clear locally so the user is signed out either way;
+    // the token expires on its own within 30 days.
+    try {
+      await api.logout();
+    } catch {
+      // ignore: local sign-out below is the guaranteed outcome
+    }
     await clearToken();
     await clearFreeChatHistory();
     setAuthed(false);
