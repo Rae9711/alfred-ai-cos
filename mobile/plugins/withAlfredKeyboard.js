@@ -69,6 +69,12 @@ function withKeyboardFiles(config) {
         throw new Error(`Missing keyboard sources at ${srcDir}`);
       }
       copyDir(srcDir, destDir);
+      // Xcode / addTarget expects AlfredKeyboard-Info.plist by convention.
+      const infoSrc = path.join(destDir, "Info.plist");
+      const infoDest = path.join(destDir, "AlfredKeyboard-Info.plist");
+      if (fs.existsSync(infoSrc)) {
+        fs.copyFileSync(infoSrc, infoDest);
+      }
 
       // Shared storage Swift helper into the main app target folder.
       const sharedSrc = path.join(projectRoot, "modules", "alfred-shared-storage", "ios");
