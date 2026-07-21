@@ -179,6 +179,12 @@ def approve_action(
 
     try:
         execution.execute_proposal(db, user, proposal)
+    except HTTPException:
+        # A deliberate HTTP status from the execution path (e.g. a 409 conflict) must
+        # propagate unchanged. HTTPException is a subclass of Exception, so without this
+        # it would be swallowed by the generic handler below and re-wrapped into a 502,
+        # turning a clean 409 into a spurious 5xx.
+        raise
     except execution.ExecutionBlocked as exc:
         raise HTTPException(status_code=502, detail=f"Execution failed: {exc}") from exc
     except Exception as exc:

@@ -7,6 +7,7 @@ caller via app.services.crypto."""
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
@@ -93,8 +94,43 @@ def _fetch_email(creds: Credentials) -> str | None:
     return None
 
 
+def _parse_expiry(payload: dict[str, Any]) -> datetime | None:
+    """Parse the stored token expiry into the naive-UTC datetime ``Credentials.expiry``
+    expects (google-auth compares it against a naive ``utcnow``).
+
+    Without this, ``Credentials.expiry`` stays ``None`` — which google-auth treats as
+    "never expires" — so ``creds.expired`` is always ``False`` and the proactive refresh
+    branch in :func:`fresh_credentials` never runs; a stale token then only fails deep
+    inside the actual Gmail/Calendar call. We tolerate the several shapes Google's own
+    libraries persist expiry in (ISO string, epoch seconds, epoch millis) and return
+    ``None`` when none is present or parseable, so a payload without an expiry falls back
+    to the prior lazy-refresh behavior instead of crashing.
+    """
+    raw = payload.get("expiry")
+    if isinstance(raw, datetime):
+        dt: datetime | None = raw
+    elif isinstance(raw, str) and raw:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            dt = None
+    else:
+        dt = None
+    if dt is not None:
+        return dt.astimezone(UTC).replace(tzinfo=None) if dt.tzinfo is not None else dt
+    # Epoch fallbacks used by other Google client libraries (seconds / milliseconds).
+    for key, scale in (("expires_at", 1.0), ("expiry_date", 1000.0)):
+        val = payload.get(key)
+        if isinstance(val, int | float) and not isinstance(val, bool):
+            return datetime.fromtimestamp(val / scale, tz=UTC).replace(tzinfo=None)
+    return None
+
+
 def credentials_from_payload(payload: dict[str, Any]) -> Credentials:
-    """Rebuild Google Credentials from a decrypted token payload for API calls."""
+    """Rebuild Google Credentials from a decrypted token payload for API calls.
+
+    ``expiry`` is populated from the stored payload so ``creds.expired`` is accurate and
+    drives a proactive refresh (see :func:`_parse_expiry`)."""
     return Credentials(  # type: ignore[no-untyped-call]
         token=payload.get("token"),
         refresh_token=payload.get("refresh_token"),
@@ -102,6 +138,7 @@ def credentials_from_payload(payload: dict[str, Any]) -> Credentials:
         client_id=payload.get("client_id"),
         client_secret=payload.get("client_secret"),
         scopes=payload.get("scopes"),
+        expiry=_parse_expiry(payload),
     )
 
 
