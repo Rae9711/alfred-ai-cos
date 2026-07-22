@@ -28,12 +28,15 @@ export function DayScheduleView({
   onEventPress,
   onTaskPress,
   emptyText = "Nothing on the calendar for today.",
+  showDayTitle = false,
 }: {
   day: Date;
   items: ScheduleTimelineItem[];
   onEventPress: (event: UpcomingMeeting) => void;
   onTaskPress?: (taskId: string) => void;
   emptyText?: string;
+  /** When false, date chrome lives in the parent week strip. */
+  showDayTitle?: boolean;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   const isToday = useMemo(() => {
@@ -73,7 +76,9 @@ export function DayScheduleView({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.dayTitle}>{formatMonthDay(day)}</Text>
+      {showDayTitle ? (
+        <Text style={styles.dayTitle}>{formatMonthDay(day)}</Text>
+      ) : null}
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}

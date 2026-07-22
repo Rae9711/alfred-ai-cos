@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import { api } from "@/api/client";
 import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
 import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
@@ -31,9 +32,11 @@ import {
   type AlfredLaunchOpts,
 } from "@/lib/alfredLaunch";
 import { openSmsCompose } from "@/lib/sms";
+import { firstNameOf, greetingFor } from "@/lib/today";
 import { CaptureScreen } from "@/screens/CaptureScreen";
 import { colors, fonts, layout, spacing } from "@/theme/theme";
 import { surfaces } from "@/theme/surfaces";
+import type { Me } from "@albert/shared-types";
 
 type HubMode = "idle" | "schedule" | "sms" | "reminder" | "capture";
 
@@ -49,13 +52,32 @@ export function AlfredHubScreen({
   const scrollRef = useRef<ScrollView>(null);
   const chat = useAlfredFreeChat(scrollRef);
 
+  const [me, setMe] = useState<Me | null>(null);
   const [mode, setMode] = useState<HubMode>(
     startInCapture ? "capture" : "idle",
   );
   const [captureText, setCaptureText] = useState(initialCaptureText);
   const [captureKey, setCaptureKey] = useState(0);
 
-  const greeting = greetingForLocale(new Date().getHours(), locale);
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getMe()
+      .then((profile) => {
+        if (!cancelled) setMe(profile);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const greeting =
+    locale === "zh"
+      ? greetingForLocale(new Date().getHours(), locale)
+      : greetingFor(new Date().getHours());
+  const displayName =
+    firstNameOf(me?.name) ?? me?.email.split("@")[0] ?? "there";
   const hub = t.alfredHub;
 
   const beginSmsFlowRef = useRef(chat.beginSmsFlow);
@@ -172,7 +194,7 @@ export function AlfredHubScreen({
           <Eyebrow>{hub.eyebrow}</Eyebrow>
           <AlfredMiniAvatar size={112} accessibilityLabel="Alfred" />
           <Serif size={32} display style={styles.greeting}>
-            {greeting} <SerifEm>{hub.butlerName}</SerifEm>
+            {greeting} <SerifEm>{displayName}</SerifEm>
           </Serif>
           <Text style={styles.sub}>{hub.sub}</Text>
         </View>
@@ -500,7 +522,7 @@ const styles = StyleSheet.create({
   composerWrap: {
     paddingHorizontal: layout.padX,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: layout.tabBarInset,
     backgroundColor: "transparent",
   },
   composerInner: {

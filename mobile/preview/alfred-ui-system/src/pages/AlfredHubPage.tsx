@@ -15,7 +15,7 @@ export default function AlfredHubPage() {
       <div className="hub-hero">
         <span className="eyebrow">管家</span>
         <AlfredAvatar size={112} />
-        <h1>下午好，<em>管家</em></h1>
+        <h1>下午好，<em>Rae</em></h1>
         <p>查/订日历、按姓名起草短信或邮件、设置提醒 — 发送前都会先请你确认。</p>
       </div>
 

@@ -1,16 +1,13 @@
-// Home — greeting, next-schedule reminder, today's schedule, composer.
+// Home — greeting, next-schedule reminder, today's schedule, inbox.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -37,22 +34,24 @@ import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { ScreenWash } from "@/components/ScreenWash";
-import { Btn, Disclose, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, Disclose, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
+import { ScheduleViewSegment } from "@/components/schedule/ScheduleViewSegment";
+import { ScheduleWeekStrip } from "@/components/schedule/ScheduleWeekStrip";
 import { WeekScheduleView } from "@/components/schedule/WeekScheduleView";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { parseSenderDisplay } from "@/lib/inbox";
 import {
   type ScheduleView,
   buildDayTimelineItems,
+  isSameDay,
+  meetingsForDay,
 } from "@/lib/schedule";
 import { greetingForLocale } from "@/i18n/locales";
-import { parseSmsComposeIntent } from "@/lib/smsComposeIntent";
 import {
   cancelLocalTaskReminder,
-  scheduleFromAssistantResponse,
   syncLocalRemindersForTasks,
 } from "@/lib/taskReminders";
 import { surfaces } from "@/theme/surfaces";
@@ -136,10 +135,10 @@ function isPast(iso: string | null): boolean {
 export function HomeScreen() {
   const router = useRouter();
   const { openSheet, showToast } = useShell();
-  const { setThinking, flashState } = useCompanionAvatar();
+  const { flashState } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
-  const { openAlfred, openConfirmReply, setTab } = useWorkflow();
+  const { openConfirmReply, setTab } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
@@ -151,12 +150,11 @@ export function HomeScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [composer, setComposer] = useState("");
-  const [asking, setAsking] = useState(false);
   const [scheduleAction, setScheduleAction] = useState(false);
   const [habitAction, setHabitAction] = useState(false);
 
   const [scheduleView, setScheduleView] = useState<ScheduleView>("day");
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [selectedMonthDay, setSelectedMonthDay] = useState<Date | null>(null);
 
   const greeting =
@@ -171,14 +169,12 @@ export function HomeScreen() {
           api.getMe().catch(() => null),
           api.listPendingActions(),
           api.listUpcomingMeetings(
-            view === "day"
-              ? { today: true }
-              : view === "week"
-                ? { week: true }
-                : { month: true },
+            view === "month" ? { month: true } : { week: true },
           ),
-          view === "day" ? api.getToday(locale).catch(() => null) : Promise.resolve(null),
-          view === "day"
+          view === "day" || view === "week"
+            ? api.getToday(locale).catch(() => null)
+            : Promise.resolve(null),
+          view === "day" || view === "week"
             ? api.listTasks({ upcoming: true }).catch(() => [] as Task[])
             : Promise.resolve([] as Task[]),
           api.getConversationInbox().catch(() => ({ items: [], counts: {} })),
@@ -240,6 +236,7 @@ export function HomeScreen() {
   const onScheduleViewChange = (view: ScheduleView) => {
     setScheduleView(view);
     setSelectedMonthDay(null);
+    if (view === "day") setSelectedDay(new Date());
   };
 
   const onRefresh = useCallback(async () => {
@@ -268,9 +265,13 @@ export function HomeScreen() {
   }, [load, scheduleView, syncAndRefresh, showToast]);
 
   const today = useMemo(() => new Date(), []);
+  const todayMeetings = useMemo(
+    () => meetingsForDay(meetings, today),
+    [meetings, today],
+  );
   const dayTimelineItems = useMemo(
-    () => buildDayTimelineItems(meetings, reminders, today),
-    [meetings, reminders, today],
+    () => buildDayTimelineItems(meetings, reminders, selectedDay),
+    [meetings, reminders, selectedDay],
   );
   const openMeeting = useCallback(
     (item: UpcomingMeeting) => {
@@ -292,14 +293,20 @@ export function HomeScreen() {
 
   const scheduleSectionLabel =
     scheduleView === "day"
-      ? t.home.sectionToday
+      ? isSameDay(selectedDay, today)
+        ? t.home.sectionToday
+        : selectedDay.toLocaleDateString(locale === "zh" ? "zh-CN" : undefined, {
+            month: "short",
+            day: "numeric",
+            weekday: "short",
+          })
       : scheduleView === "week"
         ? t.home.sectionWeek
         : monthTitle;
 
   const nextMeeting = useMemo(
-    () => meetings.find((m) => !isPast(m.start_time)) ?? null,
-    [meetings],
+    () => todayMeetings.find((m) => !isPast(m.start_time)) ?? null,
+    [todayMeetings],
   );
 
   const topScheduleProposal = todayData?.schedule_proposals?.[0] ?? null;
@@ -334,7 +341,7 @@ export function HomeScreen() {
         formatMeetingTime(nextMeeting.start_time),
         nextMeeting.title ?? t.home.untitledMeeting,
       )
-    : meetings.length > 0
+    : todayMeetings.length > 0
       ? t.home.scheduleDoneForDay
       : t.home.noScheduleToday;
 
@@ -347,43 +354,6 @@ export function HomeScreen() {
       ? t.home.viewPrep
       : t.home.viewSchedule
     : null;
-
-  const submitComposer = () => {
-    const q = composer.trim();
-    if (!q || asking) return;
-    setComposer("");
-
-    const smsIntent = parseSmsComposeIntent(q);
-    if (smsIntent) {
-      // SMS compose is an Alfred hub capability, not Chats.
-      openAlfred({ text: q, mode: "sms" });
-      return;
-    }
-
-    setAsking(true);
-    setThinking(true);
-    void (async () => {
-      try {
-        const res = await api.ask(q);
-        await scheduleFromAssistantResponse(res);
-        showToast(res.reply, { duration: 6000 });
-        if (res.action !== "none") {
-          flashState("success");
-          await api.sync({ calendarOnly: true }).catch(() => undefined);
-          await load(scheduleView);
-        }
-        if (res.action === "created") {
-          const upcoming = await api.listTasks({ upcoming: true }).catch(() => [] as Task[]);
-          setReminders(upcoming);
-        }
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : t.home.askFailed);
-      } finally {
-        setAsking(false);
-        setThinking(false);
-      }
-    })();
-  };
 
   const onButlerPress = () => {
     if (topHabitSuggestion) {
@@ -596,7 +566,7 @@ export function HomeScreen() {
     firstNameOf(me?.name) ?? me?.email.split("@")[0] ?? "there";
 
   const summaryTitle =
-    meetings.length === 0
+    todayMeetings.length === 0
       ? t.home.noScheduleToday.replace(/\.$/, "")
       : nextMeeting
         ? t.home.nextScheduleReminder(
@@ -607,7 +577,7 @@ export function HomeScreen() {
 
   const summarySubtitle =
     todayData?.day_overview?.trim() ||
-    (meetings.length === 0
+    (todayMeetings.length === 0
       ? t.home.focusTimeAvailable
       : butlerPrompt);
 
@@ -631,11 +601,7 @@ export function HomeScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? layout.tabBarInset : 0}
-    >
+    <View style={styles.root}>
       <ScreenWash />
       <ScrollView
         style={styles.scroll}
@@ -964,30 +930,32 @@ export function HomeScreen() {
           </View>
         </View>
 
-        {/* Day / week / month — below fold so first viewport matches sheet. */}
-        <Disclose
-          style={styles.discloseBlock}
-          label={scheduleSectionLabel}
-          labelExpanded={t.home.showLess}
-          defaultOpen={false}
-        >
-          <View style={styles.scheduleToggle}>
-            {(["day", "week", "month"] as const).map((view) => (
-              <Pill
-                key={view}
-                label={t.home.scheduleViews[view]}
-                kind={scheduleView === view ? "accent" : "muted"}
-                mono={false}
-                onPress={() => onScheduleViewChange(view)}
-                style={styles.scheduleTogglePill}
-              />
-            ))}
+        {/* Day / week / month — white card chrome matching design sheet. */}
+        <View style={styles.scheduleCard}>
+          <View style={styles.scheduleCardHeader}>
+            <Text style={styles.scheduleCardTitle} numberOfLines={1}>
+              {scheduleSectionLabel}
+            </Text>
+            <ScheduleViewSegment
+              value={scheduleView}
+              labels={t.home.scheduleViews}
+              onChange={onScheduleViewChange}
+            />
           </View>
+
+          {scheduleView === "day" ? (
+            <ScheduleWeekStrip
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+            />
+          ) : null}
+
+          <View style={styles.scheduleDivider} />
 
           {scheduleView === "day" ? (
             dayTimelineItems.length > 0 ? (
               <DayScheduleView
-                day={today}
+                day={selectedDay}
                 items={dayTimelineItems}
                 onEventPress={openMeeting}
                 onTaskPress={onTimelineTaskPress}
@@ -1014,51 +982,9 @@ export function HomeScreen() {
               onEventPress={openMeeting}
             />
           ) : null}
-        </Disclose>
-      </ScrollView>
-
-      <View style={styles.commandBox}>
-        <View style={styles.sparkleDot}>
-          <Ic.Sparkles size={17} color="#5D5CE6" stroke={2} />
         </View>
-        <TextInput
-          value={composer}
-          onChangeText={setComposer}
-          placeholder={t.home.composerPlaceholder}
-          placeholderTextColor="#9AA4B5"
-          style={styles.composerInput}
-          multiline
-          maxLength={500}
-          returnKeyType="send"
-          blurOnSubmit
-          onSubmitEditing={submitComposer}
-          editable={!asking}
-        />
-        <Pressable
-          style={styles.composerMic}
-          onPress={() => openAlfred()}
-          accessibilityLabel="Voice input"
-        >
-          <Ic.Mic size={17} color="#60708D" stroke={2} />
-        </Pressable>
-        {asking ? (
-          <View style={styles.sendCircle}>
-            <ActivityIndicator size="small" color="#fff" />
-          </View>
-        ) : (
-          <Pressable
-            style={[
-              styles.sendCircle,
-              !composer.trim() && styles.sendDisabled,
-            ]}
-            onPress={composer.trim() ? submitComposer : undefined}
-            accessibilityLabel={t.a11y.send}
-          >
-            <Ic.Send size={15} color="#FFFFFF" stroke={2} />
-          </Pressable>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -1074,7 +1000,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
-    paddingBottom: spacing.xl + 24,
+    paddingBottom: layout.tabBarInset + spacing.xl,
     gap: layout.gapSection,
   },
   topBar: {
@@ -1344,69 +1270,45 @@ const styles = StyleSheet.create({
     color: colors.warn,
     fontSize: 13,
   },
-  scheduleHeader: {
+  scheduleCard: {
     marginTop: layout.gapSection,
-    marginBottom: 10,
-    gap: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    paddingTop: 18,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    gap: 14,
   },
-  scheduleToggle: {
+  scheduleCardHeader: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
-  scheduleTogglePill: { marginRight: 0 },
+  scheduleCardTitle: {
+    flexShrink: 1,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 22,
+    letterSpacing: -0.4,
+    color: "#111111",
+  },
+  scheduleDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E8E8E8",
+    marginHorizontal: -4,
+  },
   scheduleEmpty: {
     fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.ink3,
     fontStyle: "italic",
-  },
-  commandBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginHorizontal: layout.padX,
-    marginBottom: layout.tabBarInset,
-    paddingVertical: 7,
-    paddingLeft: 7,
-    paddingRight: 7,
-    minHeight: 50,
-    ...surfaces.glassCard,
-    borderRadius: 18,
-  },
-  sparkleDot: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F1EFFF",
-  },
-  composerMic: {
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  composerInput: {
-    flex: 1,
-    fontFamily: fonts.sans,
-    fontSize: 11,
-    color: colors.ink,
-    minHeight: 28,
-    maxHeight: 88,
-    paddingVertical: 4,
-  },
-  sendDisabled: {
-    opacity: 0.38,
+    paddingVertical: 8,
   },
 });

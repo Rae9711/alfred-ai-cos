@@ -4,9 +4,6 @@ import {
   Clock3,
   Inbox,
   ListTodo,
-  Mic,
-  Send,
-  Sparkles,
 } from "lucide-react";
 import AlfredAvatar from "../components/AlfredAvatar";
 import { IconTile } from "../components/IconTile";
@@ -17,7 +14,7 @@ export default function HomePage() {
       <header className="home-header">
         <div>
           <span className="eyebrow">管家</span>
-          <h1>下午好，<em>管家</em></h1>
+          <h1>下午好，<em>Rae</em></h1>
           <p>安排日程、发短信、设提醒，或速记 — 其余交给我。</p>
         </div>
         <div className="header-tools">
@@ -96,13 +93,6 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-
-      <div className="composer surface">
-        <div className="sparkle-dot"><Sparkles /></div>
-        <input placeholder="告诉 Alfred 你想做什么..." />
-        <button><Mic /></button>
-        <button className="send"><Send /></button>
-      </div>
     </div>
   );
 }
