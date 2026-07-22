@@ -53,31 +53,77 @@ Checklist after install on device:
 - [ ] Settings → General → Keyboard → Keyboards → Add New Keyboard → **Alfred**
 - [ ] Alfred → **Allow Full Access**
 - [ ] Open Alfred app once while signed in (mirrors JWT into App Group)
-- [ ] In any text field, switch to Alfred keyboard → status should not say「请开启完全访问」
+- [ ] You → **键盘诊断** → confirm App Group 可访问 + Auth Token 已写入
+- [ ] Tap **同步键盘登录状态** if token is missing
+- [ ] In any text field, switch to Alfred keyboard → should not show「需要允许完全访问」
 
-## Full Access / memory guidance (product copy)
+## Diagnostics (main app)
 
-| Situation | What the keyboard shows |
+You → **键盘诊断** (`/keyboard-diagnostics`) shows real status:
+
+| Row | Values |
 |---|---|
-| Full Access off | `请开启完全访问：设置 → 通用 → 键盘 → Alfred` |
-| Not signed in | `请先在 Alfred App 登录（会话会同步到键盘）` |
-| Empty clipboard | `复制微信多选消息后点「导入对话」` |
-| After confirm w/ reminder | `已加入 Alfred · 回 App 后会设本地提醒` |
+| Keyboard Extension | Best-effort via last-seen marker; otherwise honest「无法从主 App 检测…」 |
+| App Group | 可访问 / 不可访问 |
+| Auth Token | 已写入 / 未写入 |
+| Token Updated | timestamp or — |
+| Full Access | Guidance only — main app cannot read FA;「请在系统设置中开启」 |
 
-iOS may terminate keyboards under memory pressure — keep the UI to ~3 actions + 3 replies
-(current `KeyboardViewController` already caps actions with `.prefix(3)`).
+**同步键盘登录状态** calls `syncAuthToAppGroup` and refreshes the panel.
+
+App Group suite must never silently fall back to `UserDefaults.standard` — suite failure surfaces as「未发现共享容器」in the keyboard.
+
+## Keyboard error copy
+
+| Condition | Message |
+|---|---|
+| `!hasFullAccess` | 需要允许完全访问 |
+| App Group suite unavailable | 未发现共享容器 |
+| Full Access on, container OK, no token | 主 App 尚未同步 |
+| API 401 / expired | 登录已过期 |
+| Network failure | 网络不可用 |
+
+## State machine UI (~320pt)
+
+```
+IDLE → IMPORTING → CONTEXT_REVIEW → GENERATING → REPLY_READY → EDITING
+```
+
+- **IDLE:** 「复制微信聊天后，点击导入」+ [导入所选消息]
+- **IMPORTING / GENERATING:** loading
+- **CONTEXT_REVIEW:** counts + [查看上下文] [继续]
+- **REPLY_READY:** insight, one primary reply, [换一个] [编辑] [插入], action summary, [查看并确认], **展开 ↗**
+- **EDITING:** TextView + [更简短] [更温柔] [更直接] + [插入回复]
+
+Bottom chrome: 🌐 next keyboard, space / backspace / return (no full QWERTY).
+
+**展开 ↗** opens `albert://conversation/{conversationId}` (scheme from `app.json`), writing parse/analyze session into App Group handoff so Import can hydrate.
+
+## Deep link
+
+- Scheme: `albert` (not `alfred`)
+- `albert://conversation/{id}` → `/conversation/[id]` → `ImportConversationScreen` with handoff
+- Confirm actions: `POST /conversations/actions/confirm` + App Group drain for reminders
 
 ## Flow
 
 1. User multi-selects WeChat messages → Copy
-2. Switch to Alfred Keyboard → tap **导入对话**
-3. Extension calls `POST /conversations/parse` then `/analyze`
-4. User inserts a reply via `textDocumentProxy.insertText`
+2. Switch to Alfred Keyboard → tap **导入所选消息**
+3. Extension calls `POST /conversations/parse` → context review → `/analyze`
+4. User inserts a reply via `textDocumentProxy.insertText` (only on 插入)
 5. User confirms an action → `POST /conversations/actions/confirm` + enqueue into App Group
 6. Main app drains App Group on foreground and schedules a local notification **only**
    if the confirmed action has `remind_at`
+7. **展开** opens the Import workstation with the same session
 
 ## In-app alternative (no keyboard build)
 
 Home → **从对话中发现** / route `/import` → clipboard paste → same parse/analyze/confirm
 API. Works after an OTA that includes `ImportConversationScreen`; does not need Full Access.
+
+## OTA vs new IPA
+
+| Change | Ship via |
+|---|---|
+| Import UI, diagnostics screen, deep-link routing (JS) | OTA (`bun run update:preview`) |
+| Keyboard Swift UI / App Group / shared-storage native module | **New native EAS / Xcode build** |

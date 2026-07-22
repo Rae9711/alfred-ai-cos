@@ -516,6 +516,7 @@ class ConversationAnalyzeRequest(BaseModel):
 class ConversationAnalyzeResponse(BaseModel):
     reply_suggestions: list[ReplySuggestionOut]
     actions: list[ConversationActionOut]
+    insight: str | None = None
 
 
 class ConversationConfirmRequest(BaseModel):

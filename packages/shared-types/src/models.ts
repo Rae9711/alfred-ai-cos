@@ -474,6 +474,8 @@ export interface ConversationAction {
 export interface ConversationAnalyzeResponse {
   reply_suggestions: ReplySuggestion[];
   actions: ConversationAction[];
+  /** Short one-line understanding; optional for older backends. */
+  insight?: string | null;
 }
 
 export interface ConversationConfirmRequest {

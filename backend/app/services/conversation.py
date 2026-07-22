@@ -415,7 +415,34 @@ def analyze_conversation(
         replies = replies_fut.result()
         actions = actions_fut.result()
 
-    return ConversationAnalyzeResponse(reply_suggestions=replies, actions=actions)
+    insight = _derive_insight(selected=selected, actions=actions, goal=goal_text)
+    return ConversationAnalyzeResponse(
+        reply_suggestions=replies,
+        actions=actions,
+        insight=insight,
+    )
+
+
+def _derive_insight(
+    *,
+    selected: list,
+    actions: list[ConversationActionOut],
+    goal: str,
+) -> str:
+    """Thin one-line understanding without an extra LLM call."""
+    if actions:
+        title = (actions[0].title or "").strip()
+        if title:
+            return title[:80]
+    if selected:
+        last = selected[-1]
+        snippet = (getattr(last, "content", "") or "").strip().replace("\n", " ")
+        if snippet:
+            return f"围绕「{snippet[:36]}」继续推进"
+    goal_clean = (goal or "").strip()
+    if goal_clean and goal_clean != "custom":
+        return f"按目标「{goal_clean[:24]}」生成回复"
+    return "已分析对话，可插入回复"
 
 
 def _default_remind_at(due: date, tz: str) -> datetime:

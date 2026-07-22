@@ -9,11 +9,26 @@ type ConfirmedAction = {
   confirmed_at?: string;
 };
 
+type PendingHandoff = {
+  conversation_id?: string;
+  conversation?: Record<string, unknown>;
+  insight?: string;
+  replies?: unknown[];
+  actions?: unknown[];
+  clipboard_text?: string;
+  [key: string]: unknown;
+};
+
 type AlfredSharedStorageNative = {
+  isAppGroupAvailable(): Promise<boolean>;
   setAuthToken(token: string | null): Promise<void>;
   getAuthToken(): Promise<string | null>;
+  getAuthTokenUpdatedAt(): Promise<string | null>;
+  getKeyboardLastSeen(): Promise<string | null>;
   setApiBaseUrl(url: string): Promise<void>;
   drainConfirmedActions(): Promise<ConfirmedAction[]>;
+  takePendingHandoff(): Promise<PendingHandoff | null>;
+  peekPendingHandoff(): Promise<PendingHandoff | null>;
 };
 
 let native: AlfredSharedStorageNative | null = null;
@@ -29,6 +44,16 @@ function getNative(): AlfredSharedStorageNative | null {
   }
 }
 
+export async function isAppGroupAvailable(): Promise<boolean> {
+  const mod = getNative();
+  if (!mod?.isAppGroupAvailable) return false;
+  try {
+    return await mod.isAppGroupAvailable();
+  } catch {
+    return false;
+  }
+}
+
 export async function setSharedAuthToken(token: string | null): Promise<void> {
   const mod = getNative();
   if (!mod) return;
@@ -39,6 +64,26 @@ export async function getSharedAuthToken(): Promise<string | null> {
   const mod = getNative();
   if (!mod) return null;
   return mod.getAuthToken();
+}
+
+export async function getSharedAuthTokenUpdatedAt(): Promise<string | null> {
+  const mod = getNative();
+  if (!mod?.getAuthTokenUpdatedAt) return null;
+  try {
+    return await mod.getAuthTokenUpdatedAt();
+  } catch {
+    return null;
+  }
+}
+
+export async function getKeyboardLastSeen(): Promise<string | null> {
+  const mod = getNative();
+  if (!mod?.getKeyboardLastSeen) return null;
+  try {
+    return await mod.getKeyboardLastSeen();
+  } catch {
+    return null;
+  }
 }
 
 export async function setSharedApiBaseUrl(url: string): Promise<void> {
@@ -53,4 +98,29 @@ export async function drainKeyboardConfirmedActions(): Promise<ConfirmedAction[]
   return mod.drainConfirmedActions();
 }
 
-export type { ConfirmedAction };
+export async function takePendingConversationHandoff(): Promise<PendingHandoff | null> {
+  const mod = getNative();
+  if (!mod?.takePendingHandoff) return null;
+  try {
+    return await mod.takePendingHandoff();
+  } catch {
+    return null;
+  }
+}
+
+export async function peekPendingConversationHandoff(): Promise<PendingHandoff | null> {
+  const mod = getNative();
+  if (!mod?.peekPendingHandoff) return null;
+  try {
+    return await mod.peekPendingHandoff();
+  } catch {
+    return null;
+  }
+}
+
+/** True when the native App Group module is linked (custom/dev client). */
+export function isSharedStorageNativeAvailable(): boolean {
+  return getNative() != null;
+}
+
+export type { ConfirmedAction, PendingHandoff };

@@ -21,6 +21,7 @@ import {
 import type { Me, Subscription, SubscriptionPlan } from "@albert/shared-types";
 import * as LinkingExpo from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { useRouter } from "expo-router";
 
 import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
@@ -56,6 +57,7 @@ import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 const PILOT_HIDE_BILLING = true;
 
 export function SettingsScreen() {
+  const router = useRouter();
   const { signOut } = useAuth();
   const { openSheet, closeSheet } = useShell();
   const { locale, setLocale, t } = useLocale();
@@ -665,6 +667,19 @@ export function SettingsScreen() {
           detail="Sync existing tasks"
           isLast
           onConnect={() => connectIntegration("Todoist")}
+        />
+      </View>
+
+      <SectionTitle label="键盘" />
+      <Meta style={styles.langHint}>
+        App Group 状态、登录同步、Full Access 说明
+      </Meta>
+      <View style={styles.group}>
+        <Row
+          label="键盘诊断"
+          detail="查看共享容器与 token"
+          isLast
+          onPress={() => router.push("/keyboard-diagnostics" as never)}
         />
       </View>
 

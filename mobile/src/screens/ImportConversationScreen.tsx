@@ -1,6 +1,8 @@
 // Import a WeChat multi-select paste → context checklist → replies + actions.
+// Full-screen workstation (not the cramped keyboard). Also accepts keyboard handoff
+// via App Group / albert://conversation/{id}.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,10 +16,15 @@ import {
 import type {
   ConversationAction,
   ConversationAnalyzeResponse,
+  ConversationMessage,
   ParsedConversation,
   ReplySuggestion,
 } from "@albert/shared-types";
 import * as Clipboard from "expo-clipboard";
+import {
+  takePendingConversationHandoff,
+  type PendingHandoff,
+} from "alfred-shared-storage";
 
 import { api } from "@/api/client";
 import { Ic } from "@/components/icons";
@@ -55,7 +62,95 @@ function actionKindLabel(kind: ConversationAction["type"]): string {
   return "待办";
 }
 
-export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
+function deriveInsight(
+  analysis: ConversationAnalyzeResponse | null,
+  conversation: ParsedConversation | null,
+): string {
+  const fromApi = analysis?.insight?.trim();
+  if (fromApi) return fromApi;
+  const actionTitle = analysis?.actions?.[0]?.title?.trim();
+  if (actionTitle) return actionTitle;
+  const selected = conversation?.messages.filter((m) => m.is_selected) ?? [];
+  if (selected.length > 0) {
+    const last = selected[selected.length - 1];
+    const snippet = (last?.content ?? "").trim().replace(/\n/g, " ");
+    return `围绕「${snippet.slice(0, 36)}」继续推进`;
+  }
+  return "已分析对话，可插入回复";
+}
+
+function handoffToConversation(h: PendingHandoff): ParsedConversation | null {
+  const raw = h.conversation;
+  if (!raw || typeof raw !== "object") return null;
+  const messages = Array.isArray(raw.messages) ? raw.messages : [];
+  if (messages.length === 0) return null;
+  return {
+    id: String(raw.id ?? h.conversation_id ?? "pending"),
+    source: (raw.source as ParsedConversation["source"]) ?? "wechat",
+    participants: Array.isArray(raw.participants)
+      ? (raw.participants as ParsedConversation["participants"])
+      : [],
+    messages: (messages as unknown[]).map((m, i) => {
+      const msg = m as Record<string, unknown>;
+      return {
+        id: String(msg.id ?? `m${i}`),
+        sender: String(msg.sender ?? ""),
+        content: String(msg.content ?? ""),
+        role: (msg.role as ConversationMessage["role"]) ?? "unknown",
+        is_selected: Boolean(msg.is_selected ?? true),
+        weight: typeof msg.weight === "number" ? msg.weight : 1,
+        timestamp: typeof msg.timestamp === "string" ? msg.timestamp : null,
+      };
+    }),
+    imported_at:
+      typeof raw.imported_at === "string"
+        ? raw.imported_at
+        : new Date().toISOString(),
+  };
+}
+
+function handoffToAnalysis(h: PendingHandoff): ConversationAnalyzeResponse | null {
+  const replies = Array.isArray(h.replies) ? h.replies : [];
+  const actions = Array.isArray(h.actions) ? h.actions : [];
+  if (replies.length === 0 && actions.length === 0 && !h.insight) return null;
+  return {
+    reply_suggestions: (replies as unknown[]).map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        tone: String(row.tone ?? "natural"),
+        body: String(row.body ?? ""),
+      };
+    }),
+    actions: (actions as unknown[]).map((a) => {
+      const row = a as Record<string, unknown>;
+      return {
+        id: String(row.id ?? ""),
+        type: (row.type as ConversationAction["type"]) ?? "follow_up",
+        title: String(row.title ?? ""),
+        due_date: (row.due_date as string | null) ?? null,
+        start: (row.start as string | null) ?? null,
+        end: (row.end as string | null) ?? null,
+        suggested_time: (row.suggested_time as string | null) ?? null,
+        confidence: typeof row.confidence === "number" ? row.confidence : 0,
+        evidence: String(row.evidence ?? ""),
+        evidence_message_ids: Array.isArray(row.evidence_message_ids)
+          ? (row.evidence_message_ids as string[])
+          : [],
+        tier: (row.tier as ConversationAction["tier"]) ?? "action_no_time",
+        status: String(row.status ?? "suggested"),
+      };
+    }),
+    insight: typeof h.insight === "string" ? h.insight : null,
+  };
+}
+
+export function ImportConversationScreen({
+  onClose,
+  deepLinkConversationId,
+}: {
+  onClose: () => void;
+  deepLinkConversationId?: string;
+}) {
   const [phase, setPhase] = useState<Phase>("paste");
   const [rawText, setRawText] = useState("");
   const [conversation, setConversation] = useState<ParsedConversation | null>(null);
@@ -67,11 +162,60 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
   const [ignoredActionIds, setIgnoredActionIds] = useState<Set<string>>(new Set());
   const [confirmedActionIds, setConfirmedActionIds] = useState<Set<string>>(new Set());
   const [selectedReply, setSelectedReply] = useState<ReplySuggestion | null>(null);
+  const [handoffNote, setHandoffNote] = useState<string | null>(null);
 
   const selectedCount = useMemo(
     () => conversation?.messages.filter((m) => m.is_selected).length ?? 0,
     [conversation],
   );
+  const ignoredCount = useMemo(
+    () => conversation?.messages.filter((m) => !m.is_selected).length ?? 0,
+    [conversation],
+  );
+
+  const insight = useMemo(
+    () => deriveInsight(analysis, conversation),
+    [analysis, conversation],
+  );
+
+  // Consume keyboard App Group handoff when opened via 展开 / deep link.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const handoff = await takePendingConversationHandoff();
+        if (cancelled || !handoff) {
+          if (deepLinkConversationId && deepLinkConversationId !== "pending") {
+            setHandoffNote(
+              `来自键盘 · conversation ${deepLinkConversationId.slice(0, 8)}… — 请粘贴或从剪贴板导入以继续`,
+            );
+          }
+          return;
+        }
+        const conv = handoffToConversation(handoff);
+        const anal = handoffToAnalysis(handoff);
+        if (conv && anal) {
+          setConversation(conv);
+          setAnalysis(anal);
+          setSelectedReply(anal.reply_suggestions[0] ?? null);
+          setPhase("results");
+          setHandoffNote("已从键盘展开加载");
+        } else if (conv) {
+          setConversation(conv);
+          setPhase("context");
+          setHandoffNote("已从键盘导入上下文");
+        } else if (typeof handoff.clipboard_text === "string" && handoff.clipboard_text) {
+          setRawText(handoff.clipboard_text);
+          setHandoffNote("已收到键盘剪贴板内容");
+        }
+      } catch {
+        // Expo Go / missing native module — ignore.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkConversationId]);
 
   const readClipboard = useCallback(async () => {
     setBusy(true);
@@ -166,7 +310,6 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
           set_reminder: setReminder,
         });
         setConfirmedActionIds((prev) => new Set(prev).add(action.id));
-        // Local notifications only for confirmed, time-bearing actions.
         if (res.kind === "task" && res.remind_at) {
           await scheduleLocalTaskReminder({
             taskId: res.id,
@@ -204,7 +347,7 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
             ? "导入对话"
             : phase === "context"
               ? "回复上下文"
-              : "建议与行动"}
+              : "工作台"}
         </Eyebrow>
         <View style={styles.topSpacer} />
       </View>
@@ -214,6 +357,8 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
+        {handoffNote ? <Text style={styles.handoffNote}>{handoffNote}</Text> : null}
+
         {phase === "paste" ? (
           <PastePhase
             rawText={rawText}
@@ -229,6 +374,7 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
           <ContextPhase
             conversation={conversation}
             selectedCount={selectedCount}
+            ignoredCount={ignoredCount}
             goal={goal}
             setGoal={setGoal}
             customGoal={customGoal}
@@ -240,8 +386,10 @@ export function ImportConversationScreen({ onClose }: { onClose: () => void }) {
           />
         ) : null}
 
-        {phase === "results" && analysis ? (
+        {phase === "results" && analysis && conversation ? (
           <ResultsPhase
+            conversation={conversation}
+            insight={insight}
             actions={visibleActions}
             replies={analysis.reply_suggestions}
             selectedReply={selectedReply}
@@ -329,6 +477,7 @@ function PastePhase({
 function ContextPhase({
   conversation,
   selectedCount,
+  ignoredCount,
   goal,
   setGoal,
   customGoal,
@@ -340,6 +489,7 @@ function ContextPhase({
 }: {
   conversation: ParsedConversation;
   selectedCount: number;
+  ignoredCount: number;
   goal: GoalId;
   setGoal: (g: GoalId) => void;
   customGoal: string;
@@ -355,23 +505,31 @@ function ContextPhase({
         回复上下文 · {selectedCount} 条
       </Serif>
       <Meta style={{ marginTop: 6 }}>
-        默认已选中；取消勾选无关内容即可。明显噪音已自动降权。
+        已选 {selectedCount} · 忽略 {ignoredCount}。点按切换；明显噪音已自动降权。
       </Meta>
 
-      <View style={styles.msgList}>
-        {conversation.messages.map((m) => (
+      <View style={styles.timeline}>
+        {conversation.messages.map((m, idx) => (
           <Pressable
             key={m.id}
             onPress={() => onToggle(m.id)}
             style={[styles.msgRow, !m.is_selected && styles.msgRowOff]}
           >
-            <Text style={styles.check}>{m.is_selected ? "☑" : "☐"}</Text>
+            <View style={styles.timelineRail}>
+              <View style={[styles.dot, m.is_selected && styles.dotOn]} />
+              {idx < conversation.messages.length - 1 ? (
+                <View style={styles.rail} />
+              ) : null}
+            </View>
             <View style={styles.msgBody}>
               <Text style={styles.msgSender}>{m.sender}</Text>
-              <Text style={styles.msgContent} numberOfLines={3}>
+              <Text style={styles.msgContent} numberOfLines={4}>
                 {m.content}
               </Text>
-              {m.weight < 1 ? <Pill label="降权" kind="muted" /> : null}
+              <View style={styles.msgMeta}>
+                <Text style={styles.check}>{m.is_selected ? "选用" : "忽略"}</Text>
+                {m.weight < 1 ? <Pill label="降权" kind="muted" /> : null}
+              </View>
             </View>
           </Pressable>
         ))}
@@ -416,6 +574,8 @@ function ContextPhase({
 }
 
 function ResultsPhase({
+  conversation,
+  insight,
   actions,
   replies,
   selectedReply,
@@ -426,6 +586,8 @@ function ResultsPhase({
   onInsert,
   onBack,
 }: {
+  conversation: ParsedConversation;
+  insight: string;
   actions: ConversationAction[];
   replies: ReplySuggestion[];
   selectedReply: ReplySuggestion | null;
@@ -436,11 +598,46 @@ function ResultsPhase({
   onInsert: (r: ReplySuggestion) => void;
   onBack: () => void;
 }) {
+  const selected = conversation.messages.filter((m) => m.is_selected);
+  const ignored = conversation.messages.filter((m) => !m.is_selected);
+  const calendarCount = actions.filter((a) => a.type === "calendar_event").length;
+  const followCount = actions.filter(
+    (a) => a.type === "follow_up" || a.type === "commitment" || a.type === "task",
+  ).length;
+
   return (
     <View style={styles.block}>
-      {actions.length > 0 ? (
-        <>
-          <Text style={styles.sectionLabel}>Alfred 检测到的行动</Text>
+      {/* Section 1 — Alfred 理解 + replies */}
+      <View style={styles.workSection}>
+        <Text style={styles.sectionLabel}>Alfred 理解</Text>
+        <Text style={styles.insight}>{insight}</Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>建议回复</Text>
+        <View style={styles.replyList}>
+          {replies.map((r) => {
+            const on = selectedReply?.body === r.body;
+            return (
+              <Pressable
+                key={`${r.tone}-${r.body.slice(0, 12)}`}
+                onPress={() => setSelectedReply(r)}
+                style={[styles.replyCard, on && styles.replyCardOn]}
+              >
+                <Text style={styles.replyTone}>
+                  {TONE_LABELS[r.tone] ?? r.tone}
+                </Text>
+                <Text style={styles.replyBody}>{r.body}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Section 2 — Actions / evidence */}
+      <View style={styles.workSection}>
+        <Text style={styles.sectionLabel}>
+          行动 · 📅 {calendarCount} · ✓ {followCount}
+        </Text>
+        {actions.length > 0 ? (
           <View style={styles.actionList}>
             {actions.map((a) => {
               const confirmed = confirmedActionIds.has(a.id);
@@ -512,10 +709,13 @@ function ResultsPhase({
                               kind="ghost"
                               tiny
                               onPress={() =>
-                                onConfirm({
-                                  ...a,
-                                  suggested_time: a.suggested_time ?? "tonight",
-                                }, { setReminder: true })
+                                onConfirm(
+                                  {
+                                    ...a,
+                                    suggested_time: a.suggested_time ?? "tonight",
+                                  },
+                                  { setReminder: true },
+                                )
                               }
                             />
                           ) : null}
@@ -528,34 +728,43 @@ function ResultsPhase({
               );
             })}
           </View>
-        </>
-      ) : (
-        <Meta>这段对话里没有明显需要跟进的行动。</Meta>
-      )}
+        ) : (
+          <Meta>这段对话里没有明显需要跟进的行动。</Meta>
+        )}
+      </View>
 
-      <Text style={[styles.sectionLabel, { marginTop: 22 }]}>建议回复</Text>
-      <View style={styles.replyList}>
-        {replies.map((r) => {
-          const on = selectedReply?.body === r.body;
-          return (
-            <Pressable
-              key={`${r.tone}-${r.body.slice(0, 12)}`}
-              onPress={() => setSelectedReply(r)}
-              style={[styles.replyCard, on && styles.replyCardOn]}
+      {/* Section 3 — Timeline context */}
+      <View style={styles.workSection}>
+        <Text style={styles.sectionLabel}>
+          上下文 · 选用 {selected.length} · 忽略 {ignored.length}
+        </Text>
+        <View style={styles.timeline}>
+          {conversation.messages.map((m, idx) => (
+            <View
+              key={m.id}
+              style={[styles.msgRow, !m.is_selected && styles.msgRowOff]}
             >
-              <Text style={styles.replyTone}>
-                {TONE_LABELS[r.tone] ?? r.tone}
-              </Text>
-              <Text style={styles.replyBody}>{r.body}</Text>
-            </Pressable>
-          );
-        })}
+              <View style={styles.timelineRail}>
+                <View style={[styles.dot, m.is_selected && styles.dotOn]} />
+                {idx < conversation.messages.length - 1 ? (
+                  <View style={styles.rail} />
+                ) : null}
+              </View>
+              <View style={styles.msgBody}>
+                <Text style={styles.msgSender}>{m.sender}</Text>
+                <Text style={styles.msgContent} numberOfLines={3}>
+                  {m.content}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={styles.footerRow}>
         <Btn label="返回调整" kind="ghost" onPress={onBack} style={{ flex: 1 }} />
         <Btn
-          label="插入回复"
+          label="复制回复"
           kind="accent"
           disabled={!selectedReply}
           onPress={() => selectedReply && onInsert(selectedReply)}
@@ -583,6 +792,13 @@ const styles = StyleSheet.create({
   block: { gap: 4 },
   heading: { marginTop: 8, maxWidth: 320, lineHeight: 34 },
   sub: { color: colors.ink3, fontSize: 14, lineHeight: 21, marginVertical: 12 },
+  handoffNote: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    color: colors.accent,
+    marginBottom: 10,
+    letterSpacing: 0.4,
+  },
   tipBox: {
     backgroundColor: colors.card,
     borderRadius: 14,
@@ -623,19 +839,38 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   error: { color: colors.warn, fontSize: 13, marginTop: 10 },
-  msgList: { marginTop: 16, gap: 8 },
+  timeline: { marginTop: 16, gap: 0 },
   msgRow: {
     flexDirection: "row",
     gap: 10,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    padding: 12,
+    paddingVertical: 6,
   },
-  msgRowOff: { opacity: 0.45 },
-  check: { fontSize: 16, color: colors.ink2, marginTop: 2 },
-  msgBody: { flex: 1, gap: 4 },
+  msgRowOff: { opacity: 0.4 },
+  timelineRail: { width: 14, alignItems: "center" },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.paper3,
+    marginTop: 6,
+  },
+  dotOn: { backgroundColor: colors.accent },
+  rail: {
+    flex: 1,
+    width: 1,
+    backgroundColor: colors.hair2,
+    marginTop: 4,
+    minHeight: 18,
+  },
+  check: {
+    fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  msgBody: { flex: 1, gap: 4, paddingBottom: 8 },
+  msgMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
   msgSender: {
     fontFamily: fonts.mono,
     fontSize: 11,
@@ -651,6 +886,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: "uppercase",
     color: colors.ink4,
+  },
+  workSection: {
+    marginTop: 8,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hair,
+  },
+  insight: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.ink,
+    fontFamily: fonts.serif,
   },
   goalRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   goalChip: {

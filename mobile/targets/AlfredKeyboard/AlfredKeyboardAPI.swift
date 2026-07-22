@@ -18,6 +18,7 @@ enum AlfredKeyboardAPI {
     struct AnalyzeResponse: Decodable {
         let reply_suggestions: [Reply]
         let actions: [Action]
+        let insight: String?
     }
 
     struct Reply: Decodable {
@@ -49,21 +50,38 @@ enum AlfredKeyboardAPI {
         let detail: String?
     }
 
-    enum APIError: Error {
+    enum APIError: Error, LocalizedError {
         case notSignedIn
+        case sharedContainerUnavailable
+        case unauthorized
+        case network
         case badStatus(Int, String)
         case decode
+
+        var errorDescription: String? {
+            switch self {
+            case .notSignedIn: return "主 App 尚未同步"
+            case .sharedContainerUnavailable: return "未发现共享容器"
+            case .unauthorized: return "登录已过期"
+            case .network: return "网络不可用"
+            case .badStatus(let code, _): return "请求失败 (\(code))"
+            case .decode: return "数据解析失败"
+            }
+        }
     }
 
     static func parse(text: String) async throws -> ParseResponse {
         try await post(path: "/api/v1/conversations/parse", body: ["text": text])
     }
 
-    static func analyze(conversation: [String: Any], goal: String) async throws -> AnalyzeResponse {
-        try await post(
-            path: "/api/v1/conversations/analyze",
-            body: ["conversation": conversation, "goal": goal]
-        )
+    static func analyze(
+        conversation: [String: Any],
+        goal: String,
+        tones: [String]? = nil
+    ) async throws -> AnalyzeResponse {
+        var body: [String: Any] = ["conversation": conversation, "goal": goal]
+        if let tones { body["tones"] = tones }
+        return try await post(path: "/api/v1/conversations/analyze", body: body)
     }
 
     static func confirm(action: Action, conversationId: String?) async throws -> ConfirmResponse {
@@ -86,6 +104,9 @@ enum AlfredKeyboardAPI {
     }
 
     private static func post<T: Decodable>(path: String, body: [String: Any]) async throws -> T {
+        guard AlfredAppGroup.isAvailable else {
+            throw APIError.sharedContainerUnavailable
+        }
         guard let token = AlfredAppGroup.authToken(), !token.isEmpty else {
             throw APIError.notSignedIn
         }
@@ -96,8 +117,17 @@ enum AlfredKeyboardAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: sanitize(body))
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw APIError.network
+        }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 || status == 403 {
+            throw APIError.unauthorized
+        }
         guard (200..<300).contains(status) else {
             let text = String(data: data, encoding: .utf8) ?? ""
             throw APIError.badStatus(status, text)

@@ -60,6 +60,24 @@ function DeepLinkHandler() {
       if (parsed.path === "auth" && typeof token === "string") {
         await setToken(token);
         await refresh();
+        return;
+      }
+
+      // Keyboard 展开 → albert://conversation/{id} (scheme is `albert` in app.json)
+      const rawPath = (parsed.path ?? "").replace(/^\//, "");
+      const host = parsed.hostname ?? "";
+      let conversationId: string | undefined;
+      if (host === "conversation") {
+        conversationId = rawPath.split("/")[0] || "pending";
+      } else if (rawPath.startsWith("conversation/")) {
+        conversationId = rawPath.slice("conversation/".length).split(/[/?#]/)[0] || "pending";
+      } else {
+        const m = url.match(/:\/\/conversation\/([^/?#]+)/);
+        if (m?.[1]) conversationId = m[1];
+      }
+      if (conversationId) {
+        router.push(`/conversation/${conversationId}` as never);
+        return;
       }
     };
 

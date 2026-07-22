@@ -22,6 +22,9 @@
       ],
       "@albert/shared-types": [
         "../packages/shared-types/src/index.ts"
+      ],
+      "alfred-shared-storage": [
+        "./modules/alfred-shared-storage/src/index.ts"
       ]
     }
   },
