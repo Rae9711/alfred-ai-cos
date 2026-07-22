@@ -22,4 +22,29 @@ config.resolver.nodeModulesPaths = [
 // real paths under node_modules/.bun.
 config.resolver.disableHierarchicalLookup = false;
 
+// Pin a single React / RN instance for the whole bundle.
+// Hierarchical lookup otherwise resolves `@tanstack/react-query` (hoisted under
+// repo-root node_modules) to a *different physical copy* of react than app code
+// under mobile/node_modules — Metro then ships both, and hooks blow up with
+// "Cannot read property 'useEffect' of null".
+const PINNED = new Set(["react", "react-dom", "react-native", "scheduler"]);
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const pinned =
+    PINNED.has(moduleName) ||
+    moduleName.startsWith("react/") ||
+    moduleName.startsWith("react-dom/") ||
+    moduleName.startsWith("react-native/");
+  if (pinned) {
+    return {
+      type: "sourceFile",
+      filePath: require.resolve(moduleName, { paths: [projectRoot] }),
+    };
+  }
+  if (originalResolveRequest) {
+    return originalResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
