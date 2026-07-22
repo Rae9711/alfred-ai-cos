@@ -47,15 +47,13 @@ final class KeyboardViewController: UIInputViewController {
     /// Target height closer to a stock iOS custom keyboard (~260–280pt).
     private let preferredKeyboardHeight: CGFloat = 272
 
-    // Mockup palette — cool white / light gray / deep blue (not beige paper)
-    private let accent = UIColor(red: 0.12, green: 0.28, blue: 0.62, alpha: 1)
-    private let accentSoft = UIColor(red: 0.86, green: 0.91, blue: 0.98, alpha: 1)
-    private let panel = UIColor(red: 0.97, green: 0.97, blue: 0.98, alpha: 1)
-    private let bubbleFill = UIColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1)
-    /// Explicit dark body text — `.secondaryLabel` is near-invisible on white
-    /// when the host app (e.g. WeChat) forces a dark trait collection.
-    private let bodyText = UIColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1)
-    private let mutedText = UIColor(red: 0.35, green: 0.38, blue: 0.42, alpha: 1)
+    // Warm cream paper palette — see AlfredKeyboardTheme (mirrors theme.ts).
+    // Explicit ink colors — `.secondaryLabel` is near-invisible on cream when the
+    // host app (e.g. WeChat) forces a dark trait collection.
+    private let accent = AlfredKeyboardTheme.accent
+    private let accentSoft = AlfredKeyboardTheme.accentSoft
+    private let bodyText = AlfredKeyboardTheme.ink
+    private let mutedText = AlfredKeyboardTheme.inkMuted
     private let maxEditChars = 200
 
     private let generatingLabels = [
@@ -67,7 +65,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .white
+        view.backgroundColor = AlfredKeyboardTheme.paper
         AlfredAppGroup.markKeyboardSeen()
         setupChrome()
         render()
@@ -204,11 +202,17 @@ final class KeyboardViewController: UIInputViewController {
         row.alignment = .center
         row.spacing = 4
 
-        let brand = makeLabel("Alfred", size: 14, weight: .bold, color: accent)
+        let brand = makeLabel(
+            "Alfred",
+            size: 15,
+            weight: .bold,
+            color: AlfredKeyboardTheme.accentInk,
+            style: .brand
+        )
         row.addArrangedSubview(brand)
 
         let sparkle = UIImageView(image: UIImage(systemName: "sparkles"))
-        sparkle.tintColor = accent
+        sparkle.tintColor = AlfredKeyboardTheme.tonePurple
         sparkle.contentMode = .scaleAspectFit
         sparkle.widthAnchor.constraint(equalToConstant: 12).isActive = true
         sparkle.heightAnchor.constraint(equalToConstant: 12).isActive = true
@@ -221,7 +225,7 @@ final class KeyboardViewController: UIInputViewController {
         let collapse = UIButton(type: .system)
         let chevron = UIImage(systemName: "chevron.down")
         collapse.setImage(chevron, for: .normal)
-        collapse.tintColor = mutedText
+        collapse.tintColor = AlfredKeyboardTheme.inkTertiary
         collapse.addTarget(self, action: #selector(headerChevronTapped), for: .touchUpInside)
         collapse.widthAnchor.constraint(equalToConstant: 28).isActive = true
         collapse.heightAnchor.constraint(equalToConstant: 22).isActive = true
@@ -252,12 +256,10 @@ final class KeyboardViewController: UIInputViewController {
 
     private func renderIdle() {
         if let gate = authGateMessage() {
-            let label = makeLabel(gate, size: 13, weight: .medium, color: bodyText)
-            label.textAlignment = .center
-            contentStack.addArrangedSubview(label)
+            contentStack.addArrangedSubview(makeStatusBanner(gate, tone: .warn))
             contentStack.addArrangedSubview(makePrimaryButton("打开 Alfred", action: #selector(openAppHome)))
             if let banner = statusBanner {
-                contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
+                contentStack.addArrangedSubview(makeStatusBanner(banner, tone: .neutral))
             }
             return
         }
@@ -273,7 +275,7 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             titleText = "Alfred 回复助手"
         }
-        let title = makeLabel(titleText, size: 15, weight: .semibold, color: bodyText)
+        let title = makeLabel(titleText, size: 16, weight: .semibold, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
@@ -291,12 +293,12 @@ final class KeyboardViewController: UIInputViewController {
         subtitle.textAlignment = .center
         contentStack.addArrangedSubview(subtitle)
 
-        let features = makeLabel("识别对话 · 按你的语气回复 · 自动填入", size: 11, weight: .regular, color: mutedText)
+        let features = makeLabel("识别对话 · 按你的语气回复 · 自动填入", size: 11, weight: .regular, color: AlfredKeyboardTheme.inkTertiary)
         features.textAlignment = .center
         contentStack.addArrangedSubview(features)
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
+            contentStack.addArrangedSubview(makeStatusBanner(banner, tone: .neutral))
         }
 
         let row = UIStackView()
@@ -309,7 +311,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func renderPickingSelf() {
-        let title = makeLabel("哪一句是你发的？", size: 14, weight: .semibold, color: bodyText)
+        let title = makeLabel("哪一句是你发的？", size: 15, weight: .semibold, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
         let hint = makeLabel("选一次即可，下次自动记住", size: 11, color: mutedText)
@@ -328,7 +330,7 @@ final class KeyboardViewController: UIInputViewController {
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
 
-        let title = makeLabel("正在识别聊天…", size: 14, weight: .medium, color: bodyText)
+        let title = makeLabel("正在识别聊天…", size: 14, weight: .medium, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
     }
@@ -339,7 +341,7 @@ final class KeyboardViewController: UIInputViewController {
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
 
-        let title = makeLabel("Alfred 正在理解对话", size: 14, weight: .semibold, color: bodyText)
+        let title = makeLabel("Alfred 正在理解对话", size: 15, weight: .semibold, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
@@ -380,9 +382,9 @@ final class KeyboardViewController: UIInputViewController {
         titleRow.axis = .horizontal
         titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("Alfred 理解", size: 14, weight: .semibold, color: bodyText))
+        titleRow.addArrangedSubview(makeLabel("Alfred 理解", size: 15, weight: .semibold, color: bodyText, style: .title))
         let heart = UIImageView(image: UIImage(systemName: "heart.fill"))
-        heart.tintColor = accent
+        heart.tintColor = AlfredKeyboardTheme.tonePurple
         heart.widthAnchor.constraint(equalToConstant: 12).isActive = true
         heart.heightAnchor.constraint(equalToConstant: 12).isActive = true
         titleRow.addArrangedSubview(heart)
@@ -429,9 +431,9 @@ final class KeyboardViewController: UIInputViewController {
         titleRow.axis = .horizontal
         titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("推荐回复", size: 14, weight: .semibold, color: bodyText))
+        titleRow.addArrangedSubview(makeLabel("推荐回复", size: 15, weight: .semibold, color: bodyText, style: .title))
         let bot = UIImageView(image: UIImage(systemName: "face.smiling"))
-        bot.tintColor = accent
+        bot.tintColor = AlfredKeyboardTheme.tonePurple
         bot.widthAnchor.constraint(equalToConstant: 14).isActive = true
         bot.heightAnchor.constraint(equalToConstant: 14).isActive = true
         titleRow.addArrangedSubview(bot)
@@ -453,12 +455,12 @@ final class KeyboardViewController: UIInputViewController {
         actionsRow.addArrangedSubview(makePrimaryButton("填入输入框", action: #selector(insertCurrentReply), symbol: "square.and.arrow.down"))
         contentStack.addArrangedSubview(actionsRow)
 
-        let tip = makeLabel("也可点下方「重新填入」；发送请用聊天 App 的发送键", size: 10, color: mutedText)
+        let tip = makeLabel("也可点下方「重新填入」；发送请用聊天 App 的发送键", size: 10, color: AlfredKeyboardTheme.inkTertiary)
         tip.textAlignment = .center
         contentStack.addArrangedSubview(tip)
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
+            contentStack.addArrangedSubview(makeStatusBanner(banner, tone: .neutral))
         }
     }
 
@@ -467,7 +469,7 @@ final class KeyboardViewController: UIInputViewController {
         titleRow.axis = .horizontal
         titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("编辑回复", size: 14, weight: .semibold, color: bodyText))
+        titleRow.addArrangedSubview(makeLabel("编辑回复", size: 15, weight: .semibold, color: bodyText, style: .title))
         let pencil = UIImageView(image: UIImage(systemName: "pencil"))
         pencil.tintColor = accent
         pencil.widthAnchor.constraint(equalToConstant: 12).isActive = true
@@ -478,13 +480,10 @@ final class KeyboardViewController: UIInputViewController {
         contentStack.addArrangedSubview(titleRow)
 
         let wrap = UIView()
-        wrap.backgroundColor = panel
-        wrap.layer.cornerRadius = 10
-        wrap.layer.borderWidth = 1
-        wrap.layer.borderColor = UIColor(white: 0.75, alpha: 0.55).cgColor
+        AlfredKeyboardTheme.applyCardChrome(to: wrap, fill: AlfredKeyboardTheme.surface, radius: AlfredKeyboardTheme.radiusCard)
 
         let tv = UITextView()
-        tv.font = .systemFont(ofSize: 13)
+        tv.font = AlfredKeyboardTheme.bodyFont(size: 13)
         tv.textColor = bodyText
         tv.text = currentReply()?.body ?? ""
         tv.backgroundColor = .clear
@@ -500,7 +499,7 @@ final class KeyboardViewController: UIInputViewController {
         editTextView = tv
         wrap.addSubview(tv)
 
-        let counter = makeLabel(charCountText(for: tv.text), size: 10, color: mutedText)
+        let counter = makeLabel(charCountText(for: tv.text), size: 10, color: AlfredKeyboardTheme.inkTertiary)
         counter.textAlignment = .right
         counter.translatesAutoresizingMaskIntoConstraints = false
         charCountLabel = counter
@@ -537,7 +536,7 @@ final class KeyboardViewController: UIInputViewController {
     private func renderSuccess() {
         let checkWrap = UIView()
         let check = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
-        check.tintColor = accent
+        check.tintColor = AlfredKeyboardTheme.success
         check.translatesAutoresizingMaskIntoConstraints = false
         check.contentMode = .scaleAspectFit
         checkWrap.addSubview(check)
@@ -551,7 +550,7 @@ final class KeyboardViewController: UIInputViewController {
         ])
         contentStack.addArrangedSubview(checkWrap)
 
-        let title = makeLabel("已填入，点发送即可", size: 15, weight: .semibold, color: bodyText)
+        let title = makeLabel("已填入，点发送即可", size: 16, weight: .semibold, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
@@ -579,21 +578,19 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
+            contentStack.addArrangedSubview(makeStatusBanner(banner, tone: .success))
         }
 
         let done = UIButton(type: .system)
         done.setTitle("完成", for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        done.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
         done.setTitleColor(accent, for: .normal)
         done.addTarget(self, action: #selector(resetToIdle), for: .touchUpInside)
         contentStack.addArrangedSubview(done)
     }
 
     private func renderError(_ message: String) {
-        let label = makeLabel(message, size: 13, weight: .medium, color: UIColor.systemOrange)
-        label.textAlignment = .center
-        contentStack.addArrangedSubview(label)
+        contentStack.addArrangedSubview(makeStatusBanner(message, tone: .warn))
         contentStack.addArrangedSubview(makePrimaryButton("重试", action: #selector(resetToIdle)))
     }
 
@@ -1817,18 +1814,72 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - UI helpers
 
+    private enum LabelStyle {
+        case body
+        case title
+        case brand
+    }
+
+    private enum BannerTone {
+        case neutral
+        case warn
+        case success
+        case accent
+    }
+
     private func makeLabel(
         _ text: String,
         size: CGFloat,
         weight: UIFont.Weight = .regular,
-        color: UIColor? = nil
+        color: UIColor? = nil,
+        style: LabelStyle = .body
     ) -> UILabel {
         let label = UILabel()
         label.text = text
-        label.font = .systemFont(ofSize: size, weight: weight)
+        switch style {
+        case .brand:
+            label.font = AlfredKeyboardTheme.brandFont(size: size)
+        case .title:
+            label.font = AlfredKeyboardTheme.titleFont(size: size, weight: weight)
+        case .body:
+            label.font = AlfredKeyboardTheme.bodyFont(size: size, weight: weight)
+        }
         label.textColor = color ?? bodyText
         label.numberOfLines = 0
         return label
+    }
+
+    private func makeStatusBanner(_ text: String, tone: BannerTone) -> UIView {
+        let wrap = UIView()
+        let fill: UIColor
+        let ink: UIColor
+        switch tone {
+        case .neutral:
+            fill = AlfredKeyboardTheme.paper2
+            ink = mutedText
+        case .warn:
+            fill = AlfredKeyboardTheme.warnSoft
+            ink = AlfredKeyboardTheme.warn
+        case .success:
+            fill = AlfredKeyboardTheme.successSoft
+            ink = AlfredKeyboardTheme.success
+        case .accent:
+            fill = accentSoft
+            ink = AlfredKeyboardTheme.accentInk
+        }
+        AlfredKeyboardTheme.applyCardChrome(to: wrap, fill: fill, radius: AlfredKeyboardTheme.radiusChip)
+
+        let label = makeLabel(text, size: 12, weight: .medium, color: ink)
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        wrap.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 8),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -8),
+        ])
+        return wrap
     }
 
     private func makeMascotView(height: CGFloat) -> UIView {
@@ -1860,8 +1911,7 @@ final class KeyboardViewController: UIInputViewController {
         card.spacing = 2
         card.isLayoutMarginsRelativeArrangement = true
         card.layoutMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
-        card.backgroundColor = panel
-        card.layer.cornerRadius = 8
+        AlfredKeyboardTheme.applyCardChrome(to: card, fill: AlfredKeyboardTheme.surface, radius: AlfredKeyboardTheme.radiusChip)
 
         let meta = UIStackView()
         meta.axis = .horizontal
@@ -1888,18 +1938,21 @@ final class KeyboardViewController: UIInputViewController {
 
     private func makeReplyBubble(_ text: String) -> UIView {
         let wrap = UIView()
-        wrap.backgroundColor = bubbleFill
-        wrap.layer.cornerRadius = 12
+        AlfredKeyboardTheme.applyCardChrome(
+            to: wrap,
+            fill: AlfredKeyboardTheme.glass,
+            radius: AlfredKeyboardTheme.radiusCard
+        )
 
         let label = makeLabel(text, size: 13, weight: .medium, color: bodyText)
         label.numberOfLines = 4
         label.translatesAutoresizingMaskIntoConstraints = false
         wrap.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 10),
-            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
-            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 8),
-            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -8),
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -10),
         ])
         return wrap
     }
@@ -1910,15 +1963,19 @@ final class KeyboardViewController: UIInputViewController {
         card.spacing = 4
         card.isLayoutMarginsRelativeArrangement = true
         card.layoutMargins = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
-        card.backgroundColor = accentSoft
-        card.layer.cornerRadius = 10
+        AlfredKeyboardTheme.applyCardChrome(
+            to: card,
+            fill: AlfredKeyboardTheme.purpleSoft,
+            radius: AlfredKeyboardTheme.radiusCard
+        )
+        card.layer.borderColor = AlfredKeyboardTheme.purpleHair.cgColor
 
         let titleRow = UIStackView()
         titleRow.axis = .horizontal
         titleRow.spacing = 4
         titleRow.alignment = .center
         let bell = UIImageView(image: UIImage(systemName: "bell.fill"))
-        bell.tintColor = accent
+        bell.tintColor = AlfredKeyboardTheme.tonePurple
         bell.widthAnchor.constraint(equalToConstant: 12).isActive = true
         bell.heightAnchor.constraint(equalToConstant: 12).isActive = true
         titleRow.addArrangedSubview(bell)
@@ -1940,8 +1997,9 @@ final class KeyboardViewController: UIInputViewController {
         config.title = confirmTitle(action)
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
-        config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChip
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
         btn.configuration = config
         btn.addAction(UIAction { [weak self] _ in
             Task { await self?.confirm(action) }
@@ -1963,15 +2021,16 @@ final class KeyboardViewController: UIInputViewController {
         config.title = title
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
-        config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChip
+        config.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 12, bottom: 9, trailing: 12)
         if let symbol {
             config.image = UIImage(systemName: symbol)
             config.imagePadding = 5
             config.imagePlacement = .leading
         }
         let button = UIButton(configuration: config)
-        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -1979,27 +2038,36 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSoftPrimaryButton(_ title: String, action: Selector) -> UIButton {
         var config = UIButton.Configuration.filled()
         config.title = title
-        config.baseBackgroundColor = accentSoft
-        config.baseForegroundColor = accent
-        config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
+        config.baseBackgroundColor = AlfredKeyboardTheme.purpleSoft
+        config.baseForegroundColor = AlfredKeyboardTheme.tonePurple
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChip
+        config.background.strokeColor = AlfredKeyboardTheme.purpleHair
+        config.background.strokeWidth = AlfredKeyboardTheme.hairlineWidth
+        config.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 12, bottom: 9, trailing: 12)
         let button = UIButton(configuration: config)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
 
     private func makeSecondaryButton(_ title: String, action: Selector, symbol: String? = nil) -> UIButton {
-        var config = UIButton.Configuration.gray()
+        var config = UIButton.Configuration.filled()
         config.title = title
-        config.baseForegroundColor = bodyText
-        config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        config.baseBackgroundColor = AlfredKeyboardTheme.creamButton
+        config.baseForegroundColor = AlfredKeyboardTheme.creamButtonInk
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChip
+        config.background.strokeColor = AlfredKeyboardTheme.hair
+        config.background.strokeWidth = AlfredKeyboardTheme.hairlineWidth
+        config.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10)
         if let symbol {
             config.image = UIImage(systemName: symbol)
             config.imagePadding = 5
             config.imagePlacement = .leading
         }
         let button = UIButton(configuration: config)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -2007,17 +2075,18 @@ final class KeyboardViewController: UIInputViewController {
     private func makeChipButton(_ title: String, symbol: String, action: Selector) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.title = title
-        config.baseForegroundColor = accent
+        config.baseForegroundColor = AlfredKeyboardTheme.tonePurple
         config.image = UIImage(systemName: symbol)
         config.imagePadding = 3
         config.imagePlacement = .leading
-        config.cornerStyle = .capsule
-        config.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 6, bottom: 5, trailing: 6)
-        config.background.strokeColor = accent.withAlphaComponent(0.35)
-        config.background.strokeWidth = 1
-        config.background.backgroundColor = .white
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChip
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
+        config.background.strokeColor = AlfredKeyboardTheme.purpleHair
+        config.background.strokeWidth = AlfredKeyboardTheme.hairlineWidth
+        config.background.backgroundColor = AlfredKeyboardTheme.purpleSoft
         let button = UIButton(configuration: config)
-        button.titleLabel?.font = .systemFont(ofSize: 11, weight: .medium)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 11, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -2025,19 +2094,24 @@ final class KeyboardViewController: UIInputViewController {
     private func makeGhostButton(_ title: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 12, weight: .semibold)
         button.setTitleColor(accent, for: .normal)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
 
     private func makeChromeKey(_ title: String, action: Selector, width: CGFloat? = nil) -> UIButton {
-        var config = UIButton.Configuration.gray()
+        var config = UIButton.Configuration.filled()
         config.title = title
+        config.baseBackgroundColor = AlfredKeyboardTheme.surface
         config.baseForegroundColor = bodyText
-        config.cornerStyle = .medium
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChrome
+        config.background.strokeColor = AlfredKeyboardTheme.hair
+        config.background.strokeWidth = AlfredKeyboardTheme.hairlineWidth
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
         let button = UIButton(configuration: config)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 13, weight: .medium)
         button.addTarget(self, action: action, for: .touchUpInside)
         if let width {
             button.widthAnchor.constraint(equalToConstant: width).isActive = true
@@ -2051,9 +2125,11 @@ final class KeyboardViewController: UIInputViewController {
         config.title = title
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
-        config.cornerStyle = .medium
+        config.cornerStyle = .fixed
+        config.background.cornerRadius = AlfredKeyboardTheme.radiusChrome
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
         let button = UIButton(configuration: config)
+        button.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         button.widthAnchor.constraint(equalToConstant: width).isActive = true
         button.heightAnchor.constraint(equalToConstant: 34).isActive = true
