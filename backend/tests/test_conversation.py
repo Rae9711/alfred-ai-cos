@@ -316,6 +316,78 @@ def test_tab_separated_inline_export() -> None:
     assert parsed.messages[0].content == "感觉很牛逼诶"
 
 
+# Real WeChat iOS multi-select Copy format (production collapse root cause):
+# Nickname → YYYY/MM/DD HH:MM → Content → repeat. Timestamps were previously
+# misread as senders ("2026/07/21" + ts "23:14"), scrambling or collapsing.
+SAMPLE_WECHAT_IOS_MULTISELECT = """哪个方面 automate
+Leo
+2026/07/21 23:14
+就是自动 select previous x number of messages
+Leo
+2026/07/21 23:14
+不用用户去一个一个点
+Rui ☀️
+2026/07/21 23:14
+[Video] Weixin video_20260721233539_1913.mp4
+Rui ☀️
+2026/07/21 23:15
+这个微信自己就可以
+Rui ☀️
+2026/07/21 23:15
+你滑到那 左上角 有个 select 一键全选
+"""
+
+
+def test_wechat_ios_multiselect_sender_timestamp_content() -> None:
+    """Production clipboard: Sender → YYYY/MM/DD HH:MM → body (≥5 msgs)."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT_IOS_MULTISELECT)
+    assert parsed is not None
+    assert len(parsed.messages) >= 5
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert selected >= 5
+    senders = {m.sender for m in parsed.messages}
+    assert "Leo" in senders
+    assert "Rui ☀️" in senders
+    contents = [m.content for m in parsed.messages]
+    assert any("就是自动 select previous x number of messages" in c for c in contents)
+    assert any("不用用户去一个一个点" in c for c in contents)
+    assert any("这个微信自己就可以" in c for c in contents)
+    assert any("一键全选" in c for c in contents)
+    # Timestamps must not appear as senders or as message bodies.
+    assert not any(m.sender.startswith("2026") for m in parsed.messages)
+    assert not any("2026/07/21" in m.content for m in parsed.messages)
+    # Media-only bubble dropped.
+    assert not any("[Video]" in c for c in contents)
+    # Strategy should be the iOS multiselect path.
+    assert getattr(conversation_service.parse_wechat_deterministic, "last_strategy", "") == (
+        "ios_multiselect"
+    )
+
+
+def test_wechat_ios_single_bubble_strips_timestamp_from_content() -> None:
+    """3-line first pasteboard item must not keep the date line inside content."""
+    raw = """Rui ☀️
+2026/07/21 23:08
+我想的是比如我选十条 比如我有十条未读消息"""
+    parsed = conversation_service.parse_wechat_deterministic(raw)
+    assert parsed is not None
+    assert len(parsed.messages) == 1
+    assert parsed.messages[0].sender == "Rui ☀️"
+    assert parsed.messages[0].content == "我想的是比如我选十条 比如我有十条未读消息"
+    assert "2026" not in parsed.messages[0].content
+    assert parsed.messages[0].timestamp is not None
+
+
+def test_collapsed_blob_with_embedded_ios_turns_resplits() -> None:
+    """One logical paste containing many Sender/TS/Content turns must split ≥5."""
+    # Same bytes as multi-select; ensures we never return a single merged blob.
+    parsed = conversation_service.parse_conversation(
+        SAMPLE_WECHAT_IOS_MULTISELECT, use_llm_fallback=False
+    )
+    assert len(parsed.messages) >= 5
+    assert sum(1 for m in parsed.messages if m.is_selected) >= 5
+
+
 def test_analyze_context_includes_full_selected_thread(
     monkeypatch: pytest.MonkeyPatch, user: User
 ) -> None:

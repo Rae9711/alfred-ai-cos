@@ -65,14 +65,22 @@ _SYSTEM_LINE_RE = re.compile(
     r".*拍了拍.*|"
     r"消息已发出，但被对方拒收|"
     r"\[图片\]|\[视频\]|\[语音\]|\[文件\]|\[动画表情\]|\[贴纸\]|"
+    r"\[Video\].*|"  # iOS multi-select: "[Video] Weixin video_….mp4"
     r"—"  # date separators like "— 昨天 —" handled separately
     r")$"
 )
 
 _DATE_SEPARATOR_RE = re.compile(r"^[\-—–]+\s*(昨天|今天|星期[一二三四五六日天]|\d{1,2}月\d{1,2}日).*$")
 
-# WeChat-ish sender line: optional timestamp after the name.
+# WeChat iOS multi-select Copy (2024+): standalone timestamp line between
+# nickname and body — "2026/07/21 23:14" or "2026-07-21 23:14".
+_FULL_TIMESTAMP_LINE_RE = re.compile(
+    r"^(?P<ts>\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?)$"
+)
+
+# WeChat-ish sender line: optional short timestamp after the name.
 # Examples: "6330", "Rui🌞", "张三 12:43", "Alex 昨天 21:05"
+# Do NOT match full "YYYY/MM/DD HH:MM" lines (handled separately).
 _SENDER_LINE_RE = re.compile(
     r"^(?P<sender>.+?)(?:\s+(?P<ts>\d{1,2}:\d{2}|昨天\s*\d{1,2}:\d{2}|今天\s*\d{1,2}:\d{2}))?$"
 )
@@ -105,6 +113,20 @@ def _parse_optional_timestamp(raw: str | None) -> datetime | None:
         return None
     raw = raw.strip()
     today = datetime.now(UTC).date()
+    # Full WeChat iOS multi-select timestamp: 2026/07/21 23:14
+    m = re.fullmatch(r"(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?", raw)
+    if m:
+        try:
+            return datetime(
+                int(m.group(1)),
+                int(m.group(2)),
+                int(m.group(3)),
+                int(m.group(4)),
+                int(m.group(5)),
+                tzinfo=UTC,
+            )
+        except ValueError:
+            return None
     # HH:MM only — attach today's UTC date as a best-effort placeholder.
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", raw)
     if m:
@@ -121,11 +143,17 @@ def _parse_optional_timestamp(raw: str | None) -> datetime | None:
     return None
 
 
+def _is_full_timestamp_line(line: str) -> bool:
+    return bool(_FULL_TIMESTAMP_LINE_RE.match(line.strip()))
+
+
 def _is_system_or_media_placeholder(content: str) -> bool:
     text = content.strip()
     if not text:
         return True
     if _DATE_SEPARATOR_RE.match(text):
+        return True
+    if _is_full_timestamp_line(text):
         return True
     if _SYSTEM_LINE_RE.match(text):
         return True
@@ -140,6 +168,11 @@ def _is_probable_sender(line: str) -> bool:
         return False
     # Pure timestamps / date separators are not senders.
     if re.fullmatch(r"\d{1,2}:\d{2}", line):
+        return False
+    if _is_full_timestamp_line(line):
+        return False
+    # "2026/07/21" alone (regex may strip HH:MM into ts group) — not a nickname.
+    if re.fullmatch(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}", line):
         return False
     if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
         return False
@@ -173,6 +206,8 @@ def _looks_like_wechat_blocks(text: str) -> bool:
 
 def _sender_match(line: str) -> re.Match[str] | None:
     """Return a sender-line match when `line` looks like a WeChat display name."""
+    if _is_full_timestamp_line(line):
+        return None
     m = _SENDER_LINE_RE.match(line)
     if not m:
         return None
@@ -191,18 +226,21 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
         感觉很牛逼诶
         Rae
         谢谢
-        Alex 12:43
-        明天下午见
 
-    i.e. contiguous lines with no blank separators. After a sender line the next
-    non-media line is always content (even if it looks sender-ish — short Chinese
-    replies often match the sender heuristic).
+    iOS multi-select may insert a full date line after the nickname::
+
+        Leo
+        2026/07/21 23:14
+        就是自动 select previous x number of messages
     """
     pairs: list[tuple[str, str, str | None]] = []
     i = 0
     while i < len(lines):
         line = lines[i]
         if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
+            i += 1
+            continue
+        if _is_full_timestamp_line(line):
             i += 1
             continue
         m = _sender_match(line)
@@ -212,11 +250,12 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
         sender = m.group("sender").strip()
         ts_raw = m.group("ts")
         i += 1
+        if i < len(lines) and _is_full_timestamp_line(lines[i]):
+            ts_raw = lines[i].strip()
+            i += 1
         # Skip media/system placeholders that stand alone as the bubble body.
         skipped_media = False
-        while i < len(lines) and (
-            _SYSTEM_LINE_RE.match(lines[i]) or _is_system_or_media_placeholder(lines[i])
-        ):
+        while i < len(lines) and _SYSTEM_LINE_RE.match(lines[i]):
             skipped_media = True
             i += 1
         if i >= len(lines):
@@ -224,11 +263,13 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
         if _DATE_SEPARATOR_RE.match(lines[i]):
             i += 1
             continue
-        # Media-only bubble (e.g. name + [图片] + next name): skip empty message.
+        if _is_full_timestamp_line(lines[i]):
+            i += 1
+            continue
+        # Media-only bubble (e.g. name + ts + [Video] + next name): skip.
         if skipped_media and _sender_match(lines[i]):
             continue
-        # First content line is mandatory — never reclassify as a sender
-        # (short Chinese replies often match the sender heuristic).
+        # First content line is mandatory — never reclassify as a sender.
         content_parts = [lines[i]]
         i += 1
         while i < len(lines):
@@ -236,9 +277,12 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
             if _DATE_SEPARATOR_RE.match(nxt):
                 i += 1
                 break
+            if _is_full_timestamp_line(nxt):
+                i += 1
+                continue
             if _sender_match(nxt):
                 break
-            if _SYSTEM_LINE_RE.match(nxt) or _is_system_or_media_placeholder(nxt):
+            if _SYSTEM_LINE_RE.match(nxt):
                 i += 1
                 continue
             content_parts.append(nxt)
@@ -246,6 +290,101 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
         content = "\n".join(content_parts).strip()
         if content:
             pairs.append((sender, content, ts_raw))
+    return pairs
+
+
+def _parse_wechat_ios_multiselect(lines: list[str]) -> list[tuple[str, str, str | None]]:
+    """Deterministic splitter for WeChat iOS multi-select Copy.
+
+    Exact production shape::
+
+        <optional orphan content>
+        Nickname   # emoji OK, e.g. Rui ☀️
+        YYYY/MM/DD HH:MM
+        message body
+        Nickname
+        YYYY/MM/DD HH:MM
+        message body
+        …
+
+    Prefers this strategy when ≥2 full timestamp lines are present.
+    """
+    ts_count = sum(1 for ln in lines if _is_full_timestamp_line(ln))
+    if ts_count < 2:
+        return []
+
+    pairs: list[tuple[str, str, str | None]] = []
+    i = 0
+
+    # Orphan leading content before the first Nickname + timestamp turn.
+    # The orphan may itself look "sender-ish" (short, no punctuation) — detect
+    # via peek: a real turn is Nickname immediately followed by YYYY/MM/DD HH:MM.
+    if i < len(lines) and not (
+        _sender_match(lines[i])
+        and i + 1 < len(lines)
+        and _is_full_timestamp_line(lines[i + 1])
+    ):
+        if not _SYSTEM_LINE_RE.match(lines[i]) and not _DATE_SEPARATOR_RE.match(lines[i]) and not _is_full_timestamp_line(lines[i]):
+            found_turn_at: int | None = None
+            for j in range(i + 1, min(i + 6, len(lines) - 1)):
+                if _sender_match(lines[j]) and _is_full_timestamp_line(lines[j + 1]):
+                    found_turn_at = j
+                    break
+            if found_turn_at is not None:
+                orphan = lines[i].strip()
+                if orphan and not _is_system_or_media_placeholder(orphan):
+                    pairs.append(("Unknown", orphan, None))
+                i = found_turn_at  # jump to first real turn (skip junk between)
+
+    while i < len(lines):
+        # Advance to next nickname that is followed by YYYY/MM/DD HH:MM.
+        m = _sender_match(lines[i]) if i < len(lines) else None
+        if not m or i + 1 >= len(lines) or not _is_full_timestamp_line(lines[i + 1]):
+            i += 1
+            continue
+
+        sender = m.group("sender").strip()
+        ts_raw = lines[i + 1].strip()
+        i += 2  # past sender + timestamp
+
+        # Media-only bubble: Nickname + TS + [Video]/…] + next Nickname.
+        if i < len(lines) and _SYSTEM_LINE_RE.match(lines[i]):
+            i += 1
+            continue
+
+        if i >= len(lines):
+            break
+        if _sender_match(lines[i]) and i + 1 < len(lines) and _is_full_timestamp_line(lines[i + 1]):
+            # Empty body between turns — skip.
+            continue
+        if _is_full_timestamp_line(lines[i]) or _DATE_SEPARATOR_RE.match(lines[i]):
+            i += 1
+            continue
+
+        content_parts = [lines[i]]
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            # Next turn starts at Nickname + full timestamp.
+            if (
+                _sender_match(nxt)
+                and i + 1 < len(lines)
+                and _is_full_timestamp_line(lines[i + 1])
+            ):
+                break
+            if _DATE_SEPARATOR_RE.match(nxt):
+                i += 1
+                break
+            if _SYSTEM_LINE_RE.match(nxt) or _is_full_timestamp_line(nxt):
+                i += 1
+                continue
+            content_parts.append(nxt)
+            i += 1
+
+        content = "\n".join(content_parts).strip()
+        if content and not _is_system_or_media_placeholder(content):
+            pairs.append((sender, content, ts_raw))
+
     return pairs
 
 
@@ -266,6 +405,10 @@ def _parse_blank_separated_blocks(text: str) -> list[tuple[str, str, str | None]
         if _DATE_SEPARATOR_RE.match(first) and len(lines) == 1:
             continue
         if len(lines) >= 3:
+            ios = _parse_wechat_ios_multiselect(lines)
+            if len(ios) >= 2:
+                pairs.extend(ios)
+                continue
             dense = _parse_dense_alternating(lines)
             if len(dense) >= 2:
                 pairs.extend(dense)
@@ -276,10 +419,21 @@ def _parse_blank_separated_blocks(text: str) -> list[tuple[str, str, str | None]
                 continue
             pairs.append(("Unknown", first, None))
             continue
+        # Sender + optional full timestamp + content inside one blank block.
+        if len(lines) >= 2 and _sender_match(lines[0]):
+            idx = 1
+            ts_raw = _sender_match(lines[0]).group("ts") if _sender_match(lines[0]) else None
+            if _is_full_timestamp_line(lines[idx]):
+                ts_raw = lines[idx].strip()
+                idx += 1
+            content = "\n".join(lines[idx:]).strip()
+            if content and not _is_system_or_media_placeholder(content):
+                pairs.append((_sender_match(lines[0]).group("sender").strip(), content, ts_raw))
+            continue
         m = _sender_match(first)
         if m:
             content = "\n".join(lines[1:]).strip()
-            if content:
+            if content and not _is_system_or_media_placeholder(content):
                 pairs.append((m.group("sender").strip(), content, m.group("ts")))
             continue
         pairs.append(("Unknown", "\n".join(lines), None))
@@ -291,6 +445,8 @@ def _parse_inline_exports(lines: list[str]) -> list[tuple[str, str, str | None]]
     pairs: list[tuple[str, str, str | None]] = []
     for line in lines:
         if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
+            continue
+        if _is_full_timestamp_line(line):
             continue
         m = _TAB_INLINE_RE.match(line)
         if m and _is_probable_sender(m.group("sender").strip()):
@@ -315,6 +471,7 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
     """Parse WeChat multi-select copy without an LLM.
 
     Tries several paste shapes and keeps the richest coherent split:
+      - WeChat iOS Sender→YYYY/MM/DD HH:MM→Content (highest priority when present)
       - blank-line bubbles (with inner dense repair)
       - dense alternating sender/content (no blank lines)
       - inline Name：/Name:/tab exports
@@ -324,21 +481,43 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
         return None
 
     all_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    candidates: list[list[tuple[str, str, str | None]]] = [
-        _parse_blank_separated_blocks(text),
-        _parse_dense_alternating(all_lines),
-        _parse_inline_exports(all_lines),
+    ios_pairs = _parse_wechat_ios_multiselect(all_lines)
+    candidates: list[tuple[str, list[tuple[str, str, str | None]]]] = [
+        ("ios_multiselect", ios_pairs),
+        ("blank_blocks", _parse_blank_separated_blocks(text)),
+        ("dense_alternating", _parse_dense_alternating(all_lines)),
+        ("inline_exports", _parse_inline_exports(all_lines)),
     ]
-    best = max(candidates, key=_score_pairs)
+    # When iOS timestamp pattern is clearly present, prefer it even if another
+    # strategy returns a similar count (avoids timestamp-as-sender scramble).
+    strategy = "none"
+    best: list[tuple[str, str, str | None]] = []
+    if len(ios_pairs) >= 2:
+        best = ios_pairs
+        strategy = "ios_multiselect"
+    else:
+        named = [(name, pairs) for name, pairs in candidates if pairs]
+        if not named:
+            return None
+        strategy, best = max(named, key=lambda item: _score_pairs(item[1]))
+
     if _score_pairs(best)[0] < 1:
         return None
     # A single-pair result is only useful when the paste is truly one bubble.
     # If other strategies found nothing better, still accept it.
     if _score_pairs(best)[0] == 1 and len(all_lines) >= 4:
-        # Likely under-split; prefer any candidate with >=2 if present.
-        multi = [c for c in candidates if len(c) >= 2]
+        multi = [(n, c) for n, c in candidates if len(c) >= 2]
         if multi:
-            best = max(multi, key=_score_pairs)
+            strategy, best = max(multi, key=lambda item: _score_pairs(item[1]))
+
+    # Recover: one pair whose content still embeds Sender/TS/Content turns.
+    if len(best) == 1 and len(all_lines) >= 6:
+        embedded = _parse_wechat_ios_multiselect(all_lines)
+        if len(embedded) < 2:
+            embedded = _parse_dense_alternating(all_lines)
+        if len(embedded) >= 2:
+            best = embedded
+            strategy = f"{strategy}+embedded_resplit"
 
     messages: list[ConversationMessageOut] = []
     names: list[str] = []
@@ -364,6 +543,9 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
 
     if len(messages) < 1:
         return None
+
+    # Stash strategy on a logger-friendly module attribute for parse_conversation.
+    parse_wechat_deterministic.last_strategy = strategy  # type: ignore[attr-defined]
 
     participants = [ParticipantOut(name=n, is_self=False) for n in names]
     return ParsedConversationOut(
@@ -408,17 +590,34 @@ def _from_normalized(normalized: NormalizedConversation) -> ParsedConversationOu
 def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedConversationOut:
     """Parse pasted chat text. Prefer deterministic WeChat parser; LLM repairs messy copy."""
     log = structlog.get_logger("conversation.parse")
-    raw_lines = len([ln for ln in (text or "").splitlines() if ln.strip()])
+    raw = text or ""
+    raw_lines = len([ln for ln in raw.splitlines() if ln.strip()])
+    raw_chars = len(raw)
+    # Skip LLM when the paste already has clear multi-message structure
+    # (iOS timestamp lines or many sender-ish lines).
+    lines = [ln.strip() for ln in _normalize_paste_text(raw).splitlines() if ln.strip()]
+    has_ios_ts = sum(1 for ln in lines if _is_full_timestamp_line(ln)) >= 2
     parsed = parse_wechat_deterministic(text)
     if parsed is not None:
         selected = sum(1 for m in parsed.messages if m.is_selected)
+        strategy = getattr(parse_wechat_deterministic, "last_strategy", "deterministic")
         log.info(
             "parse_deterministic",
             messages=len(parsed.messages),
             selected=selected,
             raw_lines=raw_lines,
+            raw_chars=raw_chars,
+            strategy=strategy,
+            ios_timestamps=has_ios_ts,
         )
         return parsed
+    if has_ios_ts:
+        # Structure is clear but deterministic returned None — still avoid LLM collapse.
+        log.warning(
+            "parse_ios_structure_missed",
+            raw_lines=raw_lines,
+            raw_chars=raw_chars,
+        )
     if not use_llm_fallback:
         # Last resort: treat whole paste as one message.
         return ParsedConversationOut(
@@ -438,14 +637,45 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
             ],
             imported_at=_utcnow(),
         )
+    # Prefer deterministic line fallback over LLM when paste is clearly multi-bubble.
+    if has_ios_ts or raw_lines >= 8:
+        # Do not ask the LLM to segment an obvious multi-bubble paste — it collapses.
+        line_msgs = [
+            ConversationMessageOut(
+                id=str(uuid.uuid4()),
+                sender="Unknown",
+                timestamp=None,
+                content=ln,
+                role=MessageRole.unknown,
+                is_selected=(0.3 if _NOISE_RE.match(ln) else 1.0) >= 1.0,
+                weight=0.3 if _NOISE_RE.match(ln) else 1.0,
+            )
+            for ln in lines
+            if not _is_system_or_media_placeholder(ln) and not _is_full_timestamp_line(ln)
+        ]
+        if len(line_msgs) >= 2:
+            log.info(
+                "parse_structure_line_fallback",
+                messages=len(line_msgs),
+                raw_lines=raw_lines,
+                raw_chars=raw_chars,
+            )
+            return ParsedConversationOut(
+                id=str(uuid.uuid4()),
+                source=ConversationSource.wechat,
+                participants=[],
+                messages=line_msgs,
+                imported_at=_utcnow(),
+            )
     normalized = get_llm().normalize_conversation(raw_text=text)
     llm_parsed = _from_normalized(normalized)
     # If the LLM collapsed a multi-line paste into one blob, split lines so the
     # keyboard never shows 「已选 1 条」 for an obvious multi-message copy.
     if len(llm_parsed.messages) <= 1 and raw_lines >= 4:
-        lines = [ln.strip() for ln in _normalize_paste_text(text).splitlines() if ln.strip()]
-        lines = [ln for ln in lines if not _is_system_or_media_placeholder(ln)]
-        if len(lines) >= 2:
+        split_lines = [
+            ln for ln in lines if not _is_system_or_media_placeholder(ln) and not _is_full_timestamp_line(ln)
+        ]
+        if len(split_lines) >= 2:
             msgs = [
                 ConversationMessageOut(
                     id=str(uuid.uuid4()),
@@ -456,13 +686,14 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
                     is_selected=(0.3 if _NOISE_RE.match(ln) else 1.0) >= 1.0,
                     weight=0.3 if _NOISE_RE.match(ln) else 1.0,
                 )
-                for ln in lines
+                for ln in split_lines
             ]
             log.info(
                 "parse_llm_line_split_fallback",
                 llm_messages=len(llm_parsed.messages),
                 line_messages=len(msgs),
                 raw_lines=raw_lines,
+                raw_chars=raw_chars,
             )
             return ParsedConversationOut(
                 id=str(uuid.uuid4()),
@@ -476,6 +707,7 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
         messages=len(llm_parsed.messages),
         selected=sum(1 for m in llm_parsed.messages if m.is_selected),
         raw_lines=raw_lines,
+        raw_chars=raw_chars,
     )
     return llm_parsed
 

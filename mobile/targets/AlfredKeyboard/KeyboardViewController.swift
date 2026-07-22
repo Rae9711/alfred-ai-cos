@@ -1,4 +1,5 @@
 import UIKit
+import UniformTypeIdentifiers
 
 /// Custom keyboard state machine (mockup-aligned):
 /// IDLE → IMPORTING → CONTEXT_INSIGHT → GENERATING → REPLY_READY → EDITING → SUCCESS
@@ -655,9 +656,10 @@ final class KeyboardViewController: UIInputViewController {
             render()
             return
         }
-        guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty
-        else {
+        // WeChat iOS multi-select Copy often places EACH bubble as its own
+        // UIPasteboard item. `UIPasteboard.general.string` only returns the
+        // FIRST item (~2–3 lines → 「已选 1 条」). Always merge all items.
+        guard let text = readClipboardChatText(), !text.isEmpty else {
             phase = .error("剪贴板是空的 — 先在微信多选复制")
             render()
             return
@@ -670,17 +672,31 @@ final class KeyboardViewController: UIInputViewController {
     @MainActor
     private func runParse(text: String) async {
         do {
+            // Local parse first when clipboard already looks multi-message —
+            // never show CONTEXT_INSIGHT with 1 bubble while paste has many turns.
+            let localFirst = locallyExtractMessages(from: text)
+            let itemCount = UIPasteboard.general.numberOfItems
+            var working = localFirst
+
             let parsed = try await AlfredKeyboardAPI.parse(text: text)
             conversationId = parsed.id
 
-            // If the server under-split (common when LLM collapses paste → 1 blob),
-            // re-split locally so 「已选 N 条」 matches the clipboard thread.
-            var working = parsed.messages
-            let estimated = estimateClipboardMessageCount() ?? 0
-            if working.count <= 1 || (estimated >= 4 && working.count < max(2, estimated / 2)) {
-                let local = locallyExtractMessages(from: text)
-                if local.count > working.count {
-                    working = local
+            // Take the richest of API vs local. Multi-item pasteboard ⇒ each
+            // item is usually one bubble; prefer that count when higher.
+            if parsed.messages.count > working.count {
+                working = parsed.messages
+            }
+            if itemCount >= 2 {
+                let perItem = extractMessagesFromPasteboardItems()
+                if perItem.count > working.count {
+                    working = perItem
+                }
+            }
+            // Final safety: if UI would say 1 but text has many newlines, force local.
+            let newlineRich = text.filter { $0 == "\n" || $0 == "\u{2028}" }.count >= 3
+            if working.count <= 1 && (newlineRich || localFirst.count > working.count) {
+                if localFirst.count > working.count {
+                    working = localFirst
                 }
             }
             parsedMessages = working
@@ -701,6 +717,8 @@ final class KeyboardViewController: UIInputViewController {
             if selected.count < nonNoise.count {
                 selected = Set(nonNoise.map(\.id))
             }
+            // selected_count = max(apiSelected, localSplitCount) — already enforced
+            // by taking the richest working set above.
             selectedMessageIds = selected
 
             let messages: [[String: Any]] = working.map { m in
@@ -1031,11 +1049,160 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - Heuristics / clipboard
 
+    /// Read WeChat multi-select clipboard. Critical: iOS WeChat often stores
+    /// each selected bubble as a **separate pasteboard item**. Using only
+    /// `UIPasteboard.general.string` returns the first item (~1 bubble, 2–3
+    /// lines) — the production 「已选 1 条」 failure mode.
+    private func readClipboardChatText() -> String? {
+        guard hasFullAccess else { return nil }
+        let pb = UIPasteboard.general
+        var candidates: [String] = []
+
+        // 1) All string items joined (primary WeChat multi-select path).
+        if let strings = pb.strings {
+            let parts = strings
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if parts.count >= 2 {
+                candidates.append(parts.joined(separator: "\n"))
+            } else if let only = parts.first {
+                candidates.append(only)
+            }
+        }
+
+        // 2) Walk items explicitly — covers cases where `.strings` is thin
+        // but per-item UTF-8 / plain text / RTF still has content.
+        if pb.numberOfItems >= 1 {
+            var itemParts: [String] = []
+            for item in pb.items {
+                if let extracted = extractPlainText(fromPasteboardItem: item) {
+                    let t = extracted.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !t.isEmpty { itemParts.append(t) }
+                }
+            }
+            if itemParts.count >= 2 {
+                candidates.append(itemParts.joined(separator: "\n"))
+            } else if let only = itemParts.first {
+                candidates.append(only)
+            }
+        }
+
+        // 3) Legacy single-string fallback.
+        if let s = pb.string?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+            candidates.append(s)
+        }
+
+        // Prefer the longest candidate (most bubbles / richest thread).
+        return candidates.max(by: { $0.count < $1.count })
+    }
+
+    private func extractPlainText(fromPasteboardItem item: [String: Any]) -> String? {
+        let plainKeys = [
+            UTType.utf8PlainText.identifier,
+            UTType.plainText.identifier,
+            "public.utf8-plain-text",
+            "public.text",
+        ]
+        for key in plainKeys {
+            if let s = item[key] as? String, !s.isEmpty { return s }
+            if let data = item[key] as? Data, let s = String(data: data, encoding: .utf8), !s.isEmpty {
+                return s
+            }
+        }
+        // RTF → plain (some hosts put the full thread only in RTF).
+        let rtfKeys = [UTType.rtf.identifier, "public.rtf"]
+        for key in rtfKeys {
+            let data: Data?
+            if let d = item[key] as? Data {
+                data = d
+            } else if let s = item[key] as? String {
+                data = s.data(using: .utf8)
+            } else {
+                data = nil
+            }
+            guard let data,
+                  let attr = try? NSAttributedString(
+                    data: data,
+                    options: [.documentType: NSAttributedString.DocumentType.rtf],
+                    documentAttributes: nil
+                  )
+            else { continue }
+            let s = attr.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { return s }
+        }
+        // HTML fallback.
+        if let html = item[UTType.html.identifier] as? String ?? item["public.html"] as? String,
+           let data = html.data(using: .utf8),
+           let attr = try? NSAttributedString(
+            data: data,
+            options: [
+                .documentType: NSAttributedString.DocumentType.html,
+                .characterEncoding: String.Encoding.utf8.rawValue,
+            ],
+            documentAttributes: nil
+           )
+        {
+            let s = attr.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { return s }
+        }
+        return nil
+    }
+
+    /// When WeChat puts N bubbles as N pasteboard items, parse each item
+    /// independently so content-only items still become N messages.
+    private func extractMessagesFromPasteboardItems() -> [AlfredKeyboardAPI.Message] {
+        guard hasFullAccess else { return [] }
+        let pb = UIPasteboard.general
+        var itemTexts: [String] = []
+        if let strings = pb.strings {
+            itemTexts = strings
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        if itemTexts.count < 2 {
+            itemTexts = pb.items.compactMap { extractPlainText(fromPasteboardItem: $0)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        guard itemTexts.count >= 2 else { return [] }
+
+        var out: [AlfredKeyboardAPI.Message] = []
+        for raw in itemTexts {
+            let parsed = locallyExtractMessages(from: raw)
+            if parsed.count >= 1 {
+                out.append(contentsOf: parsed)
+            } else if !isSystemOrMediaLine(raw), !isDateSeparator(raw) {
+                let noise = isNoiseAck(raw)
+                out.append(
+                    AlfredKeyboardAPI.Message(
+                        id: UUID().uuidString,
+                        sender: "Unknown",
+                        content: raw,
+                        is_selected: !noise,
+                        weight: noise ? 0.3 : 1.0
+                    )
+                )
+            }
+        }
+        return out
+    }
+
     private func estimateClipboardMessageCount() -> Int? {
         guard hasFullAccess,
-              let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let text = readClipboardChatText(),
               !text.isEmpty
         else { return nil }
+
+        let itemCount = UIPasteboard.general.numberOfItems
+        if itemCount >= 2 {
+            let perItem = extractMessagesFromPasteboardItems()
+            if perItem.count >= 2 { return perItem.count }
+            // Even without parseable senders, N pasteboard items ≈ N bubbles.
+            if let strings = UIPasteboard.general.strings, strings.filter({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).count >= 2 {
+                return strings.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+            }
+            return itemCount
+        }
 
         // Prefer blank-line WeChat blocks (sender + body per block).
         let blocks = text
@@ -1079,7 +1246,7 @@ final class KeyboardViewController: UIInputViewController {
         extractDenseWeChatPairs(lines).count
     }
 
-    /// Local mirror of backend dense/blank/tab parse — used when API under-splits.
+    /// Local mirror of backend dense/blank/tab/iOS-timestamp parse — used when API under-splits.
     private func locallyExtractMessages(from text: String) -> [AlfredKeyboardAPI.Message] {
         let normalized = text
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -1092,7 +1259,11 @@ final class KeyboardViewController: UIInputViewController {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
-        var pairs = extractDenseWeChatPairs(lines)
+        // Prefer WeChat iOS multi-select: Nickname → YYYY/MM/DD HH:MM → Content.
+        var pairs = extractWeChatIOSMultiselectPairs(lines)
+        if pairs.count < 2 {
+            pairs = extractDenseWeChatPairs(lines)
+        }
 
         // Blank-separated content-only bodies.
         let blocks = normalized
@@ -1103,7 +1274,7 @@ final class KeyboardViewController: UIInputViewController {
             let singleLineBlocks = blocks.filter { !$0.contains("\n") }
             if singleLineBlocks.count >= max(2, (blocks.count + 1) / 2) {
                 let contentPairs = singleLineBlocks
-                    .filter { !isSystemOrMediaLine($0) && !isDateSeparator($0) }
+                    .filter { !isSystemOrMediaLine($0) && !isDateSeparator($0) && !isFullTimestampLine($0) }
                     .map { ("Unknown", $0) }
                 if contentPairs.count > pairs.count {
                     pairs = contentPairs
@@ -1117,16 +1288,26 @@ final class KeyboardViewController: UIInputViewController {
                     .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                 if blines.count >= 3 {
+                    let ios = extractWeChatIOSMultiselectPairs(blines)
+                    if ios.count >= 2 {
+                        blockPairs.append(contentsOf: ios)
+                        continue
+                    }
                     let inner = extractDenseWeChatPairs(blines)
                     if inner.count >= 2 {
                         blockPairs.append(contentsOf: inner)
                         continue
                     }
                 }
-                if blines.count == 1, !isSystemOrMediaLine(blines[0]) {
+                if blines.count == 1, !isSystemOrMediaLine(blines[0]), !isFullTimestampLine(blines[0]) {
                     blockPairs.append(("Unknown", blines[0]))
                 } else if blines.count >= 2, isProbableSenderLine(stripSenderTimestamp(blines[0])) {
-                    blockPairs.append((stripSenderTimestamp(blines[0]), blines.dropFirst().joined(separator: "\n")))
+                    var idx = 1
+                    if idx < blines.count, isFullTimestampLine(blines[idx]) { idx += 1 }
+                    let body = blines[idx...].joined(separator: "\n")
+                    if !body.isEmpty {
+                        blockPairs.append((stripSenderTimestamp(blines[0]), body))
+                    }
                 }
             }
             if blockPairs.count > pairs.count {
@@ -1136,6 +1317,7 @@ final class KeyboardViewController: UIInputViewController {
 
         // Tab / colon inline.
         let inline: [(String, String)] = lines.compactMap { line in
+            if isFullTimestampLine(line) { return nil }
             if let tab = line.firstIndex(of: "\t") {
                 let name = String(line[..<tab]).trimmingCharacters(in: .whitespacesAndNewlines)
                 let body = String(line[line.index(after: tab)...]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1164,12 +1346,86 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// WeChat iOS multi-select: Nickname → YYYY/MM/DD HH:MM → Content.
+    private func extractWeChatIOSMultiselectPairs(_ lines: [String]) -> [(String, String)] {
+        let tsCount = lines.filter { isFullTimestampLine($0) }.count
+        guard tsCount >= 2 else { return [] }
+
+        var pairs: [(String, String)] = []
+        var i = 0
+
+        let startsTurn: (Int) -> Bool = { idx in
+            guard idx + 1 < lines.count else { return false }
+            return isProbableSenderLine(stripSenderTimestamp(lines[idx]))
+                && isFullTimestampLine(lines[idx + 1])
+        }
+
+        if i < lines.count, !startsTurn(i),
+           !isSystemOrMediaLine(lines[i]), !isDateSeparator(lines[i]), !isFullTimestampLine(lines[i])
+        {
+            var found: Int?
+            let upper = min(i + 6, lines.count - 1)
+            if i + 1 < upper {
+                for j in (i + 1)..<upper {
+                    if startsTurn(j) { found = j; break }
+                }
+            }
+            if let found {
+                let orphan = lines[i]
+                if !isSystemOrMediaLine(orphan) {
+                    pairs.append(("Unknown", orphan))
+                }
+                i = found
+            }
+        }
+
+        while i < lines.count {
+            guard startsTurn(i) else {
+                i += 1
+                continue
+            }
+            let sender = stripSenderTimestamp(lines[i])
+            i += 2 // past sender + timestamp
+            if i < lines.count, isSystemOrMediaLine(lines[i]) {
+                i += 1
+                continue
+            }
+            if i >= lines.count { break }
+            if startsTurn(i) { continue }
+            if isFullTimestampLine(lines[i]) || isDateSeparator(lines[i]) {
+                i += 1
+                continue
+            }
+            var contentParts = [lines[i]]
+            i += 1
+            while i < lines.count {
+                if startsTurn(i) { break }
+                if isDateSeparator(lines[i]) {
+                    i += 1
+                    break
+                }
+                if isSystemOrMediaLine(lines[i]) || isFullTimestampLine(lines[i]) {
+                    i += 1
+                    continue
+                }
+                contentParts.append(lines[i])
+                i += 1
+            }
+            let content = contentParts.joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !content.isEmpty, !isSystemOrMediaLine(content) {
+                pairs.append((sender, content))
+            }
+        }
+        return pairs
+    }
+
     private func extractDenseWeChatPairs(_ lines: [String]) -> [(String, String)] {
         var pairs: [(String, String)] = []
         var i = 0
         while i < lines.count {
             let line = lines[i]
-            if isDateSeparator(line) || isSystemOrMediaLine(line) {
+            if isDateSeparator(line) || isSystemOrMediaLine(line) || isFullTimestampLine(line) {
                 i += 1
                 continue
             }
@@ -1179,13 +1435,16 @@ final class KeyboardViewController: UIInputViewController {
                 continue
             }
             i += 1
+            if i < lines.count, isFullTimestampLine(lines[i]) {
+                i += 1
+            }
             var skippedMedia = false
             while i < lines.count && isSystemOrMediaLine(lines[i]) {
                 skippedMedia = true
                 i += 1
             }
             if i >= lines.count { break }
-            if isDateSeparator(lines[i]) {
+            if isDateSeparator(lines[i]) || isFullTimestampLine(lines[i]) {
                 i += 1
                 continue
             }
@@ -1199,6 +1458,10 @@ final class KeyboardViewController: UIInputViewController {
                 if isDateSeparator(nxt) {
                     i += 1
                     break
+                }
+                if isFullTimestampLine(nxt) {
+                    i += 1
+                    continue
                 }
                 if isProbableSenderLine(stripSenderTimestamp(nxt)) { break }
                 if isSystemOrMediaLine(nxt) {
@@ -1244,8 +1507,19 @@ final class KeyboardViewController: UIInputViewController {
         if trimmed.range(of: #"^\d{1,2}:\d{2}$"#, options: .regularExpression) != nil {
             return false
         }
+        if isFullTimestampLine(trimmed) { return false }
+        if trimmed.range(of: #"^\d{4}[/-]\d{1,2}[/-]\d{1,2}$"#, options: .regularExpression) != nil {
+            return false
+        }
         if isDateSeparator(trimmed) || isSystemOrMediaLine(trimmed) { return false }
         return true
+    }
+
+    private func isFullTimestampLine(_ line: String) -> Bool {
+        line.range(
+            of: #"^\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?$"#,
+            options: .regularExpression
+        ) != nil
     }
 
     private func isDateSeparator(_ line: String) -> Bool {
@@ -1261,6 +1535,7 @@ final class KeyboardViewController: UIInputViewController {
             #"^.*撤回了一条消息$"#,
             #"^.*拍了拍.*$"#,
             #"^\[(图片|视频|语音|文件|动画表情|贴纸)\]$"#,
+            #"^\[Video\].*"#,
         ]
         return patterns.contains { line.range(of: $0, options: .regularExpression) != nil }
     }
