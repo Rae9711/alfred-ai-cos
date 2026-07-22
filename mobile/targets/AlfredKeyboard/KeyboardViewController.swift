@@ -1,15 +1,16 @@
 import UIKit
 
-/// Custom keyboard state machine:
-/// IDLE → IMPORTING → CONTEXT_REVIEW → GENERATING → REPLY_READY → EDITING
+/// Custom keyboard state machine (mockup-aligned):
+/// IDLE → IMPORTING → CONTEXT_INSIGHT → GENERATING → REPLY_READY → EDITING → SUCCESS
 final class KeyboardViewController: UIInputViewController {
     private enum Phase {
         case idle
         case importing
-        case contextReview
+        case contextInsight
         case generating
         case replyReady
         case editing
+        case success
         case error(String)
     }
 
@@ -28,16 +29,30 @@ final class KeyboardViewController: UIInputViewController {
     private var actions: [AlfredKeyboardAPI.Action] = []
     private var insight: String = ""
     private var editTextView: UITextView?
-    private var showingContextDetail = false
-    private var showingActionsPanel = false
+    private var charCountLabel: UILabel?
     private var statusBanner: String?
+    private var generatingStep = 0
+    private var generatingTimer: Timer?
+    private var generatingComplete = false
+    private var clipboardHintCount: Int?
 
-    private let accent = UIColor(red: 0.23, green: 0.36, blue: 0.66, alpha: 1)
-    private let paper = UIColor(red: 0.96, green: 0.95, blue: 0.92, alpha: 1)
+    // Mockup palette — cool white / light gray / deep blue (not beige paper)
+    private let accent = UIColor(red: 0.12, green: 0.28, blue: 0.62, alpha: 1)
+    private let accentSoft = UIColor(red: 0.86, green: 0.91, blue: 0.98, alpha: 1)
+    private let panel = UIColor(red: 0.97, green: 0.97, blue: 0.98, alpha: 1)
+    private let bubbleFill = UIColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1)
+    private let maxEditChars = 200
+
+    private let generatingLabels = [
+        "解析聊天内容",
+        "理解情绪与意图",
+        "提取关键信息",
+        "生成回复建议…",
+    ]
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = paper
+        view.backgroundColor = .white
         AlfredAppGroup.markKeyboardSeen()
         setupChrome()
         render()
@@ -46,25 +61,33 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AlfredAppGroup.markKeyboardSeen()
-        if case .idle = phase { render() }
+        if case .idle = phase {
+            clipboardHintCount = estimateClipboardMessageCount()
+            render()
+        }
+    }
+
+    deinit {
+        generatingTimer?.invalidate()
     }
 
     // MARK: - Layout
 
     private func setupChrome() {
         root.axis = .vertical
-        root.spacing = 8
+        root.spacing = 6
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
-            root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
-            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6),
+            root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
             view.heightAnchor.constraint(equalToConstant: 320),
         ])
 
         contentScroll.translatesAutoresizingMaskIntoConstraints = false
+        contentScroll.showsVerticalScrollIndicator = false
         contentStack.axis = .vertical
         contentStack.spacing = 8
         contentStack.translatesAutoresizingMaskIntoConstraints = false
@@ -97,40 +120,74 @@ final class KeyboardViewController: UIInputViewController {
             $0.removeFromSuperview()
         }
         editTextView = nil
+        charCountLabel = nil
     }
 
     private func render() {
         clearContent()
-        renderChrome()
+        renderHeader()
         switch phase {
         case .idle: renderIdle()
-        case .importing: renderLoading("正在导入…")
-        case .contextReview: renderContextReview()
-        case .generating: renderLoading("Alfred 正在理解对话…")
+        case .importing: renderImporting()
+        case .contextInsight: renderContextInsight()
+        case .generating: renderGenerating()
         case .replyReady: renderReplyReady()
         case .editing: renderEditing()
+        case .success: renderSuccess()
         case .error(let msg): renderError(msg)
         }
+        renderChrome()
     }
 
-    private func renderChrome() {
-        let next = makeGhostButton("🌐", action: #selector(advanceTapped))
-        next.widthAnchor.constraint(equalToConstant: 40).isActive = true
-        chromeBar.addArrangedSubview(next)
+    // MARK: - Header / chrome
+
+    private func renderHeader() {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 6
+
+        let brand = makeLabel("Alfred", size: 16, weight: .bold, color: accent)
+        row.addArrangedSubview(brand)
+
+        let sparkle = UIImageView(image: UIImage(systemName: "sparkles"))
+        sparkle.tintColor = accent
+        sparkle.contentMode = .scaleAspectFit
+        sparkle.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        sparkle.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        row.addArrangedSubview(sparkle)
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        chromeBar.addArrangedSubview(spacer)
+        row.addArrangedSubview(spacer)
 
-        let space = makeGhostButton("空格", action: #selector(spaceTapped))
+        let collapse = UIButton(type: .system)
+        let chevron = UIImage(systemName: "chevron.down")
+        collapse.setImage(chevron, for: .normal)
+        collapse.tintColor = .secondaryLabel
+        collapse.addTarget(self, action: #selector(headerChevronTapped), for: .touchUpInside)
+        collapse.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        collapse.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        row.addArrangedSubview(collapse)
+
+        contentStack.addArrangedSubview(row)
+    }
+
+    private func renderChrome() {
+        let globe = makeChromeKey("🌐", action: #selector(advanceTapped), width: 36)
+        chromeBar.addArrangedSubview(globe)
+
+        let num = makeChromeKey("123", action: #selector(numbersHintTapped), width: 40)
+        chromeBar.addArrangedSubview(num)
+
+        let space = makeChromeKey("空格", action: #selector(spaceTapped))
+        space.setContentHuggingPriority(.defaultLow, for: .horizontal)
         chromeBar.addArrangedSubview(space)
 
-        let back = makeGhostButton("⌫", action: #selector(backspaceTapped))
-        back.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        let back = makeChromeKey("⌫", action: #selector(backspaceTapped), width: 40)
         chromeBar.addArrangedSubview(back)
 
-        let ret = makeGhostButton("↵", action: #selector(returnTapped))
-        ret.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        let ret = makePrimaryChromeKey("↵", action: #selector(returnTapped), width: 44)
         chromeBar.addArrangedSubview(ret)
     }
 
@@ -141,111 +198,159 @@ final class KeyboardViewController: UIInputViewController {
             let label = makeLabel(gate, size: 14, weight: .medium, color: .secondaryLabel)
             label.textAlignment = .center
             contentStack.addArrangedSubview(label)
+            contentStack.addArrangedSubview(makePrimaryButton("打开 Alfred", action: #selector(openAppHome)))
             return
         }
 
-        let hint = makeLabel("复制微信聊天后，点击导入", size: 15, weight: .medium)
-        hint.textAlignment = .center
-        contentStack.addArrangedSubview(hint)
+        contentStack.addArrangedSubview(makeMascotView(height: 72))
+
+        let title = makeLabel("检测到微信聊天", size: 17, weight: .semibold)
+        title.textAlignment = .center
+        contentStack.addArrangedSubview(title)
+
+        let subtitleText: String
+        if let n = clipboardHintCount, n > 0 {
+            subtitleText = "已复制 \(n) 条消息"
+        } else {
+            subtitleText = "复制微信聊天后即可导入"
+        }
+        let subtitle = makeLabel(subtitleText, size: 13, color: .secondaryLabel)
+        subtitle.textAlignment = .center
+        contentStack.addArrangedSubview(subtitle)
+
+        let bullets = [
+            ("text.bubble", "理解上下文"),
+            ("star.fill", "找到最重要内容"),
+            ("square.and.pencil", "生成合适回复"),
+        ]
+        for (symbol, text) in bullets {
+            contentStack.addArrangedSubview(makeBulletRow(symbol: symbol, text: text))
+        }
 
         if let banner = statusBanner {
             contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
         }
 
-        let importBtn = makePrimaryButton("导入所选消息", action: #selector(importTapped))
-        contentStack.addArrangedSubview(importBtn)
+        contentStack.addArrangedSubview(makePrimaryButton("导入所选聊天", action: #selector(importTapped)))
     }
 
-    private func renderLoading(_ text: String) {
-        let spinner = UIActivityIndicatorView(style: .medium)
+    private func renderImporting() {
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.color = accent
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
-        let label = makeLabel(text, size: 14, weight: .medium, color: .secondaryLabel)
-        label.textAlignment = .center
-        contentStack.addArrangedSubview(label)
+
+        let title = makeLabel("正在导入聊天…", size: 15, weight: .medium)
+        title.textAlignment = .center
+        contentStack.addArrangedSubview(title)
     }
 
-    private func renderError(_ message: String) {
-        let label = makeLabel(message, size: 14, weight: .medium, color: UIColor.systemOrange)
-        label.textAlignment = .center
-        contentStack.addArrangedSubview(label)
-        contentStack.addArrangedSubview(makePrimaryButton("重试", action: #selector(resetToIdle)))
+    private func renderGenerating() {
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.color = accent
+        spinner.startAnimating()
+        contentStack.addArrangedSubview(spinner)
+
+        let title = makeLabel("Alfred 正在理解对话", size: 15, weight: .semibold)
+        title.textAlignment = .center
+        contentStack.addArrangedSubview(title)
+
+        let list = UIStackView()
+        list.axis = .vertical
+        list.spacing = 8
+        list.isLayoutMarginsRelativeArrangement = true
+        list.layoutMargins = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+
+        for (idx, text) in generatingLabels.enumerated() {
+            let done = idx < generatingStep || (generatingComplete && idx <= generatingStep)
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = 8
+            row.alignment = .center
+
+            let iconName = done ? "checkmark.circle.fill" : "circle"
+            let icon = UIImageView(image: UIImage(systemName: iconName))
+            icon.tintColor = done ? accent : UIColor.tertiaryLabel
+            icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+            row.addArrangedSubview(icon)
+
+            let label = makeLabel(
+                text,
+                size: 13,
+                weight: done ? .medium : .regular,
+                color: done ? .label : .secondaryLabel
+            )
+            row.addArrangedSubview(label)
+            list.addArrangedSubview(row)
+        }
+        contentStack.addArrangedSubview(list)
     }
 
-    private func renderContextReview() {
-        let total = parsedMessages.count
-        let selected = selectedMessageIds.count
+    private func renderContextInsight() {
+        let titleRow = UIStackView()
+        titleRow.axis = .horizontal
+        titleRow.spacing = 6
+        titleRow.alignment = .center
+        titleRow.addArrangedSubview(makeLabel("Alfred 理解", size: 15, weight: .semibold))
+        let heart = UIImageView(image: UIImage(systemName: "heart.fill"))
+        heart.tintColor = accent
+        heart.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        heart.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        titleRow.addArrangedSubview(heart)
+        let spacer = UIView()
+        titleRow.addArrangedSubview(spacer)
+        contentStack.addArrangedSubview(titleRow)
+
+        let body = makeLabel(
+            insight.isEmpty ? "对方似乎想继续聊，你的回应会让对方感到安心。" : insight,
+            size: 13,
+            weight: .regular
+        )
+        body.numberOfLines = 4
+        contentStack.addArrangedSubview(body)
+
         contentStack.addArrangedSubview(
-            makeLabel("识别到 \(total) 条消息 / 已选择最相关的 \(selected) 条", size: 14, weight: .semibold)
+            makeLabel("重点参考了这些消息", size: 12, weight: .semibold, color: .secondaryLabel)
         )
 
-        if showingContextDetail {
-            for msg in parsedMessages.prefix(8) {
-                let on = selectedMessageIds.contains(msg.id)
-                let row = makeLabel(
-                    "\(on ? "●" : "○") \(msg.sender)：\(msg.content)",
-                    size: 12,
-                    color: on ? .label : .secondaryLabel
-                )
-                row.numberOfLines = 2
-                contentStack.addArrangedSubview(row)
-            }
+        for msg in evidenceMessages(limit: 2) {
+            contentStack.addArrangedSubview(makeEvidenceBubble(msg))
         }
 
-        let row = UIStackView()
-        row.axis = .horizontal
-        row.spacing = 8
-        row.distribution = .fillEqually
-        row.addArrangedSubview(makeSecondaryButton(
-            showingContextDetail ? "收起上下文" : "查看上下文",
-            action: #selector(toggleContextDetail)
-        ))
-        row.addArrangedSubview(makePrimaryButton("继续", action: #selector(continueFromContext)))
-        contentStack.addArrangedSubview(row)
+        contentStack.addArrangedSubview(
+            makeSoftPrimaryButton("下一步：生成回复", action: #selector(continueFromInsight))
+        )
     }
 
     private func renderReplyReady() {
-        contentStack.addArrangedSubview(makeLabel("Alfred 理解", size: 11, weight: .semibold, color: .secondaryLabel))
-        contentStack.addArrangedSubview(makeLabel(insight.isEmpty ? "已分析对话，可插入回复" : insight, size: 13, weight: .medium))
+        let titleRow = UIStackView()
+        titleRow.axis = .horizontal
+        titleRow.spacing = 6
+        titleRow.alignment = .center
+        titleRow.addArrangedSubview(makeLabel("推荐回复", size: 15, weight: .semibold))
+        let bot = UIImageView(image: UIImage(systemName: "face.smiling"))
+        bot.tintColor = accent
+        bot.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        bot.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        titleRow.addArrangedSubview(bot)
+        let spacer = UIView()
+        titleRow.addArrangedSubview(spacer)
+        if replies.count > 1 {
+            titleRow.addArrangedSubview(makeGhostButton("换一个", action: #selector(cycleReply)))
+        }
+        contentStack.addArrangedSubview(titleRow)
 
-        contentStack.addArrangedSubview(makeLabel("建议回复", size: 11, weight: .semibold, color: .secondaryLabel))
         let reply = currentReply()?.body ?? "（暂无建议）"
-        let body = makeLabel(reply, size: 14)
-        body.numberOfLines = 5
-        contentStack.addArrangedSubview(paddedView(body))
+        contentStack.addArrangedSubview(makeReplyBubble(reply))
 
         let actionsRow = UIStackView()
         actionsRow.axis = .horizontal
         actionsRow.spacing = 8
         actionsRow.distribution = .fillEqually
-        actionsRow.addArrangedSubview(makeSecondaryButton("换一个", action: #selector(cycleReply)))
-        actionsRow.addArrangedSubview(makeSecondaryButton("编辑", action: #selector(enterEditing)))
-        actionsRow.addArrangedSubview(makePrimaryButton("插入", action: #selector(insertCurrentReply)))
+        actionsRow.addArrangedSubview(makeSecondaryButton("编辑", action: #selector(enterEditing), symbol: "pencil"))
+        actionsRow.addArrangedSubview(makePrimaryButton("插入微信", action: #selector(insertCurrentReply), symbol: "square.and.arrow.down"))
         contentStack.addArrangedSubview(actionsRow)
-
-        let calendarCount = actions.filter { $0.type == "calendar_event" }.count
-        let followCount = actions.filter { $0.type == "follow_up" || $0.type == "commitment" || $0.type == "task" }.count
-        contentStack.addArrangedSubview(
-            makeLabel("📅 发现 \(calendarCount) 个日程   ✓ \(followCount) 个跟进", size: 12, color: .secondaryLabel)
-        )
-
-        if showingActionsPanel {
-            for action in actions.prefix(4) {
-                contentStack.addArrangedSubview(makeActionRow(action))
-            }
-        } else if !actions.isEmpty {
-            contentStack.addArrangedSubview(makeSecondaryButton("查看并确认", action: #selector(toggleActionsPanel)))
-        }
-
-        let expandRow = UIStackView()
-        expandRow.axis = .horizontal
-        expandRow.alignment = .center
-        let brand = makeLabel("Alfred", size: 13, weight: .semibold, color: accent)
-        expandRow.addArrangedSubview(brand)
-        let spacer = UIView()
-        expandRow.addArrangedSubview(spacer)
-        expandRow.addArrangedSubview(makeGhostButton("展开 ↗", action: #selector(expandTapped)))
-        contentStack.addArrangedSubview(expandRow)
 
         if let banner = statusBanner {
             contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
@@ -253,70 +358,122 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func renderEditing() {
-        contentStack.addArrangedSubview(makeLabel("编辑回复", size: 13, weight: .semibold))
+        let titleRow = UIStackView()
+        titleRow.axis = .horizontal
+        titleRow.spacing = 6
+        titleRow.alignment = .center
+        titleRow.addArrangedSubview(makeLabel("编辑回复", size: 15, weight: .semibold))
+        let pencil = UIImageView(image: UIImage(systemName: "pencil"))
+        pencil.tintColor = accent
+        pencil.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        pencil.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        titleRow.addArrangedSubview(pencil)
+        let spacer = UIView()
+        titleRow.addArrangedSubview(spacer)
+        contentStack.addArrangedSubview(titleRow)
+
+        let wrap = UIView()
+        wrap.backgroundColor = panel
+        wrap.layer.cornerRadius = 12
+        wrap.layer.borderWidth = 1
+        wrap.layer.borderColor = UIColor.separator.withAlphaComponent(0.35).cgColor
+
         let tv = UITextView()
         tv.font = .systemFont(ofSize: 14)
         tv.text = currentReply()?.body ?? ""
-        tv.backgroundColor = .systemBackground
-        tv.layer.cornerRadius = 10
-        tv.heightAnchor.constraint(equalToConstant: 90).isActive = true
+        tv.backgroundColor = .clear
+        tv.textContainerInset = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
+        tv.translatesAutoresizingMaskIntoConstraints = false
+        tv.delegate = self
         editTextView = tv
-        contentStack.addArrangedSubview(tv)
+        wrap.addSubview(tv)
+
+        let counter = makeLabel(charCountText(for: tv.text), size: 11, color: .tertiaryLabel)
+        counter.textAlignment = .right
+        counter.translatesAutoresizingMaskIntoConstraints = false
+        charCountLabel = counter
+        wrap.addSubview(counter)
+
+        NSLayoutConstraint.activate([
+            tv.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 4),
+            tv.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -4),
+            tv.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 2),
+            tv.heightAnchor.constraint(equalToConstant: 72),
+            counter.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
+            counter.topAnchor.constraint(equalTo: tv.bottomAnchor, constant: 0),
+            counter.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -6),
+        ])
+        contentStack.addArrangedSubview(wrap)
 
         let tones = UIStackView()
         tones.axis = .horizontal
         tones.spacing = 6
         tones.distribution = .fillEqually
-        tones.addArrangedSubview(makeSecondaryButton("更简短", action: #selector(rewriteBrief)))
-        tones.addArrangedSubview(makeSecondaryButton("更温柔", action: #selector(rewriteCaring)))
-        tones.addArrangedSubview(makeSecondaryButton("更直接", action: #selector(rewriteDirect)))
+        tones.addArrangedSubview(makeChipButton("更短", symbol: "scissors", action: #selector(rewriteBrief)))
+        tones.addArrangedSubview(makeChipButton("更温柔", symbol: "heart", action: #selector(rewriteCaring)))
+        tones.addArrangedSubview(makeChipButton("更坚定", symbol: "seal", action: #selector(rewriteDirect)))
         contentStack.addArrangedSubview(tones)
 
-        let row = UIStackView()
-        row.axis = .horizontal
-        row.spacing = 8
-        row.distribution = .fillEqually
-        row.addArrangedSubview(makeSecondaryButton("返回", action: #selector(exitEditing)))
-        row.addArrangedSubview(makePrimaryButton("插入回复", action: #selector(insertEditedReply)))
-        contentStack.addArrangedSubview(row)
+        contentStack.addArrangedSubview(makePrimaryButton("插入微信", action: #selector(insertEditedReply)))
     }
 
-    private func makeActionRow(_ action: AlfredKeyboardAPI.Action) -> UIView {
-        let card = UIStackView()
-        card.axis = .vertical
-        card.spacing = 4
-        card.isLayoutMarginsRelativeArrangement = true
-        card.layoutMargins = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
-        card.backgroundColor = .systemBackground
-        card.layer.cornerRadius = 10
+    private func renderSuccess() {
+        let checkWrap = UIView()
+        let check = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
+        check.tintColor = accent
+        check.translatesAutoresizingMaskIntoConstraints = false
+        check.contentMode = .scaleAspectFit
+        checkWrap.addSubview(check)
+        NSLayoutConstraint.activate([
+            check.centerXAnchor.constraint(equalTo: checkWrap.centerXAnchor),
+            check.topAnchor.constraint(equalTo: checkWrap.topAnchor),
+            check.bottomAnchor.constraint(equalTo: checkWrap.bottomAnchor),
+            check.widthAnchor.constraint(equalToConstant: 48),
+            check.heightAnchor.constraint(equalToConstant: 48),
+            checkWrap.heightAnchor.constraint(equalToConstant: 52),
+        ])
+        contentStack.addArrangedSubview(checkWrap)
 
-        card.addArrangedSubview(makeLabel(action.title, size: 13, weight: .medium))
-        let evidence = makeLabel("「\(action.evidence)」", size: 11, color: .secondaryLabel)
-        evidence.numberOfLines = 2
-        card.addArrangedSubview(evidence)
+        let title = makeLabel("已插入微信", size: 17, weight: .semibold)
+        title.textAlignment = .center
+        contentStack.addArrangedSubview(title)
 
-        let buttons = UIStackView()
-        buttons.axis = .horizontal
-        buttons.spacing = 8
-        buttons.distribution = .fillEqually
+        let count = actions.count
+        if count > 0 {
+            let follow = makeLabel(
+                "Alfred 还发现了 \(count) 个跟进行动",
+                size: 13,
+                color: .secondaryLabel
+            )
+            follow.textAlignment = .center
+            contentStack.addArrangedSubview(follow)
 
-        let confirm = UIButton(type: .system)
-        confirm.setTitle(confirmTitle(action), for: .normal)
-        confirm.addAction(UIAction { [weak self] _ in
-            Task { await self?.confirm(action) }
-        }, for: .touchUpInside)
+            for action in actions.prefix(2) {
+                contentStack.addArrangedSubview(makeSuccessActionCard(action))
+            }
+        } else {
+            let none = makeLabel("没有更多跟进事项", size: 13, color: .secondaryLabel)
+            none.textAlignment = .center
+            contentStack.addArrangedSubview(none)
+        }
 
-        let ignore = UIButton(type: .system)
-        ignore.setTitle("忽略", for: .normal)
-        ignore.addAction(UIAction { [weak self] _ in
-            self?.actions.removeAll { $0.id == action.id }
-            self?.render()
-        }, for: .touchUpInside)
+        if let banner = statusBanner {
+            contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+        }
 
-        buttons.addArrangedSubview(confirm)
-        buttons.addArrangedSubview(ignore)
-        card.addArrangedSubview(buttons)
-        return card
+        let done = UIButton(type: .system)
+        done.setTitle("完成", for: .normal)
+        done.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        done.setTitleColor(accent, for: .normal)
+        done.addTarget(self, action: #selector(resetToIdle), for: .touchUpInside)
+        contentStack.addArrangedSubview(done)
+    }
+
+    private func renderError(_ message: String) {
+        let label = makeLabel(message, size: 14, weight: .medium, color: UIColor.systemOrange)
+        label.textAlignment = .center
+        contentStack.addArrangedSubview(label)
+        contentStack.addArrangedSubview(makePrimaryButton("重试", action: #selector(resetToIdle)))
     }
 
     // MARK: - Auth gate
@@ -348,10 +505,10 @@ final class KeyboardViewController: UIInputViewController {
     // MARK: - Actions
 
     @objc private func resetToIdle() {
+        stopGeneratingProgress()
         phase = .idle
         statusBanner = nil
-        showingContextDetail = false
-        showingActionsPanel = false
+        clipboardHintCount = estimateClipboardMessageCount()
         render()
     }
 
@@ -359,6 +516,19 @@ final class KeyboardViewController: UIInputViewController {
     @objc private func spaceTapped() { textDocumentProxy.insertText(" ") }
     @objc private func backspaceTapped() { textDocumentProxy.deleteBackward() }
     @objc private func returnTapped() { textDocumentProxy.insertText("\n") }
+    @objc private func numbersHintTapped() { textDocumentProxy.insertText("123") }
+
+    @objc private func headerChevronTapped() {
+        if conversationId != nil {
+            expandTapped()
+        } else {
+            advanceToNextInputMode()
+        }
+    }
+
+    @objc private func openAppHome() {
+        openContainingApp(urlString: "albert://")
+    }
 
     @objc private func importTapped() {
         if let gate = authGateMessage() {
@@ -385,7 +555,6 @@ final class KeyboardViewController: UIInputViewController {
             conversationId = parsed.id
             parsedMessages = parsed.messages
 
-            // Prefer server selection; if none selected, take top by weight.
             var selected = Set(parsed.messages.filter(\.is_selected).map(\.id))
             if selected.isEmpty {
                 let ranked = parsed.messages.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
@@ -411,7 +580,8 @@ final class KeyboardViewController: UIInputViewController {
                 "messages": messages,
                 "imported_at": ISO8601DateFormatter().string(from: Date()),
             ]
-            phase = .contextReview
+            insight = buildHeuristicInsight()
+            phase = .contextInsight
             render()
         } catch {
             phase = .error(mapError(error))
@@ -419,25 +589,23 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    @objc private func toggleContextDetail() {
-        showingContextDetail.toggle()
-        render()
-    }
-
-    @objc private func continueFromContext() {
+    @objc private func continueFromInsight() {
         phase = .generating
+        generatingStep = 0
+        generatingComplete = false
         render()
+        startGeneratingProgress()
         Task { await runAnalyze() }
     }
 
     @MainActor
-    private func runAnalyze(tones: [String]? = nil) async {
+    private func runAnalyze(tones: [String]? = nil, returnToEditing: Bool = false) async {
         guard var conversation = conversationJSON else {
+            stopGeneratingProgress()
             phase = .error("会话丢失，请重新导入")
             render()
             return
         }
-        // Sync selection into payload.
         if var messages = conversation["messages"] as? [[String: Any]] {
             messages = messages.map { m in
                 var copy = m
@@ -458,17 +626,41 @@ final class KeyboardViewController: UIInputViewController {
             replies = analyzed.reply_suggestions
             replyIndex = 0
             actions = analyzed.actions
-            insight = analyzed.insight?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if insight.isEmpty {
+            let serverInsight = analyzed.insight?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !serverInsight.isEmpty {
+                insight = serverInsight
+            } else if insight.isEmpty {
                 if let first = actions.first?.title, !first.isEmpty {
                     insight = first
                 } else {
                     insight = "已分析对话，可插入回复"
                 }
             }
-            phase = .replyReady
+            finishGeneratingProgress()
+            if returnToEditing {
+                phase = .editing
+            } else {
+                phase = .replyReady
+            }
             render()
+            if returnToEditing {
+                editTextView?.text = currentReply()?.body
+                updateCharCount()
+            }
         } catch {
+            stopGeneratingProgress()
+            if returnToEditing, let tone = tones?.first {
+                let draft = currentReply()?.body ?? ""
+                if !draft.isEmpty {
+                    replies = [AlfredKeyboardAPI.Reply(tone: tone, body: localRewrite(draft, tone: tone))]
+                    replyIndex = 0
+                    phase = .editing
+                    render()
+                    editTextView?.text = currentReply()?.body
+                    updateCharCount()
+                    return
+                }
+            }
             phase = .error(mapError(error))
             render()
         }
@@ -485,32 +677,27 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
-    @objc private func exitEditing() {
-        if let text = editTextView?.text, !replies.isEmpty {
-            let tone = replies[replyIndex].tone
-            replies[replyIndex] = AlfredKeyboardAPI.Reply(tone: tone, body: text)
-        }
-        phase = .replyReady
-        render()
-    }
-
     @objc private func insertCurrentReply() {
         guard let body = currentReply()?.body else { return }
         textDocumentProxy.insertText(body)
-        statusBanner = "已插入"
+        phase = .success
+        statusBanner = nil
         render()
     }
 
     @objc private func insertEditedReply() {
-        let text = editTextView?.text ?? currentReply()?.body ?? ""
+        var text = editTextView?.text ?? currentReply()?.body ?? ""
+        if text.count > maxEditChars {
+            text = String(text.prefix(maxEditChars))
+        }
         guard !text.isEmpty else { return }
         textDocumentProxy.insertText(text)
         if !replies.isEmpty {
             let tone = replies[replyIndex].tone
             replies[replyIndex] = AlfredKeyboardAPI.Reply(tone: tone, body: text)
         }
-        phase = .replyReady
-        statusBanner = "已插入"
+        phase = .success
+        statusBanner = nil
         render()
     }
 
@@ -520,29 +707,27 @@ final class KeyboardViewController: UIInputViewController {
 
     @MainActor
     private func rewrite(tone: String) async {
-        let draft = editTextView?.text
-        phase = .generating
-        render()
-        await runAnalyze(tones: [tone])
-        if case .error = phase {
-            // Network failed — fall back to a local tweak so editing still works.
-            if let draft, !draft.isEmpty {
-                replies = [AlfredKeyboardAPI.Reply(tone: tone, body: localRewrite(draft, tone: tone))]
+        // Persist draft before leaving editing UI (text view is cleared on re-render).
+        if let draft = editTextView?.text {
+            if replies.isEmpty {
+                replies = [AlfredKeyboardAPI.Reply(tone: tone, body: draft)]
                 replyIndex = 0
-                phase = .editing
-                render()
-                editTextView?.text = currentReply()?.body
+            } else {
+                let t = replies[replyIndex].tone
+                replies[replyIndex] = AlfredKeyboardAPI.Reply(tone: t, body: draft)
             }
-            return
         }
-        if let idx = replies.firstIndex(where: { $0.tone == tone }) {
-            replyIndex = idx
-        } else {
-            replyIndex = 0
-        }
-        phase = .editing
+        phase = .generating
+        generatingStep = 0
+        generatingComplete = false
         render()
-        editTextView?.text = currentReply()?.body
+        startGeneratingProgress()
+        await runAnalyze(tones: [tone], returnToEditing: true)
+        if case .editing = phase, let idx = replies.firstIndex(where: { $0.tone == tone }) {
+            replyIndex = idx
+            editTextView?.text = currentReply()?.body
+            updateCharCount()
+        }
     }
 
     private func localRewrite(_ text: String, tone: String) -> String {
@@ -555,11 +740,6 @@ final class KeyboardViewController: UIInputViewController {
         default:
             return text
         }
-    }
-
-    @objc private func toggleActionsPanel() {
-        showingActionsPanel.toggle()
-        render()
     }
 
     @objc private func expandTapped() {
@@ -611,7 +791,6 @@ final class KeyboardViewController: UIInputViewController {
 
     @MainActor
     private func confirm(_ action: AlfredKeyboardAPI.Action) async {
-        // Complex calendar with start/end → open app; simple follow-ups confirm in keyboard.
         if action.type == "calendar_event", action.start != nil {
             writeHandoff()
             openContainingApp(urlString: "albert://conversation/\(conversationId ?? "pending")")
@@ -645,12 +824,117 @@ final class KeyboardViewController: UIInputViewController {
         return replies[replyIndex]
     }
 
-    private func confirmTitle(_ action: AlfredKeyboardAPI.Action) -> String {
-        switch action.type {
-        case "calendar_event": return "添加日历"
-        case "follow_up": return "添加跟进"
-        default: return "加入 Alfred"
+    // MARK: - Generating progress
+
+    private func startGeneratingProgress() {
+        generatingTimer?.invalidate()
+        generatingStep = 0
+        generatingComplete = false
+        generatingTimer = Timer.scheduledTimer(withTimeInterval: 0.55, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                guard case .generating = self.phase else { return }
+                // Leave the last item unchecked until the API finishes.
+                if self.generatingStep < self.generatingLabels.count - 1 {
+                    self.generatingStep += 1
+                    self.render()
+                }
+            }
         }
+    }
+
+    private func finishGeneratingProgress() {
+        generatingComplete = true
+        generatingStep = generatingLabels.count
+        generatingTimer?.invalidate()
+        generatingTimer = nil
+    }
+
+    private func stopGeneratingProgress() {
+        generatingTimer?.invalidate()
+        generatingTimer = nil
+        generatingComplete = false
+        generatingStep = 0
+    }
+
+    // MARK: - Heuristics / clipboard
+
+    private func estimateClipboardMessageCount() -> Int? {
+        guard hasFullAccess,
+              let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty
+        else { return nil }
+
+        // WeChat multi-select paste often has blank-line-separated blocks or "Name HH:MM" lines.
+        let blocks = text
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if blocks.count >= 2 { return blocks.count }
+
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let stamped = lines.filter { line in
+            line.range(of: #"\d{1,2}:\d{2}"#, options: .regularExpression) != nil
+        }
+        if stamped.count >= 2 { return stamped.count }
+        if lines.count >= 2 { return min(lines.count, 40) }
+        return 1
+    }
+
+    private func buildHeuristicInsight() -> String {
+        let selected = parsedMessages.filter { selectedMessageIds.contains($0.id) }
+        let blob = selected.map(\.content).joined(separator: " ")
+        if blob.contains("消化") || blob.contains("难受") || blob.contains("难过") || blob.contains("委屈") {
+            return "对方还在消化昨天的事情，想继续聊，你的回应会让对方感到安心。"
+        }
+        if blob.contains("忙") || blob.contains("稍后") || blob.contains("晚点") {
+            return "对方节奏有点紧，温柔地接一下，给对方留一点空间会更好。"
+        }
+        if blob.contains("谢谢") || blob.contains("感谢") {
+            return "对方在表达感谢，简短真诚的回应就能接住这份善意。"
+        }
+        if selected.count >= 2 {
+            return "对话里有几处值得回应的重点，先接住情绪，再轻轻推进会更自然。"
+        }
+        return "对方似乎想继续聊，你的回应会让对方感到安心。"
+    }
+
+    private func evidenceMessages(limit: Int) -> [AlfredKeyboardAPI.Message] {
+        let selected = parsedMessages.filter { selectedMessageIds.contains($0.id) }
+        let ranked = selected.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
+        if !ranked.isEmpty { return Array(ranked.prefix(limit)) }
+        return Array(parsedMessages.prefix(limit))
+    }
+
+    private func formatSuggestedTime(_ action: AlfredKeyboardAPI.Action) -> String? {
+        if let t = action.suggested_time, !t.isEmpty {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = iso.date(from: t) ?? ISO8601DateFormatter().date(from: t) {
+                let fmt = DateFormatter()
+                fmt.locale = Locale(identifier: "zh_CN")
+                fmt.dateFormat = "HH:mm"
+                return fmt.string(from: date)
+            }
+            if let range = t.range(of: #"\d{1,2}:\d{2}"#, options: .regularExpression) {
+                return String(t[range])
+            }
+            return t
+        }
+        if let due = action.due_date, !due.isEmpty { return due }
+        return nil
+    }
+
+    private func charCountText(for text: String?) -> String {
+        let n = min(text?.count ?? 0, maxEditChars)
+        return "\(n)/\(maxEditChars)"
+    }
+
+    private func updateCharCount() {
+        charCountLabel?.text = charCountText(for: editTextView?.text)
     }
 
     // MARK: - UI helpers
@@ -669,40 +953,208 @@ final class KeyboardViewController: UIInputViewController {
         return label
     }
 
-    private func paddedView(_ inner: UIView) -> UIView {
+    private func makeMascotView(height: CGFloat) -> UIView {
         let wrap = UIView()
-        wrap.backgroundColor = .systemBackground
-        wrap.layer.cornerRadius = 10
-        inner.translatesAutoresizingMaskIntoConstraints = false
-        wrap.addSubview(inner)
+        let imageView = UIImageView()
+        if let img = UIImage(named: "alfred-mascot") {
+            imageView.image = img
+        } else {
+            imageView.image = UIImage(systemName: "face.smiling.inverse")
+            imageView.tintColor = accent
+        }
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        wrap.addSubview(imageView)
         NSLayoutConstraint.activate([
-            inner.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 10),
-            inner.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
-            inner.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 8),
-            inner.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -8),
+            imageView.centerXAnchor.constraint(equalTo: wrap.centerXAnchor),
+            imageView.topAnchor.constraint(equalTo: wrap.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: wrap.bottomAnchor),
+            imageView.heightAnchor.constraint(equalToConstant: height),
+            imageView.widthAnchor.constraint(equalToConstant: height),
+            wrap.heightAnchor.constraint(equalToConstant: height),
         ])
         return wrap
     }
 
-    private func makePrimaryButton(_ title: String, action: Selector) -> UIButton {
+    private func makeBulletRow(symbol: String, text: String) -> UIView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = 8
+        row.alignment = .center
+
+        let icon = UIImageView(image: UIImage(systemName: symbol))
+        icon.tintColor = accent
+        icon.contentMode = .scaleAspectFit
+        icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(makeLabel(text, size: 13, color: .secondaryLabel))
+        return row
+    }
+
+    private func makeEvidenceBubble(_ msg: AlfredKeyboardAPI.Message) -> UIView {
+        let card = UIStackView()
+        card.axis = .vertical
+        card.spacing = 2
+        card.isLayoutMarginsRelativeArrangement = true
+        card.layoutMargins = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        card.backgroundColor = panel
+        card.layer.cornerRadius = 10
+
+        let meta = UIStackView()
+        meta.axis = .horizontal
+        meta.spacing = 6
+        meta.alignment = .center
+
+        let check = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
+        check.tintColor = accent
+        check.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        check.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        meta.addArrangedSubview(check)
+
+        let sender = String(msg.sender.suffix(4))
+        meta.addArrangedSubview(makeLabel(sender, size: 11, weight: .medium, color: .secondaryLabel))
+        let spacer = UIView()
+        meta.addArrangedSubview(spacer)
+        card.addArrangedSubview(meta)
+
+        let body = makeLabel(msg.content, size: 12)
+        body.numberOfLines = 2
+        card.addArrangedSubview(body)
+        return card
+    }
+
+    private func makeReplyBubble(_ text: String) -> UIView {
+        let wrap = UIView()
+        wrap.backgroundColor = bubbleFill
+        wrap.layer.cornerRadius = 14
+
+        let label = makeLabel(text, size: 14, weight: .medium)
+        label.numberOfLines = 5
+        label.translatesAutoresizingMaskIntoConstraints = false
+        wrap.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 12),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -12),
+        ])
+        return wrap
+    }
+
+    private func makeSuccessActionCard(_ action: AlfredKeyboardAPI.Action) -> UIView {
+        let card = UIStackView()
+        card.axis = .vertical
+        card.spacing = 6
+        card.isLayoutMarginsRelativeArrangement = true
+        card.layoutMargins = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        card.backgroundColor = accentSoft
+        card.layer.cornerRadius = 12
+
+        let titleRow = UIStackView()
+        titleRow.axis = .horizontal
+        titleRow.spacing = 6
+        titleRow.alignment = .center
+        let bell = UIImageView(image: UIImage(systemName: "bell.fill"))
+        bell.tintColor = accent
+        bell.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        bell.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        titleRow.addArrangedSubview(bell)
+        titleRow.addArrangedSubview(makeLabel(action.title, size: 13, weight: .semibold))
+        card.addArrangedSubview(titleRow)
+
+        if let time = formatSuggestedTime(action) {
+            card.addArrangedSubview(
+                makeLabel("建议提醒时间: \(time)", size: 12, color: .secondaryLabel)
+            )
+        } else {
+            let evidence = makeLabel("「\(action.evidence)」", size: 11, color: .secondaryLabel)
+            evidence.numberOfLines = 2
+            card.addArrangedSubview(evidence)
+        }
+
+        let btn = UIButton(type: .system)
+        var config = UIButton.Configuration.filled()
+        config.title = confirmTitle(action)
+        config.baseBackgroundColor = accent
+        config.baseForegroundColor = .white
+        config.cornerStyle = .medium
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        btn.configuration = config
+        btn.addAction(UIAction { [weak self] _ in
+            Task { await self?.confirm(action) }
+        }, for: .touchUpInside)
+        card.addArrangedSubview(btn)
+        return card
+    }
+
+    private func confirmTitle(_ action: AlfredKeyboardAPI.Action) -> String {
+        switch action.type {
+        case "calendar_event": return "添加日历"
+        case "follow_up": return "添加提醒"
+        default: return "添加提醒"
+        }
+    }
+
+    private func makePrimaryButton(_ title: String, action: Selector, symbol: String? = nil) -> UIButton {
         var config = UIButton.Configuration.filled()
         config.title = title
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        if let symbol {
+            config.image = UIImage(systemName: symbol)
+            config.imagePadding = 6
+            config.imagePlacement = .leading
+        }
         let button = UIButton(configuration: config)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
 
-    private func makeSecondaryButton(_ title: String, action: Selector) -> UIButton {
-        var config = UIButton.Configuration.bordered()
+    private func makeSoftPrimaryButton(_ title: String, action: Selector) -> UIButton {
+        var config = UIButton.Configuration.filled()
         config.title = title
+        config.baseBackgroundColor = accentSoft
         config.baseForegroundColor = accent
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
         let button = UIButton(configuration: config)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    private func makeSecondaryButton(_ title: String, action: Selector, symbol: String? = nil) -> UIButton {
+        var config = UIButton.Configuration.gray()
+        config.title = title
+        config.baseForegroundColor = .label
+        config.cornerStyle = .medium
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
+        if let symbol {
+            config.image = UIImage(systemName: symbol)
+            config.imagePadding = 6
+            config.imagePlacement = .leading
+        }
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    private func makeChipButton(_ title: String, symbol: String, action: Selector) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.title = title
+        config.baseForegroundColor = accent
+        config.image = UIImage(systemName: symbol)
+        config.imagePadding = 4
+        config.imagePlacement = .leading
+        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
+        config.background.strokeColor = accent.withAlphaComponent(0.35)
+        config.background.strokeWidth = 1
+        config.background.backgroundColor = .white
+        let button = UIButton(configuration: config)
+        button.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -710,9 +1162,45 @@ final class KeyboardViewController: UIInputViewController {
     private func makeGhostButton(_ title: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-        button.setTitleColor(.label, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        button.setTitleColor(accent, for: .normal)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
+    }
+
+    private func makeChromeKey(_ title: String, action: Selector, width: CGFloat? = nil) -> UIButton {
+        var config = UIButton.Configuration.gray()
+        config.title = title
+        config.baseForegroundColor = .label
+        config.cornerStyle = .medium
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        if let width {
+            button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        }
+        return button
+    }
+
+    private func makePrimaryChromeKey(_ title: String, action: Selector, width: CGFloat) -> UIButton {
+        var config = UIButton.Configuration.filled()
+        config.title = title
+        config.baseBackgroundColor = accent
+        config.baseForegroundColor = .white
+        config.cornerStyle = .medium
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        return button
+    }
+}
+
+extension KeyboardViewController: UITextViewDelegate {
+    func textViewDidChange(_ textView: UITextView) {
+        if textView.text.count > maxEditChars {
+            textView.text = String(textView.text.prefix(maxEditChars))
+        }
+        updateCharCount()
     }
 }

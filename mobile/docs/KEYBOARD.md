@@ -83,21 +83,33 @@ App Group suite must never silently fall back to `UserDefaults.standard` — sui
 | API 401 / expired | 登录已过期 |
 | Network failure | 网络不可用 |
 
-## State machine UI (~320pt)
+## State machine UI (~320pt, cool white / deep-blue mockup)
 
 ```
-IDLE → IMPORTING → CONTEXT_REVIEW → GENERATING → REPLY_READY → EDITING
+IDLE → IMPORTING → CONTEXT_INSIGHT → GENERATING → REPLY_READY → EDITING → SUCCESS
 ```
 
-- **IDLE:** 「复制微信聊天后，点击导入」+ [导入所选消息]
-- **IMPORTING / GENERATING:** loading
-- **CONTEXT_REVIEW:** counts + [查看上下文] [继续]
-- **REPLY_READY:** insight, one primary reply, [换一个] [编辑] [插入], action summary, [查看并确认], **展开 ↗**
-- **EDITING:** TextView + [更简短] [更温柔] [更直接] + [插入回复]
+Visual language: white / light-gray panels, deep-blue primary CTAs, light-blue reply
+bubble (not the earlier beige paper look). Header: **Alfred** + sparkles + chevron
+(chevron → 展开 deep link when a conversation exists, else next keyboard).
 
-Bottom chrome: 🌐 next keyboard, space / backspace / return (no full QWERTY).
+- **IDLE:** mascot + 「检测到微信聊天」+ clipboard count hint + capability bullets + [导入所选聊天]
+- **IMPORTING:** spinner while `POST /parse`
+- **CONTEXT_INSIGHT:** heuristic 「Alfred 理解」+ evidence bubbles from top selected messages + [下一步：生成回复]
+- **GENERATING:** spinner + checklist (解析 → 情绪意图 → 关键信息 → 生成回复…) while `POST /analyze`
+- **REPLY_READY:** light-blue 推荐回复 bubble + [编辑] [插入微信]
+- **EDITING:** TextView + `n/200` counter + tone chips 更短 / 更温柔 / 更坚定 + [插入微信]
+- **SUCCESS:** checkmark 「已插入微信」+ follow-up action cards ([添加提醒]) + 完成 → IDLE
 
-**展开 ↗** opens `albert://conversation/{conversationId}` (scheme from `app.json`), writing parse/analyze session into App Group handoff so Import can hydrate.
+Bottom chrome: 🌐 123 空格 ⌫ blue ↵ (minimal bar styled closer to the mockup; no full QWERTY).
+
+Mascot asset: `targets/AlfredKeyboard/alfred-mascot.png` (copied into the extension
+Resources phase by `keyboard-wiring.cjs`).
+
+**展开** (header chevron when session exists) opens `albert://conversation/{conversationId}`
+(scheme from `app.json`), writing parse/analyze session into App Group handoff so Import can hydrate.
+
+Keyboard Swift / assets / entitlements changes **require a new native IPA** — OTA will not update the extension UI.
 
 ## Deep link
 
@@ -108,13 +120,13 @@ Bottom chrome: 🌐 next keyboard, space / backspace / return (no full QWERTY).
 ## Flow
 
 1. User multi-selects WeChat messages → Copy
-2. Switch to Alfred Keyboard → tap **导入所选消息**
-3. Extension calls `POST /conversations/parse` → context review → `/analyze`
-4. User inserts a reply via `textDocumentProxy.insertText` (only on 插入)
+2. Switch to Alfred Keyboard → tap **导入所选聊天**
+3. Extension calls `POST /conversations/parse` → context insight → **下一步：生成回复** → `/analyze`
+4. User inserts a reply via `textDocumentProxy.insertText` (插入微信) → success + follow-ups
 5. User confirms an action → `POST /conversations/actions/confirm` + enqueue into App Group
 6. Main app drains App Group on foreground and schedules a local notification **only**
    if the confirmed action has `remind_at`
-7. **展开** opens the Import workstation with the same session
+7. Header chevron / 展开 opens the Import workstation with the same session
 
 ## In-app alternative (no keyboard build)
 

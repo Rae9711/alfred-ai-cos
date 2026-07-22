@@ -200,30 +200,39 @@ function ensureFrameworksBuildPhase(project, target) {
   return uuid;
 }
 
-function addSwiftToTarget(project, target, groupKey, fileName) {
+function ensureFileInGroup(project, groupKey, fileName, lastKnownFileType) {
+  const group = project.hash.project.objects.PBXGroup[groupKey];
+  group.children = group.children || [];
+  const existing = group.children.find((c) => {
+    const ref = project.hash.project.objects.PBXFileReference[c.value];
+    return ref && stripQuotes(ref.path) === fileName;
+  });
+  if (existing) return existing.value;
+
   const fileRef = project.generateUuid();
   if (!project.hash.project.objects.PBXFileReference) {
     project.hash.project.objects.PBXFileReference = {};
   }
   project.hash.project.objects.PBXFileReference[fileRef] = {
     isa: "PBXFileReference",
-    lastKnownFileType: "sourcecode.swift",
+    lastKnownFileType,
     name: `"${fileName}"`,
     path: `"${fileName}"`,
     sourceTree: '"<group>"',
     fileEncoding: 4,
   };
   project.hash.project.objects.PBXFileReference[`${fileRef}_comment`] = fileName;
+  group.children.push({ value: fileRef, comment: fileName });
+  return fileRef;
+}
 
-  const group = project.hash.project.objects.PBXGroup[groupKey];
-  group.children = group.children || [];
-  const alreadyInGroup = group.children.some((c) => {
-    const ref = project.hash.project.objects.PBXFileReference[c.value];
-    return ref && stripQuotes(ref.path) === fileName;
-  });
-  if (!alreadyInGroup) {
-    group.children.push({ value: fileRef, comment: fileName });
-  }
+function addSwiftToTarget(project, target, groupKey, fileName) {
+  const fileRef = ensureFileInGroup(
+    project,
+    groupKey,
+    fileName,
+    "sourcecode.swift",
+  );
 
   const sourcesPhaseId = ensureSourcesBuildPhase(project, target);
   const buildFileId = project.generateUuid();
@@ -249,6 +258,61 @@ function addSwiftToTarget(project, target, groupKey, fileName) {
   if (!alreadyBuilt) {
     phase.files.push({ value: buildFileId, comment: `${fileName} in Sources` });
   }
+}
+
+function ensureResourcesBuildPhase(project, target) {
+  const phases = project.hash.project.objects.PBXResourcesBuildPhase || {};
+  const existing = (target.buildPhases || [])
+    .map((p) => p.value)
+    .filter((id) => phases[id] && phases[id].isa === "PBXResourcesBuildPhase");
+  if (existing.length) return existing[0];
+
+  const uuid = project.generateUuid();
+  if (!project.hash.project.objects.PBXResourcesBuildPhase) {
+    project.hash.project.objects.PBXResourcesBuildPhase = {};
+  }
+  project.hash.project.objects.PBXResourcesBuildPhase[uuid] = {
+    isa: "PBXResourcesBuildPhase",
+    buildActionMask: 2147483647,
+    files: [],
+    runOnlyForDeploymentPostprocessing: 0,
+  };
+  project.hash.project.objects.PBXResourcesBuildPhase[`${uuid}_comment`] =
+    "Resources";
+  if (!target.buildPhases) target.buildPhases = [];
+  target.buildPhases.push({ value: uuid, comment: "Resources" });
+  return uuid;
+}
+
+function addPngToTarget(project, target, groupKey, fileName) {
+  const fileRef = ensureFileInGroup(project, groupKey, fileName, "image.png");
+  const resourcesPhaseId = ensureResourcesBuildPhase(project, target);
+  const phase =
+    project.hash.project.objects.PBXResourcesBuildPhase[resourcesPhaseId];
+  phase.files = phase.files || [];
+  const alreadyBuilt = phase.files.some((f) => {
+    const bf = project.hash.project.objects.PBXBuildFile[f.value];
+    if (!bf) return false;
+    const fr = project.hash.project.objects.PBXFileReference[bf.fileRef];
+    return fr && stripQuotes(fr.path) === fileName;
+  });
+  if (alreadyBuilt) return;
+
+  const buildFileId = project.generateUuid();
+  if (!project.hash.project.objects.PBXBuildFile) {
+    project.hash.project.objects.PBXBuildFile = {};
+  }
+  project.hash.project.objects.PBXBuildFile[buildFileId] = {
+    isa: "PBXBuildFile",
+    fileRef,
+    fileRef_comment: fileName,
+  };
+  project.hash.project.objects.PBXBuildFile[`${buildFileId}_comment`] =
+    `${fileName} in Resources`;
+  phase.files.push({
+    value: buildFileId,
+    comment: `${fileName} in Resources`,
+  });
 }
 
 function getAppDeploymentTarget(project, appTarget) {
@@ -361,6 +425,14 @@ function wireKeyboardProject(project, { iosRoot, bundleId }) {
     addSwiftToTarget(project, nativeTarget, groupKey, file);
   }
 
+  const pngFiles = fs
+    .readdirSync(keyboardDir)
+    .filter((f) => f.endsWith(".png"))
+    .sort();
+  for (const file of pngFiles) {
+    addPngToTarget(project, nativeTarget, groupKey, file);
+  }
+
   // Build settings for the keyboard target's configurations only.
   const configs = project.pbxXCBuildConfigurationSection();
   for (const key of Object.keys(configs)) {
@@ -416,6 +488,7 @@ function wireKeyboardProject(project, { iosRoot, bundleId }) {
         `entitlements=${entitlementsRel}`,
         `deploymentTarget=${deploymentTarget}`,
         `sources=${swiftFiles.join(",")}`,
+        `resources=${pngFiles.join(",")}`,
         `embeddedAppExtension=${embedded}`,
         `wired=true`,
       ].join("\n") + "\n",
