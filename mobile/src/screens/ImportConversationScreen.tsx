@@ -177,7 +177,8 @@ export function ImportConversationScreen({
   onClose,
   deepLinkConversationId,
 }: {
-  onClose: () => void;
+  /** When omitted (e.g. Chats tab), the close control is hidden. */
+  onClose?: () => void;
   deepLinkConversationId?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("paste");
@@ -371,9 +372,13 @@ export function ImportConversationScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.top}>
-        <IconBtn onPress={onClose}>
-          <Ic.Close size={18} color={colors.ink2} />
-        </IconBtn>
+        {onClose ? (
+          <IconBtn onPress={onClose}>
+            <Ic.Close size={18} color={colors.ink2} />
+          </IconBtn>
+        ) : (
+          <View style={styles.topSpacer} />
+        )}
         <Eyebrow>
           {phase === "paste"
             ? "导入对话"

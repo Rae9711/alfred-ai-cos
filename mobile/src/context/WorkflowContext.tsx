@@ -1,5 +1,5 @@
 // Cross-tab workflow: Inbox → Chats (task thread) with real drafts + send.
-// Alfred hub is the assistant tab; Chats is the conversation workbench.
+// Alfred hub is the assistant tab; Chats empty path is paste-import.
 // Task threads still load LLM drafts from the API.
 
 import {
@@ -27,7 +27,7 @@ import { enrichSmsDetailFields } from "@/lib/smsSenderDisplay";
 
 export type { AlfredLaunchOpts };
 
-/** Tab bar keys. `"ask"` is the Chats workbench; `"alfred"` is the center hub. */
+/** Tab bar keys. `"ask"` is Chats (paste import / reply thread); `"alfred"` is the center hub. */
 export type TabKey = "today" | "inbox" | "alfred" | "ask" | "settings";
 
 export type ChatMode = "free" | "reply" | "delegate" | "proactive";
