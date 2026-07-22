@@ -79,6 +79,16 @@ export const translations = {
       followUpMarkedDone: "Marked done.",
       followUpIgnored: "Ignored.",
       followUpUpdateFailed: "Couldn't update — try again.",
+      showMore: "Show more",
+      showLess: "Show less",
+      showWeekAhead: "Week ahead",
+      hideWeekAhead: "Hide week ahead",
+      showReminders: (n: number) =>
+        n === 1 ? "1 reminder" : `${n} reminders`,
+      hideReminders: "Hide reminders",
+      showFollowUps: (n: number) =>
+        n === 1 ? "1 follow-up from chats" : `${n} follow-ups from chats`,
+      hideFollowUps: "Hide follow-ups",
     },
     planning: {
       sectionLabel: "Planning",
@@ -428,6 +438,22 @@ export const translations = {
       seed:
         "I can check or book your calendar, draft a text or email by name, or set a reminder — you confirm before anything sends.",
       seedReminder: "Remind me ",
+      primaryAction: "Ask Alfred",
+    },
+    importFlow: {
+      titlePlain: "Turn a chat into",
+      titleEm: "action",
+      sub: "Paste a multi-select WeChat copy. Alfred drafts a reply and pulls out follow-ups.",
+      pasteCta: "Paste from clipboard",
+      orPaste: "Or paste below",
+      parseCta: "Parse conversation",
+      reading: "Reading…",
+      parsing: "Parsing…",
+      showTips: "Copy tips",
+      hideTips: "Hide tips",
+      tipTitle: "Copy tips",
+      tipBody:
+        "Long-press a bubble → multi-select → copy (sender names help).\nShort reactions are de-prioritized automatically.\nSystem lines are ignored.\nKeyboard import needs Full Access to read the clipboard.",
     },
     chats: {
       eyebrow: "Conversations",
@@ -555,6 +581,15 @@ export const translations = {
       followUpMarkedDone: "已标记完成。",
       followUpIgnored: "已忽略。",
       followUpUpdateFailed: "无法更新 — 请重试。",
+      showMore: "展开",
+      showLess: "收起",
+      showWeekAhead: "下周预览",
+      hideWeekAhead: "收起下周预览",
+      showReminders: (n: number) => `${n} 条提醒`,
+      hideReminders: "收起提醒",
+      showFollowUps: (n: number) =>
+        n === 1 ? "1 条对话跟进" : `${n} 条对话跟进`,
+      hideFollowUps: "收起跟进",
     },
     planning: {
       sectionLabel: "时间块建议",
@@ -891,6 +926,22 @@ export const translations = {
       seed:
         "我可以帮你查看或预订日历、按名字起草短信或邮件、设置提醒 — 发送前都会先请你确认。",
       seedReminder: "提醒我 ",
+      primaryAction: "问管家",
+    },
+    importFlow: {
+      titlePlain: "把对话变成",
+      titleEm: "可执行行动",
+      sub: "粘贴微信多选复制内容。管家会起草回复并提取跟进事项。",
+      pasteCta: "从剪贴板导入",
+      orPaste: "或粘贴到下方",
+      parseCta: "解析对话",
+      reading: "读取中…",
+      parsing: "解析中…",
+      showTips: "复制小提示",
+      hideTips: "收起提示",
+      tipTitle: "复制小提示",
+      tipBody:
+        "长按气泡 → 多选 → 复制（带发送者姓名效果最好）\n表情 / 「已读」「好」等短回复会自动降权\n系统提示、「以上是历史消息」会被忽略\n键盘导入需开启「完全访问」才能读剪贴板",
     },
     chats: {
       eyebrow: "对话",

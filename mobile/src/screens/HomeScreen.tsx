@@ -26,7 +26,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
-import { Btn, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, Disclose, Pill, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
@@ -561,27 +561,41 @@ export function HomeScreen() {
           />
         }
       >
-        <View style={styles.headerRow}>
-          <View style={styles.headerText}>
-            <Serif size={30}>
-              {greeting} <SerifEm>{displayName}</SerifEm>
-            </Serif>
+        <View style={styles.hero}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.eyebrowDate}>
+                {today.toLocaleDateString(locale === "zh" ? "zh-CN" : undefined, {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </Text>
+              <Serif size={34} style={styles.greeting}>
+                {greeting} <SerifEm>{displayName}</SerifEm>
+              </Serif>
+              {todayData?.day_overview ? (
+                <Text style={styles.dayOverview} numberOfLines={2}>
+                  {todayData.day_overview}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={() => router.push("/search")}
+              hitSlop={10}
+              style={styles.searchBtn}
+              accessibilityLabel="Search"
+            >
+              <Ic.Search size={18} color={colors.ink3} stroke={1.5} />
+            </Pressable>
+            <CompanionAvatar
+              size={56}
+              level={meta.level}
+              color={meta.color}
+              state={state}
+              speech={t.home.speechHi}
+            />
           </View>
-          <Pressable
-            onPress={() => router.push("/search")}
-            hitSlop={10}
-            style={styles.searchBtn}
-            accessibilityLabel="Search"
-          >
-            <Ic.Search size={18} color={colors.ink3} stroke={1.5} />
-          </Pressable>
-          <CompanionAvatar
-            size={52}
-            level={meta.level}
-            color={meta.color}
-            state={state}
-            speech={t.home.speechHi}
-          />
         </View>
 
         {pendingCount > 0 ? (
@@ -598,17 +612,8 @@ export function HomeScreen() {
 
         <View style={styles.butlerBlock}>
           <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
-          {todayData?.day_overview ? (
-            <Text style={styles.dayOverview}>{todayData.day_overview}</Text>
-          ) : null}
           <View style={styles.proactiveCard}>
-            {weekAhead?.show_prominently ? (
-              <View style={styles.weekAheadBlock}>
-                <Text style={styles.weekAheadLabel}>{t.home.weekAheadLabel}</Text>
-                <Text style={styles.weekAheadText}>{weekAhead.summary}</Text>
-              </View>
-            ) : null}
-            <Serif size={17} style={styles.proactiveText}>
+            <Serif size={18} style={styles.proactiveText}>
               {butlerPrompt}
             </Serif>
             {topHabitSuggestion && !topScheduleProposal ? (
@@ -664,9 +669,20 @@ export function HomeScreen() {
                 </Pressable>
               </View>
             ) : null}
+            {weekAhead ? (
+              <Disclose
+                label={t.home.showWeekAhead}
+                labelExpanded={t.home.hideWeekAhead}
+                defaultOpen={Boolean(weekAhead.show_prominently)}
+              >
+                <Text style={styles.weekAheadText}>{weekAhead.summary}</Text>
+              </Disclose>
+            ) : null}
             {reminders.length > 0 ? (
-              <View style={styles.remindersBlock}>
-                <Text style={styles.remindersLabel}>{t.home.upcomingReminders}</Text>
+              <Disclose
+                label={t.home.showReminders(reminders.length)}
+                labelExpanded={t.home.hideReminders}
+              >
                 {reminders.slice(0, 5).map((task) => (
                   <Pressable
                     key={task.id}
@@ -684,14 +700,17 @@ export function HomeScreen() {
                     </Text>
                   </Pressable>
                 ))}
-              </View>
+              </Disclose>
             ) : null}
           </View>
         </View>
 
         {conversationItems.length > 0 ? (
-          <View style={styles.conversationBlock}>
-            <Text style={styles.butlerLabel}>{t.home.fromConversations}</Text>
+          <Disclose
+            style={styles.conversationBlock}
+            label={t.home.showFollowUps(conversationItems.length)}
+            labelExpanded={t.home.hideFollowUps}
+          >
             <View style={styles.conversationCard}>
               <Text style={styles.conversationSummary}>
                 {t.home.fromConversationsSummary(
@@ -704,7 +723,7 @@ export function HomeScreen() {
                 <View key={`${item.kind}-${item.id}`} style={styles.conversationRow}>
                   <Text style={styles.conversationKind}>
                     {item.kind === "calendar_event"
-                      ? "📅"
+                      ? "·"
                       : item.kind === "follow_up"
                         ? "↻"
                         : "□"}
@@ -748,7 +767,7 @@ export function HomeScreen() {
                 </View>
               ))}
             </View>
-          </View>
+          </Disclose>
         ) : null}
 
         {scheduleView === "day" ? (
@@ -852,16 +871,32 @@ const styles = StyleSheet.create({
     paddingTop: layout.topPad,
     paddingBottom: spacing.lg,
   },
+  hero: {
+    marginHorizontal: -layout.padX,
+    paddingHorizontal: layout.padX,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.heroWash,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hair,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
   },
-  headerText: { flex: 1 },
+  headerText: { flex: 1, gap: 6 },
+  eyebrowDate: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: colors.ink4,
+  },
+  greeting: { maxWidth: 280 },
   searchBtn: { paddingTop: 8 },
   butlerBlock: { marginTop: spacing.lg, gap: 8 },
-  conversationBlock: { marginTop: spacing.lg, gap: 8 },
+  conversationBlock: { marginTop: spacing.md },
   conversationCard: {
     backgroundColor: colors.card,
     borderRadius: radius.card,
@@ -869,12 +904,26 @@ const styles = StyleSheet.create({
     borderColor: colors.hair2,
     padding: spacing.md,
     gap: 10,
+    shadowColor: "#141316",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  conversationSummary: { fontSize: 14, color: colors.ink2, lineHeight: 20 },
+  conversationSummary: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.ink2,
+    lineHeight: 20,
+  },
   conversationRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   conversationKind: { fontSize: 14, color: colors.ink3, marginTop: 2 },
   conversationBody: { flex: 1, gap: 2 },
-  conversationTitle: { fontSize: 14, color: colors.ink, lineHeight: 20 },
+  conversationTitle: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: colors.ink,
+    lineHeight: 20,
+  },
   conversationMeta: { fontSize: 12, color: colors.ink4, fontStyle: "italic" },
   conversationActions: {
     flexDirection: "row",
@@ -883,14 +932,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   conversationActionAccent: {
+    fontFamily: fonts.sansMedium,
     fontSize: 13,
     color: colors.accent,
-    fontWeight: "600",
   },
   conversationActionMuted: {
+    fontFamily: fonts.sans,
     fontSize: 13,
     color: colors.ink3,
-    fontWeight: "500",
   },
   butlerLabel: {
     fontFamily: fonts.mono,
@@ -900,10 +949,10 @@ const styles = StyleSheet.create({
     color: colors.ink4,
   },
   dayOverview: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     lineHeight: 20,
     color: colors.ink3,
-    fontStyle: "italic",
   },
   proactiveCard: {
     backgroundColor: colors.card,
@@ -911,39 +960,38 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
     padding: spacing.md,
-    gap: 14,
+    gap: 12,
+    shadowColor: "#141316",
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  proactiveText: { color: colors.ink2, lineHeight: 24 },
+  proactiveText: { color: colors.ink, lineHeight: 26 },
   habitPattern: { fontSize: 13, color: colors.ink4, fontStyle: "italic" },
-  weekAheadBlock: { gap: 4, paddingBottom: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.hair2 },
-  weekAheadLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: colors.ink4,
+  weekAheadText: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.ink3,
   },
-  weekAheadText: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
   proactiveBtn: { alignSelf: "flex-start" },
   habitActions: { gap: 10 },
   scheduleProposalActions: { gap: 10 },
-  dismissProposal: { fontSize: 13, color: colors.ink4 },
-  remindersBlock: { gap: 8, marginTop: 4 },
-  remindersLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: colors.ink4,
-  },
+  dismissProposal: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink4 },
   reminderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
+    paddingVertical: 4,
   },
-  reminderTitle: { flex: 1, fontSize: 14, color: colors.ink2 },
-  reminderWhen: { fontSize: 12, color: colors.ink4 },
+  reminderTitle: {
+    flex: 1,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.ink2,
+  },
+  reminderWhen: { fontFamily: fonts.mono, fontSize: 11, color: colors.ink4 },
   approvalsBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -956,8 +1004,8 @@ const styles = StyleSheet.create({
   },
   approvalsText: {
     flex: 1,
+    fontFamily: fonts.sansMedium,
     color: colors.warn,
-    fontWeight: "600",
     fontSize: 13,
   },
   sectionLabel: {
@@ -979,6 +1027,7 @@ const styles = StyleSheet.create({
   },
   scheduleTogglePill: { marginRight: 0 },
   scheduleEmpty: {
+    fontFamily: fonts.sans,
     fontSize: 14,
     color: colors.ink3,
     fontStyle: "italic",
@@ -1006,6 +1055,7 @@ const styles = StyleSheet.create({
   },
   composerInput: {
     flex: 1,
+    fontFamily: fonts.sans,
     fontSize: 15,
     color: colors.ink,
     minHeight: 28,

@@ -24,8 +24,9 @@ import * as Clipboard from "expo-clipboard";
 
 import { api } from "@/api/client";
 import { Ic } from "@/components/icons";
-import { Btn, Eyebrow, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, Disclose, Eyebrow, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
 import { scheduleLocalTaskReminder } from "@/lib/taskReminders";
+import { useLocale } from "@/context/LocaleContext";
 import { colors, fonts, layout } from "@/theme/theme";
 
 type Phase = "paste" | "context" | "results";
@@ -460,28 +461,18 @@ function PastePhase({
   onReadClipboard: () => void;
   onParse: () => void;
 }) {
+  const { t } = useLocale();
+  const flow = t.importFlow;
+
   return (
     <View style={styles.block}>
-      <Serif size={28} style={styles.heading}>
-        把微信对话变成 <SerifEm>可执行行动</SerifEm>
+      <Serif size={30} style={styles.heading}>
+        {flow.titlePlain} <SerifEm>{flow.titleEm}</SerifEm>
       </Serif>
-      <Text style={styles.sub}>
-        在微信里多选最近几条关键消息并复制，然后点导入。Alfred
-        会整理上下文、生成回复，并找出待办、日程和跟进。
-      </Text>
-
-      <View style={styles.tipBox}>
-        <Text style={styles.tipTitle}>复制小提示</Text>
-        <Text style={styles.tipBody}>
-          · 长按气泡 → 多选 → 复制（带发送者姓名效果最好）{"\n"}
-          · 表情 / 「已读」「好」等短回复会自动降权{"\n"}
-          · 系统提示、「以上是历史消息」会被忽略{"\n"}
-          · 键盘导入需开启「完全访问」才能读剪贴板
-        </Text>
-      </View>
+      <Text style={styles.sub}>{flow.sub}</Text>
 
       <Btn
-        label={busy ? "读取中…" : "从剪贴板导入"}
+        label={busy ? flow.reading : flow.pasteCta}
         kind="accent"
         full
         disabled={busy}
@@ -489,22 +480,34 @@ function PastePhase({
         leading={<Ic.Forward size={14} color="#fff" />}
       />
 
-      <Text style={styles.or}>或粘贴到下方</Text>
+      <Text style={styles.or}>{flow.orPaste}</Text>
       <TextInput
         value={rawText}
         onChangeText={setRawText}
         multiline
-        placeholder={"6330\n我需要审一下\n\nRui🌞\n一吃一堆"}
+        placeholder={"6330\n我需要审一下\n\nRui\n一吃一堆"}
         placeholderTextColor={colors.ink4}
         style={styles.textArea}
       />
       <Btn
-        label={busy ? "解析中…" : "解析对话"}
+        label={busy ? flow.parsing : flow.parseCta}
         kind="ghost"
         full
         disabled={busy || !rawText.trim()}
         onPress={onParse}
       />
+
+      <Disclose
+        label={flow.showTips}
+        labelExpanded={flow.hideTips}
+        style={{ marginTop: 8 }}
+      >
+        <View style={styles.tipBox}>
+          <Text style={styles.tipTitle}>{flow.tipTitle}</Text>
+          <Text style={styles.tipBody}>{flow.tipBody}</Text>
+        </View>
+      </Disclose>
+
       {busy ? <ActivityIndicator color={colors.accent} style={{ marginTop: 12 }} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -827,8 +830,14 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: layout.padX, paddingBottom: 40 },
   block: { gap: 4 },
-  heading: { marginTop: 8, maxWidth: 320, lineHeight: 34 },
-  sub: { color: colors.ink3, fontSize: 14, lineHeight: 21, marginVertical: 12 },
+  heading: { marginTop: 8, maxWidth: 320, lineHeight: 36 },
+  sub: {
+    fontFamily: fonts.sans,
+    color: colors.ink3,
+    fontSize: 14,
+    lineHeight: 21,
+    marginVertical: 12,
+  },
   handoffNote: {
     fontFamily: fonts.mono,
     fontSize: 11,
@@ -837,12 +846,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   tipBox: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
+    backgroundColor: colors.paper2,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair,
     padding: 12,
-    marginBottom: 14,
     gap: 6,
   },
   tipTitle: {
@@ -852,7 +860,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.ink3,
   },
-  tipBody: { color: colors.ink2, fontSize: 13, lineHeight: 20 },
+  tipBody: {
+    fontFamily: fonts.sans,
+    color: colors.ink2,
+    fontSize: 13,
+    lineHeight: 20,
+  },
   or: {
     textAlign: "center",
     color: colors.ink4,
@@ -863,17 +876,22 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
   textArea: {
-    minHeight: 140,
+    minHeight: 160,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
     borderRadius: 16,
     padding: 14,
     backgroundColor: colors.card,
     color: colors.ink,
+    fontFamily: fonts.sans,
     fontSize: 15,
     lineHeight: 22,
     textAlignVertical: "top",
     marginBottom: 10,
+    shadowColor: "#141316",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
   error: { color: colors.warn, fontSize: 13, marginTop: 10 },
   timeline: { marginTop: 16, gap: 0 },

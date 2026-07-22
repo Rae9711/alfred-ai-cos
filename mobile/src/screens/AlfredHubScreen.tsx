@@ -175,8 +175,8 @@ export function AlfredHubScreen({
       >
         <Eyebrow>{hub.eyebrow}</Eyebrow>
         <View style={styles.hero}>
-          <CompanionAvatar size={96} color={meta.color} state={state} />
-          <Serif size={26} style={styles.greeting}>
+          <CompanionAvatar size={104} color={meta.color} state={state} />
+          <Serif size={30} style={styles.greeting}>
             {greeting} <SerifEm>{hub.butlerName}</SerifEm>
           </Serif>
           <Text style={styles.sub}>{hub.sub}</Text>
@@ -185,15 +185,21 @@ export function AlfredHubScreen({
         <View style={styles.actions}>
           {actions.map((a) => {
             const active = mode === a.key;
+            const primary = a.key === "schedule";
             return (
               <Pressable
                 key={a.key}
                 onPress={() => onAction(a.key)}
-                style={[styles.actionChip, active && styles.actionChipActive]}
+                style={[
+                  styles.actionChip,
+                  primary && styles.actionChipPrimary,
+                  active && styles.actionChipActive,
+                ]}
               >
                 <Text
                   style={[
                     styles.actionLabel,
+                    primary && !active && styles.actionLabelPrimary,
                     active && styles.actionLabelActive,
                   ]}
                 >
@@ -368,7 +374,13 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: "center",
     gap: spacing.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
+    marginHorizontal: -layout.padX,
+    paddingHorizontal: layout.padX,
+    backgroundColor: colors.heroWash,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.hair,
+    marginBottom: spacing.sm,
   },
   greeting: { textAlign: "center" },
   sub: {
@@ -384,14 +396,21 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
     justifyContent: "center",
+    marginTop: spacing.sm,
   },
   actionChip: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    borderColor: colors.hair2,
     borderRadius: radius.pill,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "transparent",
+  },
+  actionChipPrimary: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accent,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: colors.paper,
   },
   actionChipActive: {
     borderColor: colors.ink,
@@ -399,10 +418,16 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontFamily: fonts.mono,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: colors.ink3,
+  },
+  actionLabelPrimary: {
+    fontFamily: fonts.monoMedium,
+    color: colors.accentInk,
     fontSize: 11,
     letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.ink2,
   },
   actionLabelActive: { color: colors.paper },
   modeHint: {
@@ -424,6 +449,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
+    shadowColor: "#141316",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   thinking: {
     fontFamily: fonts.mono,
@@ -445,16 +474,30 @@ const styles = StyleSheet.create({
     borderColor: colors.hair2,
     gap: 10,
   },
-  smsDraftTo: { fontSize: 13, color: colors.ink3 },
-  emailDraftSubject: { fontSize: 14, fontWeight: "600", color: colors.ink },
-  smsDraftBody: { fontSize: 15, lineHeight: 22, color: colors.ink2 },
+  smsDraftTo: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink3 },
+  emailDraftSubject: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  smsDraftBody: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.ink2,
+  },
   userBubble: {
     backgroundColor: colors.ink,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 18,
   },
-  userText: { color: colors.paper, fontSize: 14.5, lineHeight: 21 },
+  userText: {
+    fontFamily: fonts.sans,
+    color: colors.paper,
+    fontSize: 14.5,
+    lineHeight: 21,
+  },
   composerWrap: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hair,

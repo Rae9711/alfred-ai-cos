@@ -8,36 +8,41 @@ implementation and this doc disagree, this doc wins; if the doc is wrong, fix th
 
 | Token        | Value                          | Use |
 |--------------|--------------------------------|-----|
-| paper        | `#f4f1ea`                      | screen background |
-| paper2       | `#ebe7dd`                      | quoted blocks, mode-tab track, recent rows |
-| paper3       | `#e0dccf`                      | (reserved) |
-| card         | `#fbf9f4`                      | card surface |
-| ink          | `#19171a`                      | primary text, ink buttons |
-| ink2         | `#3b3a3e`                      | body text |
-| ink3         | `#6c6a70`                      | meta, secondary |
-| ink4         | `#a3a09c`                      | faint meta, check border, rank numbers |
-| hair         | `rgba(25,23,26,0.08)`          | card hairline, dividers |
-| hair2        | `rgba(25,23,26,0.14)`          | flat-card border, input border |
-| accent       | `#3a5da8`                      | indigo accent (default; tweakable) |
-| accentSoft   | `#dde0ec` (= accent 14% on paper, precomputed) | accent pill bg, soft cards |
-| accentInk    | `#16264a` (= accent 78% + black, precomputed)  | accent pill text, em in titles |
-| warn         | `#b8543b`                      | terracotta: urgency, danger, delete |
-| warnSoft     | `#f4dccb`                      | warn pill bg, risk blocks |
-| success      | `#4a7a4e`                      | integration "synced" dot |
+| paper        | `#f2f0eb`                      | screen background (cooler stone) |
+| paper2       | `#e8e5de`                      | quoted blocks, mode-tab track, recent rows |
+| paper3       | `#ddd9d0`                      | (reserved) |
+| card         | `#fbfbf8`                      | card surface |
+| heroWash     | `#edeae3`                      | hero band wash |
+| ink          | `#141316`                      | primary text, ink buttons |
+| ink2         | `#35343a`                      | body text |
+| ink3         | `#6a686f`                      | meta, secondary |
+| ink4         | `#9c9994`                      | faint meta, check border, rank numbers |
+| hair         | `rgba(20,19,22,0.08)`          | card hairline, dividers |
+| hair2        | `rgba(20,19,22,0.16)`          | flat-card border, input border |
+| accent       | `#2f4f8c`                      | ink-blue accent |
+| accentSoft   | `#d9dfeb`                      | accent pill bg, soft cards |
+| accentInk    | `#13233f`                      | accent pill text, em in titles |
+| warn         | `#a84a36`                      | warn only (urgency, danger) |
+| warnSoft     | `#f0ddd2`                      | warn pill bg, risk blocks |
+| success      | `#3f6b43`                      | integration "synced" dot |
 
 RN has no `color-mix`, so `accentSoft`/`accentInk` are precomputed. Accent is
 tweakable in the prototype (Ink/Indigo/Forest/Terracotta); we ship Indigo.
 
 ## Type
 
-- **serif** = Instrument Serif 400. Display: greetings, titles, priority titles,
-  briefing prose, transcripts (italic). `letterSpacing: -0.01em`, `lineHeight ~1.15`.
-  `em` inside a title is italic + `accentInk`.
-- **mono** = Geist Mono. Eyebrows (`11px / 0.14em / uppercase / ink3`), meta
-  (`12px / ink3`), pill text (`10.5px / 0.04em / uppercase`), rank numbers, tab labels
-  (`9px / 0.1em / uppercase`), section "WHY" label (`10px / 0.08em`).
-- **sans** = system. Body, `h3` section titles (`13px / 500 / 0.06em / uppercase / ink3`),
-  buttons (`14px / 500`).
+- **serif** = Newsreader 500 (+ 400 Italic for `em`). Display: greetings, titles,
+  priority titles, briefing prose. `letterSpacing: -0.015em`, `lineHeight ~1.18`.
+  `em` inside a title uses Newsreader Italic + `accentInk`.
+- **mono** = IBM Plex Mono. Eyebrows (`11px / uppercase / ink3`), meta (`12px`),
+  pills, rank numbers, tab labels, section labels.
+- **sans** = DM Sans 400/500. Body, section titles, buttons, UI chrome.
+
+Rationale: Instrument Serif + Geist Mono read as the default AI-app pair; warm cream
++ terracotta brochure was already the brand default. Newsreader is purpose-built for
+screen reading (calm editorial), DM Sans gives a purposeful UI sans without Inter,
+IBM Plex Mono reads institutional/executive rather than startup-AI. Paper cooled
+slightly toward stone; terracotta stays warn-only; ink-blue is the sole attention accent.
 
 ## Spacing / radius (regular density)
 

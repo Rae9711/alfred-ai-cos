@@ -1,37 +1,39 @@
-// Albert's design tokens, ported from the Alfred prototype (warm editorial, light).
-// Paper background, layered ink for text hierarchy, a single blue accent, a warm warn
-// red. Instrument Serif for display, Geist Mono for metadata, system sans for body.
+// Albert design tokens — calm editorial butler (elevated paper, not AI-brochure).
+// Display: Newsreader. Body: DM Sans. Meta: IBM Plex Mono.
+// Warm stone paper kept as brand continuity; terracotta reserved for warn only.
 
 import type { Priority } from "@albert/shared-types";
 
 export const colors = {
-  // Surfaces (warm paper)
-  paper: "#F4F1EA",
-  paper2: "#EBE7DD",
-  paper3: "#E0DCCF",
-  card: "#FBF9F4",
+  // Surfaces — cooler stone parchment (less yellow brochure cream)
+  paper: "#F2F0EB",
+  paper2: "#E8E5DE",
+  paper3: "#DDD9D0",
+  card: "#FBFBF8",
+  // Subtle hero wash (top of viewport depth without glow)
+  heroWash: "#EDEAE3",
 
-  // Ink hierarchy
-  ink: "#19171A",
-  ink2: "#3B3A3E",
-  ink3: "#6C6A70",
-  ink4: "#A3A09C",
+  // Ink hierarchy — stronger contrast for focal weight
+  ink: "#141316",
+  ink2: "#35343A",
+  ink3: "#6A686F",
+  ink4: "#9C9994",
 
   // Hairlines
-  hair: "rgba(25,23,26,0.08)",
-  hair2: "rgba(25,23,26,0.14)",
+  hair: "rgba(20,19,22,0.08)",
+  hair2: "rgba(20,19,22,0.16)",
 
-  // Accent (blue) + soft tints
-  accent: "#3A5DA8",
-  accentSoft: "#DDE0EC", // ~accent 14% over paper, precomputed (no color-mix in RN)
-  accentInk: "#16264A", // ~accent 78% + black, precomputed
+  // Accent (ink-blue) + soft tints — primary attention color
+  accent: "#2F4F8C",
+  accentSoft: "#D9DFEB",
+  accentInk: "#13233F",
 
-  // Warn (terracotta)
-  warn: "#B8543B",
-  warnSoft: "#F4DCCB",
+  // Warn only (not a brand accent)
+  warn: "#A84A36",
+  warnSoft: "#F0DDD2",
 
   // Success (integration "synced" dot)
-  success: "#4A7A4E",
+  success: "#3F6B43",
 } as const;
 
 // Named layout constants from the prototype's density-regular. Screens use these
@@ -47,11 +49,12 @@ export const layout = {
 
 // Font family keys must match the names registered in app/_layout.tsx useFonts().
 export const fonts = {
-  serif: "InstrumentSerif_400Regular",
-  mono: "GeistMono_400Regular",
-  monoMedium: "GeistMono_500Medium",
-  // System sans for body text (the prototype uses -apple-system for body).
-  sans: undefined as string | undefined, // undefined => RN default system font
+  serif: "Newsreader_500Medium",
+  serifItalic: "Newsreader_400Regular_Italic",
+  mono: "IBMPlexMono_400Regular",
+  monoMedium: "IBMPlexMono_500Medium",
+  sans: "DMSans_400Regular",
+  sansMedium: "DMSans_500Medium",
 } as const;
 
 export const spacing = {
@@ -63,7 +66,7 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  card: 18,
+  card: 16,
   pill: 100,
   full: 9999,
   sm: 12,
@@ -71,9 +74,9 @@ export const radius = {
 
 // Priority dot/pill colors. critical/high lean on warn (urgent), the rest on ink/accent.
 export const priorityColor: Record<Priority, string> = {
-  critical: "#B8543B",
-  high: "#C8763B",
-  medium: "#3A5DA8",
-  low: "#A3A09C",
-  noise: "#A3A09C",
+  critical: "#A84A36",
+  high: "#C06A3A",
+  medium: "#2F4F8C",
+  low: "#9C9994",
+  noise: "#9C9994",
 };

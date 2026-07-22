@@ -10,9 +10,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@albert/shared-types": "workspace:*",
-        "@expo-google-fonts/geist": "^0.4.2",
-        "@expo-google-fonts/geist-mono": "^0.4.2",
-        "@expo-google-fonts/instrument-serif": "^0.4.1",
+        "@expo-google-fonts/dm-sans": "^0.4.2",
+        "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
+        "@expo-google-fonts/newsreader": "^0.4.1",
         "@sentry/react-native": "^8.19.0",
         "@tanstack/react-query": "^5.90.0",
         "alfred-shared-storage": "file:./modules/alfred-shared-storage",
@@ -298,11 +298,11 @@
 
     "@exodus/bytes": ["@exodus/bytes@1.15.1", "", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-S6mL0yNB/Abt9Ei4tq8gDhcczc4S3+vQ4ra7vxnAf+YHC02srtqxKKZghx2Dq6p0e66THKwR6r8N6P95wEty7Q=="],
 
-    "@expo-google-fonts/geist": ["@expo-google-fonts/geist@0.4.2", "", {}, "sha512-cTsqJRQrvK5EniTVwH7UDK18RFf9Bc6yxciAuM936aViQ+eR6j3mLEI2rQkJXz5JP9kwtn8tHJviDyZ0ulH6oA=="],
+    "@expo-google-fonts/dm-sans": ["@expo-google-fonts/dm-sans@0.4.2", "", {}, "sha512-e/fLH5aCJzkEenz7axvEn8N7IJAKhUwNjIxS75h9j+Ip1M9S7d22M19gJN3A7QW4egVkBJRyQh1hQFhngQn9yA=="],
 
-    "@expo-google-fonts/geist-mono": ["@expo-google-fonts/geist-mono@0.4.2", "", {}, "sha512-Ei2dBHXBgCL0pNi1RSuWIroOsvaNBeyT+2oE/q9vQBzZyqWuKYZ5yrybTeIeDl7MEWTgxBVUjyrws3JVbVac8Q=="],
+    "@expo-google-fonts/ibm-plex-mono": ["@expo-google-fonts/ibm-plex-mono@0.4.1", "", {}, "sha512-/yYz1mPZq8Nd4tSiH0SBDPEdJUqiOGBwVgSrQvLuw7SPh6C7ezBzmi6eFyHY4QaQwjHDmOLSBKsxzq8ZDFXVAg=="],
 
-    "@expo-google-fonts/instrument-serif": ["@expo-google-fonts/instrument-serif@0.4.1", "", {}, "sha512-1CgCrLbTSgE7RV8ZrTT7i06UAyNQDBrhxQuxkReNnfq5yvUhTmvpOK17grlEsXG5p04lJ1ZXGiIjPeHo6X0sXg=="],
+    "@expo-google-fonts/newsreader": ["@expo-google-fonts/newsreader@0.4.1", "", {}, "sha512-j96W112+mj/VYP06DCq00w+twyw42w0MY7eHB/XXioNK80BcG0cIk/zogjOENZSY7qejzIFbHE/PZYqlh/6VKQ=="],
 
     "@expo/apple-utils": ["@expo/apple-utils@2.1.19", "", { "bin": { "apple-utils": "bin.js" } }, "sha512-f1iMteL+tTOSF1sovVB35ncobdiZvhjWvwEOWGIuAutyeIpcxNJ/2tUZSE748X/VEQLn1cL2Tozkdp2MLXStvA=="],
 

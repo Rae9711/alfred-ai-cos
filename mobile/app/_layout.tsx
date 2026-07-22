@@ -1,7 +1,6 @@
-// Root layout. Loads the brand fonts (Instrument Serif + Geist Mono, the heart of the
-// editorial design), provides auth state, and captures the albert://auth?token=... deep
-// link from the OAuth callback. Holds the splash until fonts are ready so there's no
-// flash of system type.
+// Root layout. Loads brand fonts (Newsreader + DM Sans + IBM Plex Mono), provides auth
+// state, and captures the albert://auth?token=... deep link from the OAuth callback.
+// Holds the splash until fonts are ready so there's no flash of system type.
 
 import { useEffect } from "react";
 import { Slot, router } from "expo-router";
@@ -11,12 +10,17 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Updates from "expo-updates";
 import {
   useFonts,
-  InstrumentSerif_400Regular,
-} from "@expo-google-fonts/instrument-serif";
+  Newsreader_400Regular_Italic,
+  Newsreader_500Medium,
+} from "@expo-google-fonts/newsreader";
 import {
-  GeistMono_400Regular,
-  GeistMono_500Medium,
-} from "@expo-google-fonts/geist-mono";
+  DMSans_400Regular,
+  DMSans_500Medium,
+} from "@expo-google-fonts/dm-sans";
+import {
+  IBMPlexMono_400Regular,
+  IBMPlexMono_500Medium,
+} from "@expo-google-fonts/ibm-plex-mono";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 
@@ -116,9 +120,12 @@ function DeepLinkHandler() {
 
 function RootLayout() {
   const [fontsLoaded] = useFonts({
-    InstrumentSerif_400Regular,
-    GeistMono_400Regular,
-    GeistMono_500Medium,
+    Newsreader_500Medium,
+    Newsreader_400Regular_Italic,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    IBMPlexMono_400Regular,
+    IBMPlexMono_500Medium,
   });
 
   useEffect(() => {

@@ -3,7 +3,7 @@
 // alf-card, alf-card-flat, alf-btn, alf-check, alf-icon-btn, Avatar). See
 // theme/DESIGN.md for the spec. Plain RN primitives + react-native-svg icons.
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   Pressable,
@@ -39,12 +39,11 @@ export function Serif({
     <Text
       style={[
         {
-          fontFamily: fonts.serif,
+          fontFamily: italic ? fonts.serifItalic : fonts.serif,
           fontSize: size,
-          lineHeight: size * 1.15,
-          letterSpacing: -0.01 * size,
+          lineHeight: size * 1.18,
+          letterSpacing: -0.015 * size,
           color,
-          fontStyle: italic ? "italic" : "normal",
         },
         style,
       ]}
@@ -57,9 +56,47 @@ export function Serif({
 // Inline italic accent span inside a serif title ("Good morning, <em>Maya</em>.").
 export function SerifEm({ children }: { children: ReactNode }) {
   return (
-    <Text style={{ fontStyle: "italic", color: colors.accentInk }}>
+    <Text
+      style={{
+        fontFamily: fonts.serifItalic,
+        color: colors.accentInk,
+      }}
+    >
       {children}
     </Text>
+  );
+}
+
+/** Progressive disclosure — collapsed by default; one job: reveal secondary content. */
+export function Disclose({
+  label,
+  labelExpanded,
+  children,
+  defaultOpen = false,
+  style,
+}: {
+  label: string;
+  labelExpanded?: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View style={style}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={styles.discloseToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <Text style={styles.discloseLabel}>
+          {open ? (labelExpanded ?? label) : label}
+        </Text>
+        <Text style={styles.discloseChevron}>{open ? "−" : "+"}</Text>
+      </Pressable>
+      {open ? <View style={styles.discloseBody}>{children}</View> : null}
+    </View>
   );
 }
 
@@ -439,6 +476,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
+    fontFamily: fonts.sansMedium,
     fontSize: 13,
     fontWeight: "500",
     letterSpacing: 0.78,
@@ -455,6 +493,7 @@ const styles = StyleSheet.create({
   },
   screenTitle: { marginTop: 2 },
   screenSubtitle: {
+    fontFamily: fonts.sans,
     fontSize: 15,
     lineHeight: 22,
     color: colors.ink3,
@@ -479,7 +518,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
-  pillTextSans: { fontSize: 12.5 },
+  pillTextSans: { fontFamily: fonts.sans, fontSize: 12.5 },
   pill_accent: {
     backgroundColor: colors.accentSoft,
     borderColor: colors.accent,
@@ -493,10 +532,11 @@ const styles = StyleSheet.create({
     padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair,
-    shadowColor: "#19171A",
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#141316",
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   cardFlat: {
     backgroundColor: "transparent",
@@ -504,6 +544,32 @@ const styles = StyleSheet.create({
     padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
+  },
+
+  discloseToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+  },
+  discloseLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.0,
+    textTransform: "uppercase",
+    color: colors.ink3,
+    flex: 1,
+  },
+  discloseChevron: {
+    fontFamily: fonts.mono,
+    fontSize: 16,
+    color: colors.ink4,
+    paddingHorizontal: 4,
+  },
+  discloseBody: {
+    marginTop: 4,
+    gap: 8,
   },
 
   btn: {
@@ -526,7 +592,7 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.4 },
   btnPressed: { transform: [{ scale: 0.97 }] },
-  btnText: { fontSize: 14, fontWeight: "500" },
+  btnText: { fontFamily: fonts.sansMedium, fontSize: 14, fontWeight: "500" },
   btnTextTiny: { fontSize: 12 },
   btnText_ink: { color: colors.paper },
   btnText_accent: { color: "#FFFFFF" },
