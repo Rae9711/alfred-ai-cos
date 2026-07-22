@@ -18,6 +18,7 @@ final class KeyboardViewController: UIInputViewController {
     private let contentScroll = UIScrollView()
     private let contentStack = UIStackView()
     private let chromeBar = UIStackView()
+    private var heightConstraint: NSLayoutConstraint?
 
     private var phase: Phase = .idle
     private var conversationJSON: [String: Any]?
@@ -36,11 +37,18 @@ final class KeyboardViewController: UIInputViewController {
     private var generatingComplete = false
     private var clipboardHintCount: Int?
 
+    /// Target height closer to a stock iOS custom keyboard (~260–280pt).
+    private let preferredKeyboardHeight: CGFloat = 272
+
     // Mockup palette — cool white / light gray / deep blue (not beige paper)
     private let accent = UIColor(red: 0.12, green: 0.28, blue: 0.62, alpha: 1)
     private let accentSoft = UIColor(red: 0.86, green: 0.91, blue: 0.98, alpha: 1)
     private let panel = UIColor(red: 0.97, green: 0.97, blue: 0.98, alpha: 1)
     private let bubbleFill = UIColor(red: 0.90, green: 0.94, blue: 1.0, alpha: 1)
+    /// Explicit dark body text — `.secondaryLabel` is near-invisible on white
+    /// when the host app (e.g. WeChat) forces a dark trait collection.
+    private let bodyText = UIColor(red: 0.18, green: 0.20, blue: 0.24, alpha: 1)
+    private let mutedText = UIColor(red: 0.35, green: 0.38, blue: 0.42, alpha: 1)
     private let maxEditChars = 200
 
     private let generatingLabels = [
@@ -86,21 +94,28 @@ final class KeyboardViewController: UIInputViewController {
 
     private func setupChrome() {
         root.axis = .vertical
-        root.spacing = 6
+        root.spacing = 4
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
+
+        let height = view.heightAnchor.constraint(equalToConstant: preferredKeyboardHeight)
+        height.priority = .required
+        heightConstraint = height
+
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
-            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
-            view.heightAnchor.constraint(equalToConstant: 320),
+            root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 10),
+            root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
+            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -2),
+            height,
         ])
 
         contentScroll.translatesAutoresizingMaskIntoConstraints = false
         contentScroll.showsVerticalScrollIndicator = false
+        contentScroll.alwaysBounceVertical = false
+        contentScroll.isScrollEnabled = false
         contentStack.axis = .vertical
-        contentStack.spacing = 8
+        contentStack.spacing = 4
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         contentScroll.addSubview(contentStack)
         root.addArrangedSubview(contentScroll)
@@ -109,10 +124,16 @@ final class KeyboardViewController: UIInputViewController {
         chromeBar.spacing = 6
         chromeBar.distribution = .fill
         chromeBar.alignment = .center
+        chromeBar.setContentHuggingPriority(.required, for: .vertical)
+        chromeBar.setContentCompressionResistancePriority(.required, for: .vertical)
         root.addArrangedSubview(chromeBar)
 
+        // Content fills leftover space above chrome; no fixed min height that
+        // forces the panel taller than preferredKeyboardHeight.
+        let scrollFill = contentScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 1)
+        scrollFill.priority = .defaultLow
         NSLayoutConstraint.activate([
-            contentScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 250),
+            scrollFill,
             contentStack.leadingAnchor.constraint(equalTo: contentScroll.contentLayoutGuide.leadingAnchor),
             contentStack.trailingAnchor.constraint(equalTo: contentScroll.contentLayoutGuide.trailingAnchor),
             contentStack.topAnchor.constraint(equalTo: contentScroll.contentLayoutGuide.topAnchor),
@@ -134,8 +155,22 @@ final class KeyboardViewController: UIInputViewController {
         charCountLabel = nil
     }
 
+    /// Scroll only when dense phases can overflow the fixed keyboard height.
+    private func updateScrollPolicy() {
+        switch phase {
+        case .contextInsight, .replyReady, .editing, .success:
+            contentScroll.isScrollEnabled = true
+            contentScroll.showsVerticalScrollIndicator = true
+        default:
+            contentScroll.isScrollEnabled = false
+            contentScroll.showsVerticalScrollIndicator = false
+            contentScroll.contentOffset = .zero
+        }
+    }
+
     private func render() {
         clearContent()
+        contentStack.spacing = 4
         renderHeader()
         switch phase {
         case .idle: renderIdle()
@@ -148,6 +183,7 @@ final class KeyboardViewController: UIInputViewController {
         case .error(let msg): renderError(msg)
         }
         renderChrome()
+        updateScrollPolicy()
     }
 
     // MARK: - Header / chrome
@@ -156,16 +192,16 @@ final class KeyboardViewController: UIInputViewController {
         let row = UIStackView()
         row.axis = .horizontal
         row.alignment = .center
-        row.spacing = 6
+        row.spacing = 4
 
-        let brand = makeLabel("Alfred", size: 16, weight: .bold, color: accent)
+        let brand = makeLabel("Alfred", size: 14, weight: .bold, color: accent)
         row.addArrangedSubview(brand)
 
         let sparkle = UIImageView(image: UIImage(systemName: "sparkles"))
         sparkle.tintColor = accent
         sparkle.contentMode = .scaleAspectFit
-        sparkle.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        sparkle.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        sparkle.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        sparkle.heightAnchor.constraint(equalToConstant: 12).isActive = true
         row.addArrangedSubview(sparkle)
 
         let spacer = UIView()
@@ -175,10 +211,10 @@ final class KeyboardViewController: UIInputViewController {
         let collapse = UIButton(type: .system)
         let chevron = UIImage(systemName: "chevron.down")
         collapse.setImage(chevron, for: .normal)
-        collapse.tintColor = .secondaryLabel
+        collapse.tintColor = mutedText
         collapse.addTarget(self, action: #selector(headerChevronTapped), for: .touchUpInside)
-        collapse.widthAnchor.constraint(equalToConstant: 32).isActive = true
-        collapse.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        collapse.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        collapse.heightAnchor.constraint(equalToConstant: 22).isActive = true
         row.addArrangedSubview(collapse)
 
         contentStack.addArrangedSubview(row)
@@ -206,19 +242,19 @@ final class KeyboardViewController: UIInputViewController {
 
     private func renderIdle() {
         if let gate = authGateMessage() {
-            let label = makeLabel(gate, size: 14, weight: .medium, color: .secondaryLabel)
+            let label = makeLabel(gate, size: 13, weight: .medium, color: bodyText)
             label.textAlignment = .center
             contentStack.addArrangedSubview(label)
             contentStack.addArrangedSubview(makePrimaryButton("打开 Alfred", action: #selector(openAppHome)))
             if let banner = statusBanner {
-                contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+                contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
             }
             return
         }
 
-        contentStack.addArrangedSubview(makeMascotView(height: 72))
+        contentStack.addArrangedSubview(makeMascotView(height: 40))
 
-        let title = makeLabel("检测到微信聊天", size: 17, weight: .semibold)
+        let title = makeLabel("检测到微信聊天", size: 15, weight: .semibold, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
@@ -228,72 +264,68 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             subtitleText = "复制微信聊天后即可导入"
         }
-        let subtitle = makeLabel(subtitleText, size: 13, color: .secondaryLabel)
+        let subtitle = makeLabel(subtitleText, size: 12, weight: .medium, color: mutedText)
         subtitle.textAlignment = .center
         contentStack.addArrangedSubview(subtitle)
 
-        let bullets = [
-            ("text.bubble", "理解上下文"),
-            ("star.fill", "找到最重要内容"),
-            ("square.and.pencil", "生成合适回复"),
-        ]
-        for (symbol, text) in bullets {
-            contentStack.addArrangedSubview(makeBulletRow(symbol: symbol, text: text))
-        }
+        // One compact feature line instead of three stacked bullets.
+        let features = makeLabel("理解上下文 · 找重点 · 生成回复", size: 11, weight: .regular, color: mutedText)
+        features.textAlignment = .center
+        contentStack.addArrangedSubview(features)
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
         }
 
         contentStack.addArrangedSubview(makePrimaryButton("导入所选聊天", action: #selector(importTapped)))
     }
 
     private func renderImporting() {
-        let spinner = UIActivityIndicatorView(style: .large)
+        let spinner = UIActivityIndicatorView(style: .medium)
         spinner.color = accent
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
 
-        let title = makeLabel("正在导入聊天…", size: 15, weight: .medium)
+        let title = makeLabel("正在导入聊天…", size: 14, weight: .medium, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
     }
 
     private func renderGenerating() {
-        let spinner = UIActivityIndicatorView(style: .large)
+        let spinner = UIActivityIndicatorView(style: .medium)
         spinner.color = accent
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
 
-        let title = makeLabel("Alfred 正在理解对话", size: 15, weight: .semibold)
+        let title = makeLabel("Alfred 正在理解对话", size: 14, weight: .semibold, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
         let list = UIStackView()
         list.axis = .vertical
-        list.spacing = 8
+        list.spacing = 4
         list.isLayoutMarginsRelativeArrangement = true
-        list.layoutMargins = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
+        list.layoutMargins = UIEdgeInsets(top: 2, left: 4, bottom: 2, right: 4)
 
         for (idx, text) in generatingLabels.enumerated() {
             let done = idx < generatingStep || (generatingComplete && idx <= generatingStep)
             let row = UIStackView()
             row.axis = .horizontal
-            row.spacing = 8
+            row.spacing = 6
             row.alignment = .center
 
             let iconName = done ? "checkmark.circle.fill" : "circle"
             let icon = UIImageView(image: UIImage(systemName: iconName))
-            icon.tintColor = done ? accent : UIColor.tertiaryLabel
-            icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-            icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+            icon.tintColor = done ? accent : mutedText.withAlphaComponent(0.45)
+            icon.widthAnchor.constraint(equalToConstant: 14).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 14).isActive = true
             row.addArrangedSubview(icon)
 
             let label = makeLabel(
                 text,
-                size: 13,
+                size: 12,
                 weight: done ? .medium : .regular,
-                color: done ? .label : .secondaryLabel
+                color: done ? bodyText : mutedText
             )
             row.addArrangedSubview(label)
             list.addArrangedSubview(row)
@@ -304,13 +336,13 @@ final class KeyboardViewController: UIInputViewController {
     private func renderContextInsight() {
         let titleRow = UIStackView()
         titleRow.axis = .horizontal
-        titleRow.spacing = 6
+        titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("Alfred 理解", size: 15, weight: .semibold))
+        titleRow.addArrangedSubview(makeLabel("Alfred 理解", size: 14, weight: .semibold, color: bodyText))
         let heart = UIImageView(image: UIImage(systemName: "heart.fill"))
         heart.tintColor = accent
-        heart.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        heart.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        heart.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        heart.heightAnchor.constraint(equalToConstant: 12).isActive = true
         titleRow.addArrangedSubview(heart)
         let spacer = UIView()
         titleRow.addArrangedSubview(spacer)
@@ -318,14 +350,15 @@ final class KeyboardViewController: UIInputViewController {
 
         let body = makeLabel(
             insight.isEmpty ? "对方似乎想继续聊，你的回应会让对方感到安心。" : insight,
-            size: 13,
-            weight: .regular
+            size: 12,
+            weight: .regular,
+            color: bodyText
         )
-        body.numberOfLines = 4
+        body.numberOfLines = 3
         contentStack.addArrangedSubview(body)
 
         contentStack.addArrangedSubview(
-            makeLabel("重点参考了这些消息", size: 12, weight: .semibold, color: .secondaryLabel)
+            makeLabel("重点参考了这些消息", size: 11, weight: .semibold, color: mutedText)
         )
 
         for msg in evidenceMessages(limit: 2) {
@@ -340,13 +373,13 @@ final class KeyboardViewController: UIInputViewController {
     private func renderReplyReady() {
         let titleRow = UIStackView()
         titleRow.axis = .horizontal
-        titleRow.spacing = 6
+        titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("推荐回复", size: 15, weight: .semibold))
+        titleRow.addArrangedSubview(makeLabel("推荐回复", size: 14, weight: .semibold, color: bodyText))
         let bot = UIImageView(image: UIImage(systemName: "face.smiling"))
         bot.tintColor = accent
-        bot.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        bot.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        bot.widthAnchor.constraint(equalToConstant: 14).isActive = true
+        bot.heightAnchor.constraint(equalToConstant: 14).isActive = true
         titleRow.addArrangedSubview(bot)
         let spacer = UIView()
         titleRow.addArrangedSubview(spacer)
@@ -367,20 +400,20 @@ final class KeyboardViewController: UIInputViewController {
         contentStack.addArrangedSubview(actionsRow)
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
         }
     }
 
     private func renderEditing() {
         let titleRow = UIStackView()
         titleRow.axis = .horizontal
-        titleRow.spacing = 6
+        titleRow.spacing = 4
         titleRow.alignment = .center
-        titleRow.addArrangedSubview(makeLabel("编辑回复", size: 15, weight: .semibold))
+        titleRow.addArrangedSubview(makeLabel("编辑回复", size: 14, weight: .semibold, color: bodyText))
         let pencil = UIImageView(image: UIImage(systemName: "pencil"))
         pencil.tintColor = accent
-        pencil.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        pencil.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        pencil.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        pencil.heightAnchor.constraint(equalToConstant: 12).isActive = true
         titleRow.addArrangedSubview(pencil)
         let spacer = UIView()
         titleRow.addArrangedSubview(spacer)
@@ -388,21 +421,22 @@ final class KeyboardViewController: UIInputViewController {
 
         let wrap = UIView()
         wrap.backgroundColor = panel
-        wrap.layer.cornerRadius = 12
+        wrap.layer.cornerRadius = 10
         wrap.layer.borderWidth = 1
-        wrap.layer.borderColor = UIColor.separator.withAlphaComponent(0.35).cgColor
+        wrap.layer.borderColor = UIColor(white: 0.75, alpha: 0.55).cgColor
 
         let tv = UITextView()
-        tv.font = .systemFont(ofSize: 14)
+        tv.font = .systemFont(ofSize: 13)
+        tv.textColor = bodyText
         tv.text = currentReply()?.body ?? ""
         tv.backgroundColor = .clear
-        tv.textContainerInset = UIEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
+        tv.textContainerInset = UIEdgeInsets(top: 6, left: 4, bottom: 6, right: 4)
         tv.translatesAutoresizingMaskIntoConstraints = false
         tv.delegate = self
         editTextView = tv
         wrap.addSubview(tv)
 
-        let counter = makeLabel(charCountText(for: tv.text), size: 11, color: .tertiaryLabel)
+        let counter = makeLabel(charCountText(for: tv.text), size: 10, color: mutedText)
         counter.textAlignment = .right
         counter.translatesAutoresizingMaskIntoConstraints = false
         charCountLabel = counter
@@ -412,10 +446,10 @@ final class KeyboardViewController: UIInputViewController {
             tv.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 4),
             tv.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -4),
             tv.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 2),
-            tv.heightAnchor.constraint(equalToConstant: 72),
-            counter.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
+            tv.heightAnchor.constraint(equalToConstant: 56),
+            counter.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -8),
             counter.topAnchor.constraint(equalTo: tv.bottomAnchor, constant: 0),
-            counter.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -6),
+            counter.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -4),
         ])
         contentStack.addArrangedSubview(wrap)
 
@@ -442,13 +476,13 @@ final class KeyboardViewController: UIInputViewController {
             check.centerXAnchor.constraint(equalTo: checkWrap.centerXAnchor),
             check.topAnchor.constraint(equalTo: checkWrap.topAnchor),
             check.bottomAnchor.constraint(equalTo: checkWrap.bottomAnchor),
-            check.widthAnchor.constraint(equalToConstant: 48),
-            check.heightAnchor.constraint(equalToConstant: 48),
-            checkWrap.heightAnchor.constraint(equalToConstant: 52),
+            check.widthAnchor.constraint(equalToConstant: 36),
+            check.heightAnchor.constraint(equalToConstant: 36),
+            checkWrap.heightAnchor.constraint(equalToConstant: 40),
         ])
         contentStack.addArrangedSubview(checkWrap)
 
-        let title = makeLabel("已插入微信", size: 17, weight: .semibold)
+        let title = makeLabel("已插入微信", size: 15, weight: .semibold, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
@@ -456,8 +490,8 @@ final class KeyboardViewController: UIInputViewController {
         if count > 0 {
             let follow = makeLabel(
                 "Alfred 还发现了 \(count) 个跟进行动",
-                size: 13,
-                color: .secondaryLabel
+                size: 12,
+                color: mutedText
             )
             follow.textAlignment = .center
             contentStack.addArrangedSubview(follow)
@@ -466,25 +500,25 @@ final class KeyboardViewController: UIInputViewController {
                 contentStack.addArrangedSubview(makeSuccessActionCard(action))
             }
         } else {
-            let none = makeLabel("没有更多跟进事项", size: 13, color: .secondaryLabel)
+            let none = makeLabel("没有更多跟进事项", size: 12, color: mutedText)
             none.textAlignment = .center
             contentStack.addArrangedSubview(none)
         }
 
         if let banner = statusBanner {
-            contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+            contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
         }
 
         let done = UIButton(type: .system)
         done.setTitle("完成", for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 15, weight: .medium)
+        done.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
         done.setTitleColor(accent, for: .normal)
         done.addTarget(self, action: #selector(resetToIdle), for: .touchUpInside)
         contentStack.addArrangedSubview(done)
     }
 
     private func renderError(_ message: String) {
-        let label = makeLabel(message, size: 14, weight: .medium, color: UIColor.systemOrange)
+        let label = makeLabel(message, size: 13, weight: .medium, color: UIColor.systemOrange)
         label.textAlignment = .center
         contentStack.addArrangedSubview(label)
         contentStack.addArrangedSubview(makePrimaryButton("重试", action: #selector(resetToIdle)))
@@ -997,12 +1031,12 @@ final class KeyboardViewController: UIInputViewController {
         _ text: String,
         size: CGFloat,
         weight: UIFont.Weight = .regular,
-        color: UIColor = .label
+        color: UIColor? = nil
     ) -> UILabel {
         let label = UILabel()
         label.text = text
         label.font = .systemFont(ofSize: size, weight: weight)
-        label.textColor = color
+        label.textColor = color ?? bodyText
         label.numberOfLines = 0
         return label
     }
@@ -1030,49 +1064,33 @@ final class KeyboardViewController: UIInputViewController {
         return wrap
     }
 
-    private func makeBulletRow(symbol: String, text: String) -> UIView {
-        let row = UIStackView()
-        row.axis = .horizontal
-        row.spacing = 8
-        row.alignment = .center
-
-        let icon = UIImageView(image: UIImage(systemName: symbol))
-        icon.tintColor = accent
-        icon.contentMode = .scaleAspectFit
-        icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
-        row.addArrangedSubview(icon)
-        row.addArrangedSubview(makeLabel(text, size: 13, color: .secondaryLabel))
-        return row
-    }
-
     private func makeEvidenceBubble(_ msg: AlfredKeyboardAPI.Message) -> UIView {
         let card = UIStackView()
         card.axis = .vertical
         card.spacing = 2
         card.isLayoutMarginsRelativeArrangement = true
-        card.layoutMargins = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        card.layoutMargins = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
         card.backgroundColor = panel
-        card.layer.cornerRadius = 10
+        card.layer.cornerRadius = 8
 
         let meta = UIStackView()
         meta.axis = .horizontal
-        meta.spacing = 6
+        meta.spacing = 4
         meta.alignment = .center
 
         let check = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
         check.tintColor = accent
-        check.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        check.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        check.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        check.heightAnchor.constraint(equalToConstant: 12).isActive = true
         meta.addArrangedSubview(check)
 
         let sender = String(msg.sender.suffix(4))
-        meta.addArrangedSubview(makeLabel(sender, size: 11, weight: .medium, color: .secondaryLabel))
+        meta.addArrangedSubview(makeLabel(sender, size: 10, weight: .medium, color: mutedText))
         let spacer = UIView()
         meta.addArrangedSubview(spacer)
         card.addArrangedSubview(meta)
 
-        let body = makeLabel(msg.content, size: 12)
+        let body = makeLabel(msg.content, size: 11, color: bodyText)
         body.numberOfLines = 2
         card.addArrangedSubview(body)
         return card
@@ -1081,17 +1099,17 @@ final class KeyboardViewController: UIInputViewController {
     private func makeReplyBubble(_ text: String) -> UIView {
         let wrap = UIView()
         wrap.backgroundColor = bubbleFill
-        wrap.layer.cornerRadius = 14
+        wrap.layer.cornerRadius = 12
 
-        let label = makeLabel(text, size: 14, weight: .medium)
-        label.numberOfLines = 5
+        let label = makeLabel(text, size: 13, weight: .medium, color: bodyText)
+        label.numberOfLines = 4
         label.translatesAutoresizingMaskIntoConstraints = false
         wrap.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -12),
-            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 12),
-            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -12),
+            label.leadingAnchor.constraint(equalTo: wrap.leadingAnchor, constant: 10),
+            label.trailingAnchor.constraint(equalTo: wrap.trailingAnchor, constant: -10),
+            label.topAnchor.constraint(equalTo: wrap.topAnchor, constant: 8),
+            label.bottomAnchor.constraint(equalTo: wrap.bottomAnchor, constant: -8),
         ])
         return wrap
     }
@@ -1099,30 +1117,30 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSuccessActionCard(_ action: AlfredKeyboardAPI.Action) -> UIView {
         let card = UIStackView()
         card.axis = .vertical
-        card.spacing = 6
+        card.spacing = 4
         card.isLayoutMarginsRelativeArrangement = true
-        card.layoutMargins = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        card.layoutMargins = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
         card.backgroundColor = accentSoft
-        card.layer.cornerRadius = 12
+        card.layer.cornerRadius = 10
 
         let titleRow = UIStackView()
         titleRow.axis = .horizontal
-        titleRow.spacing = 6
+        titleRow.spacing = 4
         titleRow.alignment = .center
         let bell = UIImageView(image: UIImage(systemName: "bell.fill"))
         bell.tintColor = accent
-        bell.widthAnchor.constraint(equalToConstant: 14).isActive = true
-        bell.heightAnchor.constraint(equalToConstant: 14).isActive = true
+        bell.widthAnchor.constraint(equalToConstant: 12).isActive = true
+        bell.heightAnchor.constraint(equalToConstant: 12).isActive = true
         titleRow.addArrangedSubview(bell)
-        titleRow.addArrangedSubview(makeLabel(action.title, size: 13, weight: .semibold))
+        titleRow.addArrangedSubview(makeLabel(action.title, size: 12, weight: .semibold, color: bodyText))
         card.addArrangedSubview(titleRow)
 
         if let time = formatSuggestedTime(action) {
             card.addArrangedSubview(
-                makeLabel("建议提醒时间: \(time)", size: 12, color: .secondaryLabel)
+                makeLabel("建议提醒时间: \(time)", size: 11, color: mutedText)
             )
         } else {
-            let evidence = makeLabel("「\(action.evidence)」", size: 11, color: .secondaryLabel)
+            let evidence = makeLabel("「\(action.evidence)」", size: 10, color: mutedText)
             evidence.numberOfLines = 2
             card.addArrangedSubview(evidence)
         }
@@ -1133,7 +1151,7 @@ final class KeyboardViewController: UIInputViewController {
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
         btn.configuration = config
         btn.addAction(UIAction { [weak self] _ in
             Task { await self?.confirm(action) }
@@ -1156,13 +1174,14 @@ final class KeyboardViewController: UIInputViewController {
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
         if let symbol {
             config.image = UIImage(systemName: symbol)
-            config.imagePadding = 6
+            config.imagePadding = 5
             config.imagePlacement = .leading
         }
         let button = UIButton(configuration: config)
+        button.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -1173,7 +1192,7 @@ final class KeyboardViewController: UIInputViewController {
         config.baseBackgroundColor = accentSoft
         config.baseForegroundColor = accent
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10)
         let button = UIButton(configuration: config)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
@@ -1182,12 +1201,12 @@ final class KeyboardViewController: UIInputViewController {
     private func makeSecondaryButton(_ title: String, action: Selector, symbol: String? = nil) -> UIButton {
         var config = UIButton.Configuration.gray()
         config.title = title
-        config.baseForegroundColor = .label
+        config.baseForegroundColor = bodyText
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
         if let symbol {
             config.image = UIImage(systemName: symbol)
-            config.imagePadding = 6
+            config.imagePadding = 5
             config.imagePlacement = .leading
         }
         let button = UIButton(configuration: config)
@@ -1200,15 +1219,15 @@ final class KeyboardViewController: UIInputViewController {
         config.title = title
         config.baseForegroundColor = accent
         config.image = UIImage(systemName: symbol)
-        config.imagePadding = 4
+        config.imagePadding = 3
         config.imagePlacement = .leading
         config.cornerStyle = .capsule
-        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 5, leading: 6, bottom: 5, trailing: 6)
         config.background.strokeColor = accent.withAlphaComponent(0.35)
         config.background.strokeWidth = 1
         config.background.backgroundColor = .white
         let button = UIButton(configuration: config)
-        button.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        button.titleLabel?.font = .systemFont(ofSize: 11, weight: .medium)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
@@ -1216,7 +1235,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeGhostButton(_ title: String, action: Selector) -> UIButton {
         let button = UIButton(type: .system)
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+        button.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
         button.setTitleColor(accent, for: .normal)
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
@@ -1225,14 +1244,15 @@ final class KeyboardViewController: UIInputViewController {
     private func makeChromeKey(_ title: String, action: Selector, width: CGFloat? = nil) -> UIButton {
         var config = UIButton.Configuration.gray()
         config.title = title
-        config.baseForegroundColor = .label
+        config.baseForegroundColor = bodyText
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
         let button = UIButton(configuration: config)
         button.addTarget(self, action: action, for: .touchUpInside)
         if let width {
             button.widthAnchor.constraint(equalToConstant: width).isActive = true
         }
+        button.heightAnchor.constraint(equalToConstant: 34).isActive = true
         return button
     }
 
@@ -1242,10 +1262,11 @@ final class KeyboardViewController: UIInputViewController {
         config.baseBackgroundColor = accent
         config.baseForegroundColor = .white
         config.cornerStyle = .medium
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8)
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
         let button = UIButton(configuration: config)
         button.addTarget(self, action: action, for: .touchUpInside)
         button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        button.heightAnchor.constraint(equalToConstant: 34).isActive = true
         return button
     }
 }
