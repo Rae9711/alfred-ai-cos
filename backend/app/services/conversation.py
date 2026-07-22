@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -82,6 +83,9 @@ _INLINE_SENDER_RE = re.compile(
     r"^(?P<sender>[^:：\n]{1,40})(?:：|:(?!\d))\s*(?P<content>.+)$"
 )
 
+# Tab-separated "Name\tmessage" (some iOS clipboard representations).
+_TAB_INLINE_RE = re.compile(r"^(?P<sender>[^\t\n]{1,40})\t+(?P<content>.+)$")
+
 _DEFAULT_TONES = ["natural", "caring", "brief"]
 
 _GOAL_LABELS = {
@@ -142,9 +146,21 @@ def _is_probable_sender(line: str) -> bool:
     return True
 
 
+def _normalize_paste_text(text: str) -> str:
+    """Normalize clipboard quirks before parsing (CRLF, unicode separators, NBSP)."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\u2028", "\n").replace("\u2029", "\n\n")
+    text = text.replace("\u00a0", " ")
+    return text.strip()
+
+
+def _blank_blocks(text: str) -> list[str]:
+    return [b.strip() for b in re.split(r"\n\s*\n", text.strip()) if b.strip()]
+
+
 def _looks_like_wechat_blocks(text: str) -> bool:
     """True when the paste has alternating short sender lines and content blocks."""
-    blocks = [b.strip() for b in re.split(r"\n\s*\n", text.strip()) if b.strip()]
+    blocks = _blank_blocks(text)
     if len(blocks) < 2:
         return False
     senderish = 0
@@ -233,32 +249,104 @@ def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | Non
     return pairs
 
 
+def _parse_blank_separated_blocks(text: str) -> list[tuple[str, str, str | None]]:
+    """Parse blank-line separated bubbles; densify multi-bubble blocks.
+
+    A single stray blank line used to merge the rest of a dense paste into one
+    blob (→ selected_count=1/2). When a block has 3+ lines, re-run dense
+    alternating inside it. Single-line blocks are treated as content-only
+    messages (WeChat sometimes copies bodies without sender names).
+    """
+    pairs: list[tuple[str, str, str | None]] = []
+    for block in _blank_blocks(text):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        first = lines[0]
+        if _DATE_SEPARATOR_RE.match(first) and len(lines) == 1:
+            continue
+        if len(lines) >= 3:
+            dense = _parse_dense_alternating(lines)
+            if len(dense) >= 2:
+                pairs.extend(dense)
+                continue
+        if len(lines) == 1:
+            # Content-only multi-select: each blank-separated line is one bubble.
+            if _is_system_or_media_placeholder(first):
+                continue
+            pairs.append(("Unknown", first, None))
+            continue
+        m = _sender_match(first)
+        if m:
+            content = "\n".join(lines[1:]).strip()
+            if content:
+                pairs.append((m.group("sender").strip(), content, m.group("ts")))
+            continue
+        pairs.append(("Unknown", "\n".join(lines), None))
+    return pairs
+
+
+def _parse_inline_exports(lines: list[str]) -> list[tuple[str, str, str | None]]:
+    """Colon / tab single-line export styles."""
+    pairs: list[tuple[str, str, str | None]] = []
+    for line in lines:
+        if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
+            continue
+        m = _TAB_INLINE_RE.match(line)
+        if m and _is_probable_sender(m.group("sender").strip()):
+            pairs.append((m.group("sender").strip(), m.group("content").strip(), None))
+            continue
+        m = _INLINE_SENDER_RE.match(line)
+        if m and _is_probable_sender(m.group("sender").strip()):
+            pairs.append((m.group("sender").strip(), m.group("content").strip(), None))
+    return pairs
+
+
+def _score_pairs(pairs: list[tuple[str, str, str | None]]) -> tuple[int, int, int]:
+    """Prefer more messages, then more distinct senders, then less Unknown."""
+    if not pairs:
+        return (0, 0, 0)
+    senders = {s for s, _, _ in pairs}
+    named = sum(1 for s, _, _ in pairs if s != "Unknown")
+    return (len(pairs), len(senders), named)
+
+
 def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
     """Parse WeChat multi-select copy without an LLM.
 
-    Expected shape (blank-line separated blocks):
-        Sender
-        message content
-        (optional more content lines)
-
-    Or:
-        Sender 12:43
-        message content
-
-    Also accepts dense (no blank lines) alternating sender/content, and
-    single-line "Name：content" / "Name: content" export styles.
+    Tries several paste shapes and keeps the richest coherent split:
+      - blank-line bubbles (with inner dense repair)
+      - dense alternating sender/content (no blank lines)
+      - inline Name：/Name:/tab exports
     """
-    text = text.strip()
+    text = _normalize_paste_text(text)
     if not text:
         return None
+
+    all_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    candidates: list[list[tuple[str, str, str | None]]] = [
+        _parse_blank_separated_blocks(text),
+        _parse_dense_alternating(all_lines),
+        _parse_inline_exports(all_lines),
+    ]
+    best = max(candidates, key=_score_pairs)
+    if _score_pairs(best)[0] < 1:
+        return None
+    # A single-pair result is only useful when the paste is truly one bubble.
+    # If other strategies found nothing better, still accept it.
+    if _score_pairs(best)[0] == 1 and len(all_lines) >= 4:
+        # Likely under-split; prefer any candidate with >=2 if present.
+        multi = [c for c in candidates if len(c) >= 2]
+        if multi:
+            best = max(multi, key=_score_pairs)
 
     messages: list[ConversationMessageOut] = []
     names: list[str] = []
 
-    def _append(sender: str, content: str, ts_raw: str | None) -> None:
+    for sender, content, ts_raw in best:
         content = content.strip()
         if not content or _is_system_or_media_placeholder(content):
-            return
+            continue
         if sender not in names and sender != "Unknown":
             names.append(sender)
         weight = 0.3 if _NOISE_RE.match(content) else 1.0
@@ -273,45 +361,6 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
                 weight=weight,
             )
         )
-
-    if _looks_like_wechat_blocks(text):
-        blocks = [b.strip() for b in re.split(r"\n\s*\n", text) if b.strip()]
-        for block in blocks:
-            lines = [ln.rstrip() for ln in block.splitlines() if ln.strip()]
-            if not lines:
-                continue
-            first = lines[0].strip()
-            if _DATE_SEPARATOR_RE.match(first) and len(lines) == 1:
-                continue
-            m = _sender_match(first)
-            if m:
-                sender = m.group("sender").strip()
-                ts_raw = m.group("ts")
-                content = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
-                if not content:
-                    continue
-                _append(sender, content, ts_raw)
-            else:
-                _append("Unknown", "\n".join(lines), None)
-    else:
-        # Dense alternating sender/content (common when blank lines are stripped).
-        all_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        dense_pairs = _parse_dense_alternating(all_lines)
-        if len(dense_pairs) >= 2:
-            for sender, content, ts_raw in dense_pairs:
-                _append(sender, content, ts_raw)
-        else:
-            # Inline "Name：message" fallback for colon-separated exports.
-            inline_hits = 0
-            for line in all_lines:
-                if _DATE_SEPARATOR_RE.match(line):
-                    continue
-                m = _INLINE_SENDER_RE.match(line)
-                if m and _is_probable_sender(m.group("sender").strip()):
-                    _append(m.group("sender").strip(), m.group("content"), None)
-                    inline_hits += 1
-            if inline_hits < 2:
-                return None
 
     if len(messages) < 1:
         return None
@@ -358,8 +407,17 @@ def _from_normalized(normalized: NormalizedConversation) -> ParsedConversationOu
 
 def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedConversationOut:
     """Parse pasted chat text. Prefer deterministic WeChat parser; LLM repairs messy copy."""
+    log = structlog.get_logger("conversation.parse")
+    raw_lines = len([ln for ln in (text or "").splitlines() if ln.strip()])
     parsed = parse_wechat_deterministic(text)
     if parsed is not None:
+        selected = sum(1 for m in parsed.messages if m.is_selected)
+        log.info(
+            "parse_deterministic",
+            messages=len(parsed.messages),
+            selected=selected,
+            raw_lines=raw_lines,
+        )
         return parsed
     if not use_llm_fallback:
         # Last resort: treat whole paste as one message.
@@ -381,7 +439,45 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
             imported_at=_utcnow(),
         )
     normalized = get_llm().normalize_conversation(raw_text=text)
-    return _from_normalized(normalized)
+    llm_parsed = _from_normalized(normalized)
+    # If the LLM collapsed a multi-line paste into one blob, split lines so the
+    # keyboard never shows 「已选 1 条」 for an obvious multi-message copy.
+    if len(llm_parsed.messages) <= 1 and raw_lines >= 4:
+        lines = [ln.strip() for ln in _normalize_paste_text(text).splitlines() if ln.strip()]
+        lines = [ln for ln in lines if not _is_system_or_media_placeholder(ln)]
+        if len(lines) >= 2:
+            msgs = [
+                ConversationMessageOut(
+                    id=str(uuid.uuid4()),
+                    sender="Unknown",
+                    timestamp=None,
+                    content=ln,
+                    role=MessageRole.unknown,
+                    is_selected=(0.3 if _NOISE_RE.match(ln) else 1.0) >= 1.0,
+                    weight=0.3 if _NOISE_RE.match(ln) else 1.0,
+                )
+                for ln in lines
+            ]
+            log.info(
+                "parse_llm_line_split_fallback",
+                llm_messages=len(llm_parsed.messages),
+                line_messages=len(msgs),
+                raw_lines=raw_lines,
+            )
+            return ParsedConversationOut(
+                id=str(uuid.uuid4()),
+                source=ConversationSource.wechat,
+                participants=[],
+                messages=msgs,
+                imported_at=_utcnow(),
+            )
+    log.info(
+        "parse_llm",
+        messages=len(llm_parsed.messages),
+        selected=sum(1 for m in llm_parsed.messages if m.is_selected),
+        raw_lines=raw_lines,
+    )
+    return llm_parsed
 
 
 # Soft cap so a huge paste cannot blow the reply/action prompt; prefer the

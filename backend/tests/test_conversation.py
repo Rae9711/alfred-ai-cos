@@ -188,6 +188,84 @@ Alice
 那就下午见
 """
 
+SAMPLE_TEN_GROUP = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+再发一个版本
+Rae
+我再试一下导入
+Alex
+好的可以继续
+Bob
+我也看看这个
+Charlie 孙嘉谦 0608
+晚上九点同步一下
+Rae
+收到了吗那边
+Alex
+没问题可以开
+"""
+
+SAMPLE_MIXED_BLANK = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+再发一个版本
+Rae
+我再试一下导入
+Alex
+好的可以继续
+Bob
+我也看看这个
+Charlie 孙嘉谦 0608
+晚上九点同步一下
+Rae
+收到了吗那边
+Alex
+没问题可以开
+"""
+
+SAMPLE_CONTENT_ONLY_BLANK = """感觉很牛逼诶
+
+晚上一起看看这个界面
+
+布局压缩之后还能编辑吗
+
+再发一个版本
+
+我再试一下导入
+
+好的可以继续
+
+我也看看这个
+
+晚上九点同步一下
+
+收到了吗那边
+
+没问题可以开
+"""
+
+SAMPLE_TAB_INLINE = """Charlie 孙嘉谦 0608\t感觉很牛逼诶
+Rae\t晚上一起看看这个界面
+Alex\t布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608\t再发一个版本
+Rae\t我再试一下导入
+Alex\t好的可以继续
+Bob\t我也看看这个
+Charlie 孙嘉谦 0608\t晚上九点同步一下
+Rae\t收到了吗那边
+Alex\t没问题可以开
+"""
+
 
 def test_long_paste_selects_nearly_all_messages() -> None:
     """~12-message multi-select should keep almost all bubbles selected by default."""
@@ -198,6 +276,44 @@ def test_long_paste_selects_nearly_all_messages() -> None:
     # Only exact noise acks (e.g. bare 收到) are deselected — contentful lines stay on.
     assert len(selected) >= 10
     assert len(selected) == sum(1 for m in parsed.messages if m.weight >= 1.0)
+
+
+def test_ten_line_group_chat_selected_count_at_least_eight() -> None:
+    """Realistic group paste must yield selected_count >= 8 (keyboard 「已选 N 条」)."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_TEN_GROUP)
+    assert parsed is not None
+    assert len(parsed.messages) >= 8
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert selected >= 8
+    assert "Charlie 孙嘉谦 0608" in {m.sender for m in parsed.messages}
+
+
+def test_mixed_blank_line_does_not_collapse_thread() -> None:
+    """A single stray blank line must not merge the rest into 1–2 blobs."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_MIXED_BLANK)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+
+
+def test_content_only_blank_separated_bodies() -> None:
+    """WeChat sometimes copies message bodies without sender names."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_CONTENT_ONLY_BLANK)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+
+
+def test_tab_separated_inline_export() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_TAB_INLINE)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+    assert parsed.messages[0].sender == "Charlie 孙嘉谦 0608"
+    assert parsed.messages[0].content == "感觉很牛逼诶"
 
 
 def test_analyze_context_includes_full_selected_thread(

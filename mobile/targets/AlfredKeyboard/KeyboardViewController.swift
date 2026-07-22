@@ -672,23 +672,38 @@ final class KeyboardViewController: UIInputViewController {
         do {
             let parsed = try await AlfredKeyboardAPI.parse(text: text)
             conversationId = parsed.id
-            parsedMessages = parsed.messages
+
+            // If the server under-split (common when LLM collapses paste → 1 blob),
+            // re-split locally so 「已选 N 条」 matches the clipboard thread.
+            var working = parsed.messages
+            let estimated = estimateClipboardMessageCount() ?? 0
+            if working.count <= 1 || (estimated >= 4 && working.count < max(2, estimated / 2)) {
+                let local = locallyExtractMessages(from: text)
+                if local.count > working.count {
+                    working = local
+                }
+            }
+            parsedMessages = working
 
             // Product: 复制 N 条 → 读取全部 → 再回复. Never cap to top-K.
             // Prefer server non-noise selection; if under-selected, take all weight>=1.
-            var selected = Set(parsed.messages.filter(\.is_selected).map(\.id))
-            let nonNoise = parsed.messages.filter { ($0.weight ?? 1.0) >= 1.0 }
+            var selected = Set(working.filter(\.is_selected).map(\.id))
+            let nonNoise = working.filter { ($0.weight ?? 1.0) >= 1.0 }
             if selected.isEmpty {
-                selected = Set((nonNoise.isEmpty ? parsed.messages : nonNoise).map(\.id))
-            } else if selected.count < parsed.messages.count,
-                      selected.count < max(2, (parsed.messages.count + 1) / 2)
+                selected = Set((nonNoise.isEmpty ? working : nonNoise).map(\.id))
+            } else if selected.count < working.count,
+                      selected.count < max(2, (working.count + 1) / 2)
             {
                 // Parser/LLM under-selected (e.g. only 1 of 10); restore full thread.
-                selected = Set((nonNoise.isEmpty ? parsed.messages : nonNoise).map(\.id))
+                selected = Set((nonNoise.isEmpty ? working : nonNoise).map(\.id))
+            }
+            // Always select every extracted non-noise bubble by default.
+            if selected.count < nonNoise.count {
+                selected = Set(nonNoise.map(\.id))
             }
             selectedMessageIds = selected
 
-            let messages: [[String: Any]] = parsed.messages.map { m in
+            let messages: [[String: Any]] = working.map { m in
                 [
                     "id": m.id,
                     "sender": m.sender,
@@ -1061,7 +1076,96 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func countDenseWeChatMessages(_ lines: [String]) -> Int {
-        var count = 0
+        extractDenseWeChatPairs(lines).count
+    }
+
+    /// Local mirror of backend dense/blank/tab parse — used when API under-splits.
+    private func locallyExtractMessages(from text: String) -> [AlfredKeyboardAPI.Message] {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\u{2028}", with: "\n")
+            .replacingOccurrences(of: "\u{2029}", with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = normalized
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var pairs = extractDenseWeChatPairs(lines)
+
+        // Blank-separated content-only bodies.
+        let blocks = normalized
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if blocks.count >= 2 {
+            let singleLineBlocks = blocks.filter { !$0.contains("\n") }
+            if singleLineBlocks.count >= max(2, (blocks.count + 1) / 2) {
+                let contentPairs = singleLineBlocks
+                    .filter { !isSystemOrMediaLine($0) && !isDateSeparator($0) }
+                    .map { ("Unknown", $0) }
+                if contentPairs.count > pairs.count {
+                    pairs = contentPairs
+                }
+            }
+            // Dense-inside-blocks repair for mixed blank pastes.
+            var blockPairs: [(String, String)] = []
+            for block in blocks {
+                let blines = block
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                if blines.count >= 3 {
+                    let inner = extractDenseWeChatPairs(blines)
+                    if inner.count >= 2 {
+                        blockPairs.append(contentsOf: inner)
+                        continue
+                    }
+                }
+                if blines.count == 1, !isSystemOrMediaLine(blines[0]) {
+                    blockPairs.append(("Unknown", blines[0]))
+                } else if blines.count >= 2, isProbableSenderLine(stripSenderTimestamp(blines[0])) {
+                    blockPairs.append((stripSenderTimestamp(blines[0]), blines.dropFirst().joined(separator: "\n")))
+                }
+            }
+            if blockPairs.count > pairs.count {
+                pairs = blockPairs
+            }
+        }
+
+        // Tab / colon inline.
+        let inline: [(String, String)] = lines.compactMap { line in
+            if let tab = line.firstIndex(of: "\t") {
+                let name = String(line[..<tab]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let body = String(line[line.index(after: tab)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if isProbableSenderLine(name), !body.isEmpty { return (name, body) }
+            }
+            if let idx = line.firstIndex(where: { $0 == "：" || $0 == ":" }) {
+                let name = String(line[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let body = String(line[line.index(after: idx)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if isProbableSenderLine(name), !body.isEmpty { return (name, body) }
+            }
+            return nil
+        }
+        if inline.count > pairs.count {
+            pairs = inline
+        }
+
+        return pairs.map { sender, content in
+            let noise = isNoiseAck(content)
+            return AlfredKeyboardAPI.Message(
+                id: UUID().uuidString,
+                sender: sender,
+                content: content,
+                is_selected: !noise,
+                weight: noise ? 0.3 : 1.0
+            )
+        }
+    }
+
+    private func extractDenseWeChatPairs(_ lines: [String]) -> [(String, String)] {
+        var pairs: [(String, String)] = []
         var i = 0
         while i < lines.count {
             let line = lines[i]
@@ -1069,7 +1173,8 @@ final class KeyboardViewController: UIInputViewController {
                 i += 1
                 continue
             }
-            guard isProbableSenderLine(stripSenderTimestamp(line)) else {
+            let sender = stripSenderTimestamp(line)
+            guard isProbableSenderLine(sender) else {
                 i += 1
                 continue
             }
@@ -1084,13 +1189,11 @@ final class KeyboardViewController: UIInputViewController {
                 i += 1
                 continue
             }
-            // Media-only bubble: name + [图片] + next name.
             if skippedMedia && isProbableSenderLine(stripSenderTimestamp(lines[i])) {
                 continue
             }
-            // First content line is always content (even if sender-ish).
+            var contentParts = [lines[i]]
             i += 1
-            count += 1
             while i < lines.count {
                 let nxt = lines[i]
                 if isDateSeparator(nxt) {
@@ -1102,10 +1205,23 @@ final class KeyboardViewController: UIInputViewController {
                     i += 1
                     continue
                 }
+                contentParts.append(nxt)
                 i += 1
             }
+            let content = contentParts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !content.isEmpty {
+                pairs.append((sender, content))
+            }
         }
-        return count
+        return pairs
+    }
+
+    private func isNoiseAck(_ content: String) -> Bool {
+        let t = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.range(
+            of: #"^(好|嗯|哦|噢|ok|okay|kk|收到|哈哈+|呵呵+|已吃|已读|\[.*?\]|（.*?）)$"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
     }
 
     /// Strip optional "HH:MM" / "昨天 HH:MM" suffix for sender checks.
