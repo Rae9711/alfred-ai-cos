@@ -61,9 +61,20 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AlfredAppGroup.markKeyboardSeen()
-        if case .idle = phase {
+        // Re-read hasFullAccess / App Group / token every time the keyboard
+        // becomes visible. Settings → Allow Full Access kills or backgrounds the
+        // extension; without this, a stale gate banner (or .error from a prior
+        // tap) can linger until the process restarts.
+        switch phase {
+        case .idle:
             clipboardHintCount = estimateClipboardMessageCount()
             render()
+        case .error(let message) where Self.authGateCopy.contains(message):
+            phase = .idle
+            clipboardHintCount = estimateClipboardMessageCount()
+            render()
+        default:
+            break
         }
     }
 
@@ -481,6 +492,15 @@ final class KeyboardViewController: UIInputViewController {
 
     // MARK: - Auth gate
 
+    /// Exact banner strings shown when auth/FA is incomplete (also used to
+    /// recover from `.error` after the user flips Full Access in Settings).
+    private static let authGateCopy: Set<String> = [
+        "需要允许完全访问",
+        "未发现共享容器",
+        "主 App 尚未同步",
+    ]
+
+    /// Live checks — never cache `hasFullAccess`; iOS updates it after Settings.
     private func authGateMessage() -> String? {
         if !hasFullAccess {
             return "需要允许完全访问"

@@ -57,6 +57,34 @@ Checklist after install on device:
 - [ ] Tap **同步键盘登录状态** if token is missing
 - [ ] In any text field, switch to Alfred keyboard → should not show「需要允许完全访问」
 
+### Full Access detection chain (keyboard)
+
+`authGateMessage()` is evaluated live on every IDLE render and on `viewWillAppear`
+(never caches `hasFullAccess`):
+
+| Order | Condition | Banner |
+|---|---|---|
+| 1 | `!hasFullAccess` | 需要允许完全访问 |
+| 2 | FA on, App Group container URL nil | 未发现共享容器 |
+| 3 | FA on, container OK, no JWT in suite | 主 App 尚未同步 |
+| 4 | FA on + token | IDLE — 「检测到微信聊天」+ [导入所选聊天] |
+
+Import then needs FA for **clipboard** (`UIPasteboard`) and **network** (`URLSession`).
+Token comes from App Group (synced by main app via `AlfredSharedStorage`).
+
+### Strict FA toggle test (device)
+
+1. Install IPA → open Alfred → sign in → **同步键盘登录状态** (诊断: App Group 可访问 + Token 已写入).
+2. Add Alfred keyboard; leave **Allow Full Access OFF**.
+3. Notes/微信 → switch to Alfred → banner **must** be「需要允许完全访问」(no import CTA).
+4. Settings → Alfred keyboard → enable **Allow Full Access** → confirm dialog.
+5. Return to Notes/微信 → **dismiss keyboard fully**, then reopen and switch to Alfred.
+6. Banner **must leave**「需要允许完全访问」:
+   - If sync skipped →「主 App 尚未同步」or「未发现共享容器」
+   - If synced → IDLE with [导入所选聊天]
+7. Toggle FA **OFF** again → reopen keyboard → banner must return to「需要允许完全访问」.
+8. FA ON + WeChat multi-select copy → [导入所选聊天] → IMPORTING (parse) → insight → generate (network).
+
 ## Diagnostics (main app)
 
 You → **键盘诊断** (`/keyboard-diagnostics`) shows real status:
