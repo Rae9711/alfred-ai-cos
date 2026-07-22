@@ -400,16 +400,22 @@ function InboxCard({
     unread: labels.unread,
   });
   const tone =
-    item.section === "reply"
-      ? ("purple" as const)
-      : item.section === "decision"
-        ? ("blue" as const)
+    status.kind === "needs"
+      ? ("blue" as const)
+      : status.kind === "done"
+        ? ("green" as const)
         : ("neutral" as const);
   const showActions =
     item.showReplyActions ||
     item.section === "decision" ||
     item.isUnread ||
     item.section === "fyi";
+  const subjectTone =
+    status.kind === "needs"
+      ? styles.subjectNeeds
+      : status.kind === "fyi" || status.kind === "unread"
+        ? styles.subjectFyi
+        : null;
 
   return (
     <View style={styles.card}>
@@ -426,7 +432,7 @@ function InboxCard({
               {mailboxLabel ? ` · ${mailboxLabel}` : ""}
             </Text>
           </View>
-          <Text style={styles.subject} numberOfLines={2}>
+          <Text style={[styles.subject, subjectTone]} numberOfLines={2}>
             {item.title}
           </Text>
           <Text style={styles.preview} numberOfLines={2}>
@@ -437,25 +443,35 @@ function InboxCard({
             label={labels.openLink}
           />
         </View>
-        <View
-          style={[
-            surfaces.statusPill,
-            status.done && surfaces.statusPillDone,
-            status.kind === "fyi" && styles.statusFyiPill,
-            status.kind === "unread" && styles.statusUnreadPill,
-            styles.statusChip,
-          ]}
-        >
-          <Text
+        <View style={styles.cardEnd}>
+          {item.isUnread ? (
+            <View
+              style={styles.unreadDot}
+              accessibilityLabel={labels.unread}
+            />
+          ) : null}
+          <View
             style={[
-              surfaces.statusPillText,
-              status.done && surfaces.statusPillDoneText,
-              status.kind === "fyi" && styles.statusFyiText,
-              status.kind === "unread" && styles.statusUnreadText,
+              surfaces.statusPill,
+              status.done && surfaces.statusPillDone,
+              status.kind === "needs" && styles.statusNeedsPill,
+              (status.kind === "fyi" || status.kind === "unread") &&
+                styles.statusFyiPill,
+              styles.statusChip,
             ]}
           >
-            {status.text}
-          </Text>
+            <Text
+              style={[
+                surfaces.statusPillText,
+                status.done && surfaces.statusPillDoneText,
+                status.kind === "needs" && styles.statusNeedsText,
+                (status.kind === "fyi" || status.kind === "unread") &&
+                  styles.statusFyiText,
+              ]}
+            >
+              {status.text}
+            </Text>
+          </View>
         </View>
       </Pressable>
 
@@ -580,10 +596,22 @@ const styles = StyleSheet.create({
     padding: layout.cardPad,
     borderRadius: 20,
   },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
   cardMain: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+  },
+  cardEnd: {
+    alignItems: "flex-end",
+    gap: 6,
+    flexShrink: 0,
+    paddingTop: 1,
   },
   cardCopy: {
     flex: 1,
@@ -607,6 +635,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginTop: 1,
   },
+  subjectNeeds: {
+    color: colors.accent,
+  },
+  subjectFyi: {
+    color: "#5F6470",
+  },
   preview: {
     fontFamily: fonts.sans,
     fontSize: 10,
@@ -614,20 +648,20 @@ const styles = StyleSheet.create({
     color: "#77756F",
   },
   statusChip: {
-    alignSelf: "center",
+    alignSelf: "flex-end",
     flexShrink: 0,
+  },
+  statusNeedsPill: {
+    backgroundColor: colors.accentSoft,
+  },
+  statusNeedsText: {
+    color: colors.accent,
   },
   statusFyiPill: {
     backgroundColor: "#F0EEE9",
   },
   statusFyiText: {
     color: "#5F6470",
-  },
-  statusUnreadPill: {
-    backgroundColor: "#F3EFFF",
-  },
-  statusUnreadText: {
-    color: "#5D55D8",
   },
   quickActions: {
     flexDirection: "row",
