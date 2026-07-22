@@ -15,6 +15,7 @@ import {
 
 import { CompanionAvatar } from "@/components/CompanionAvatar";
 import { Ic } from "@/components/icons";
+import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
@@ -165,6 +166,7 @@ export function AlfredHubScreen({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? layout.tabBarInset : 0}
     >
+      <ScreenWash />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.scroll}
@@ -364,12 +366,13 @@ function FreeBubble({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: { flex: 1, backgroundColor: colors.washBottom },
   scroll: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
+    backgroundColor: "transparent",
   },
   hero: {
     alignItems: "center",
@@ -377,9 +380,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     marginHorizontal: -layout.padX,
     paddingHorizontal: layout.padX,
-    backgroundColor: colors.heroWash,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.hair,
+    backgroundColor: "transparent",
     marginBottom: spacing.sm,
   },
   greeting: { textAlign: "center" },

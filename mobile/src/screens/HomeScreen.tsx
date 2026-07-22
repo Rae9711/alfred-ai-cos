@@ -26,6 +26,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
+import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Disclose, Pill, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
@@ -536,6 +537,7 @@ export function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
+        <ScreenWash />
         <ActivityIndicator color={colors.accent} />
       </View>
     );
@@ -547,6 +549,7 @@ export function HomeScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? layout.tabBarInset : 0}
     >
+      <ScreenWash />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -858,14 +861,14 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.washBottom },
   centered: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.paper,
+    backgroundColor: colors.washBottom,
   },
-  scroll: { flex: 1 },
+  scroll: { flex: 1, backgroundColor: "transparent" },
   content: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
@@ -875,9 +878,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -layout.padX,
     paddingHorizontal: layout.padX,
     paddingBottom: spacing.md,
-    backgroundColor: colors.heroWash,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.hair,
+    backgroundColor: "transparent",
   },
   headerRow: {
     flexDirection: "row",

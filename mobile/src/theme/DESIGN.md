@@ -8,11 +8,15 @@ implementation and this doc disagree, this doc wins; if the doc is wrong, fix th
 
 | Token        | Value                          | Use |
 |--------------|--------------------------------|-----|
-| paper        | `#f2f0eb`                      | screen background (cooler stone) |
-| paper2       | `#e8e5de`                      | quoted blocks, mode-tab track, recent rows |
-| paper3       | `#ddd9d0`                      | (reserved) |
-| card         | `#fbfbf8`                      | card surface |
-| heroWash     | `#edeae3`                      | hero band wash |
+| paper        | `#f4f3f0`                      | screen base (near-neutral stone) |
+| paper2       | `#ebe9e5`                      | quoted blocks, mode-tab track, recent rows |
+| paper3       | `#e0ddd8`                      | (reserved) |
+| card         | `#fbfbf9`                      | card surface |
+| washTop      | `#e8e6e2`                      | screen wash top stop |
+| washMid      | `#f0efec`                      | screen wash mid bridge |
+| washBottom   | `#f6f5f2`                      | screen wash bottom / fallback bg |
+| washVignette | `rgba(28,26,24,0.04)`          | soft edge depth |
+| heroWash     | `#eeece8`                      | optional hero band (matches wash) |
 | ink          | `#141316`                      | primary text, ink buttons |
 | ink2         | `#35343a`                      | body text |
 | ink3         | `#6a686f`                      | meta, secondary |
@@ -41,8 +45,9 @@ tweakable in the prototype (Ink/Indigo/Forest/Terracotta); we ship Indigo.
 Rationale: Instrument Serif + Geist Mono read as the default AI-app pair; warm cream
 + terracotta brochure was already the brand default. Newsreader is purpose-built for
 screen reading (calm editorial), DM Sans gives a purposeful UI sans without Inter,
-IBM Plex Mono reads institutional/executive rather than startup-AI. Paper cooled
-slightly toward stone; terracotta stays warn-only; ink-blue is the sole attention accent.
+IBM Plex Mono reads institutional/executive rather than startup-AI. Screen backdrop is
+a quiet near-neutral stone wash (`washTop` → `washBottom` + soft vignette) — not teal→
+grey, not purple mesh. Terracotta stays warn-only; ink-blue is the sole attention accent.
 
 ## Spacing / radius (regular density)
 

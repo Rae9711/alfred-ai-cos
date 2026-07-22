@@ -1,17 +1,24 @@
 // Albert design tokens — calm editorial butler (elevated paper, not AI-brochure).
 // Display: Newsreader. Body: DM Sans. Meta: IBM Plex Mono.
-// Warm stone paper kept as brand continuity; terracotta reserved for warn only.
+// Screen backdrop: quiet near-neutral stone wash (no teal / purple / mesh).
+// Terracotta reserved for warn only.
 
 import type { Priority } from "@albert/shared-types";
 
 export const colors = {
-  // Surfaces — cooler stone parchment (less yellow brochure cream)
-  paper: "#F2F0EB",
-  paper2: "#E8E5DE",
-  paper3: "#DDD9D0",
-  card: "#FBFBF8",
-  // Subtle hero wash (top of viewport depth without glow)
-  heroWash: "#EDEAE3",
+  // Surfaces — cool-leaning near-neutral stone (supports glass cards)
+  paper: "#F4F3F0",
+  paper2: "#EBE9E5",
+  paper3: "#E0DDD8",
+  card: "#FBFBF9",
+  // Full-screen wash stops (barely-there two-stop + mid bridge)
+  washTop: "#E8E6E2",
+  washMid: "#F0EFEC",
+  washBottom: "#F6F5F2",
+  // Soft edge vignette (ink @ ~4%)
+  washVignette: "rgba(28,26,24,0.04)",
+  // Legacy hero band — keep in sync with wash mid so it doesn't flash teal
+  heroWash: "#EEECE8",
 
   // Ink hierarchy — stronger contrast for focal weight
   ink: "#141316",

@@ -174,7 +174,7 @@ function Tab({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.washBottom },
   content: { flex: 1 },
   bar: {
     flexDirection: "row",
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.hair,
-    backgroundColor: colors.paper,
+    backgroundColor: colors.washBottom,
     paddingBottom: layout.padX + 4,
     paddingTop: 8,
     paddingHorizontal: 14,
