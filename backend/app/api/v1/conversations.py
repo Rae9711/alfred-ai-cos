@@ -42,13 +42,19 @@ def analyze_conversation(
     if not payload.conversation.messages:
         raise HTTPException(status_code=400, detail="Conversation has no messages")
     tz = payload.timezone or user.timezone or "UTC"
-    return conversation_service.analyze_conversation(
-        payload.conversation,
-        goal=payload.goal or "custom",
-        tones=payload.tones,
-        user=user,
-        timezone=tz,
-    )
+    try:
+        return conversation_service.analyze_conversation(
+            payload.conversation,
+            goal=payload.goal or "custom",
+            tones=payload.tones,
+            user=user,
+            timezone=tz,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface LLM/validation failures cleanly
+        raise HTTPException(
+            status_code=502,
+            detail=f"Analyze failed: {exc.__class__.__name__}",
+        ) from exc
 
 
 @router.post("/actions/confirm", response_model=ConversationConfirmResponse)

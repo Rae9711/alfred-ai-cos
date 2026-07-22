@@ -261,6 +261,9 @@ final class KeyboardViewController: UIInputViewController {
         let subtitleText: String
         if let n = clipboardHintCount, n > 0 {
             subtitleText = "已复制 \(n) 条消息"
+        } else if clipboardHintCount == 0 {
+            // Confident clipboard text exists but message boundaries unclear.
+            subtitleText = "已检测到剪贴板内容"
         } else {
             subtitleText = "复制微信聊天后即可导入"
         }
@@ -358,11 +361,23 @@ final class KeyboardViewController: UIInputViewController {
         contentStack.addArrangedSubview(body)
 
         contentStack.addArrangedSubview(
-            makeLabel("重点参考了这些消息", size: 11, weight: .semibold, color: mutedText)
+            makeLabel(
+                "重点参考了这些消息（已选 \(selectedMessageIds.count) 条）",
+                size: 11,
+                weight: .semibold,
+                color: mutedText
+            )
         )
 
-        for msg in evidenceMessages(limit: 2) {
-            contentStack.addArrangedSubview(makeEvidenceBubble(msg))
+        let evidence = evidenceMessages(limit: 4)
+        if evidence.isEmpty {
+            contentStack.addArrangedSubview(
+                makeLabel("暂无可用消息，请重新导入", size: 11, color: mutedText)
+            )
+        } else {
+            for msg in evidence {
+                contentStack.addArrangedSubview(makeEvidenceBubble(msg))
+            }
         }
 
         contentStack.addArrangedSubview(
@@ -433,6 +448,12 @@ final class KeyboardViewController: UIInputViewController {
         tv.textContainerInset = UIEdgeInsets(top: 6, left: 4, bottom: 6, right: 4)
         tv.translatesAutoresizingMaskIntoConstraints = false
         tv.delegate = self
+        // Empty inputView prevents iOS from swapping away our custom keyboard
+        // when the TextView becomes first responder inside the extension.
+        tv.inputView = UIView()
+        tv.isEditable = true
+        tv.isSelectable = true
+        tv.isScrollEnabled = true
         editTextView = tv
         wrap.addSubview(tv)
 
@@ -463,6 +484,11 @@ final class KeyboardViewController: UIInputViewController {
         contentStack.addArrangedSubview(tones)
 
         contentStack.addArrangedSubview(makePrimaryButton("插入微信", action: #selector(insertEditedReply)))
+
+        // Focus after the next layout pass so the TextView is in the hierarchy.
+        DispatchQueue.main.async { [weak self] in
+            self?.editTextView?.becomeFirstResponder()
+        }
     }
 
     private func renderSuccess() {
@@ -570,10 +596,46 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func advanceTapped() { advanceToNextInputMode() }
-    @objc private func spaceTapped() { textDocumentProxy.insertText(" ") }
-    @objc private func backspaceTapped() { textDocumentProxy.deleteBackward() }
-    @objc private func returnTapped() { textDocumentProxy.insertText("\n") }
-    @objc private func numbersHintTapped() { textDocumentProxy.insertText("123") }
+    @objc private func spaceTapped() { insertIntoActiveField(" ") }
+    @objc private func backspaceTapped() { deleteFromActiveField() }
+    @objc private func returnTapped() { insertIntoActiveField("\n") }
+    @objc private func numbersHintTapped() { insertIntoActiveField("123") }
+
+    /// While editing a draft, chrome keys target the TextView — not WeChat.
+    private func insertIntoActiveField(_ text: String) {
+        if case .editing = phase, let tv = editTextView, tv.isFirstResponder {
+            let selected = tv.selectedRange
+            let ns = (tv.text as NSString?) ?? ""
+            var updated = ns.replacingCharacters(in: selected, with: text)
+            if updated.count > maxEditChars {
+                updated = String(updated.prefix(maxEditChars))
+            }
+            tv.text = updated
+            let cursor = min(selected.location + (text as NSString).length, (updated as NSString).length)
+            tv.selectedRange = NSRange(location: cursor, length: 0)
+            updateCharCount()
+            return
+        }
+        textDocumentProxy.insertText(text)
+    }
+
+    private func deleteFromActiveField() {
+        if case .editing = phase, let tv = editTextView, tv.isFirstResponder {
+            let selected = tv.selectedRange
+            let ns = (tv.text as NSString?) ?? ""
+            if selected.length > 0 {
+                tv.text = ns.replacingCharacters(in: selected, with: "")
+                tv.selectedRange = NSRange(location: selected.location, length: 0)
+            } else if selected.location > 0 {
+                let range = NSRange(location: selected.location - 1, length: 1)
+                tv.text = ns.replacingCharacters(in: range, with: "")
+                tv.selectedRange = NSRange(location: selected.location - 1, length: 0)
+            }
+            updateCharCount()
+            return
+        }
+        textDocumentProxy.deleteBackward()
+    }
 
     @objc private func headerChevronTapped() {
         if conversationId != nil {
@@ -614,6 +676,10 @@ final class KeyboardViewController: UIInputViewController {
 
             var selected = Set(parsed.messages.filter(\.is_selected).map(\.id))
             if selected.isEmpty {
+                let ranked = parsed.messages.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
+                selected = Set(ranked.prefix(min(8, ranked.count)).map(\.id))
+            } else if selected.count == 1, parsed.messages.count > 1 {
+                // Parser/LLM sometimes under-selects; keep top-weighted extras for context.
                 let ranked = parsed.messages.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
                 selected = Set(ranked.prefix(min(6, ranked.count)).map(\.id))
             }
@@ -953,23 +1019,131 @@ final class KeyboardViewController: UIInputViewController {
               !text.isEmpty
         else { return nil }
 
-        // WeChat multi-select paste often has blank-line-separated blocks or "Name HH:MM" lines.
+        // Prefer blank-line WeChat blocks (sender + body per block).
         let blocks = text
             .components(separatedBy: "\n\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if blocks.count >= 2 { return blocks.count }
+        if blocks.count >= 2 {
+            let senderish = blocks.filter { block in
+                let first = block
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .first { !$0.isEmpty } ?? ""
+                return isProbableSenderLine(first)
+            }.count
+            if senderish >= max(2, blocks.count / 2) {
+                return senderish
+            }
+        }
 
+        // Dense alternating sender/content (no blank lines) — same idea as backend.
         let lines = text
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let stamped = lines.filter { line in
-            line.range(of: #"\d{1,2}:\d{2}"#, options: .regularExpression) != nil
+        let dense = countDenseWeChatMessages(lines)
+        if dense >= 2 { return dense }
+
+        // Colon export: "Name：message"
+        let colonHits = lines.filter { line in
+            guard let idx = line.firstIndex(where: { $0 == "：" || $0 == ":" }) else { return false }
+            let name = String(line[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return isProbableSenderLine(name)
+        }.count
+        if colonHits >= 2 { return colonHits }
+
+        // Clipboard has text but we can't count messages confidently — never invent N.
+        return 0
+    }
+
+    private func countDenseWeChatMessages(_ lines: [String]) -> Int {
+        var count = 0
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
+            if isDateSeparator(line) || isSystemOrMediaLine(line) {
+                i += 1
+                continue
+            }
+            guard isProbableSenderLine(stripSenderTimestamp(line)) else {
+                i += 1
+                continue
+            }
+            i += 1
+            var skippedMedia = false
+            while i < lines.count && isSystemOrMediaLine(lines[i]) {
+                skippedMedia = true
+                i += 1
+            }
+            if i >= lines.count { break }
+            if isDateSeparator(lines[i]) {
+                i += 1
+                continue
+            }
+            // Media-only bubble: name + [图片] + next name.
+            if skippedMedia && isProbableSenderLine(stripSenderTimestamp(lines[i])) {
+                continue
+            }
+            // First content line is always content (even if sender-ish).
+            i += 1
+            count += 1
+            while i < lines.count {
+                let nxt = lines[i]
+                if isDateSeparator(nxt) {
+                    i += 1
+                    break
+                }
+                if isProbableSenderLine(stripSenderTimestamp(nxt)) { break }
+                if isSystemOrMediaLine(nxt) {
+                    i += 1
+                    continue
+                }
+                i += 1
+            }
         }
-        if stamped.count >= 2 { return stamped.count }
-        if lines.count >= 2 { return min(lines.count, 40) }
-        return 1
+        return count
+    }
+
+    /// Strip optional "HH:MM" / "昨天 HH:MM" suffix for sender checks.
+    private func stripSenderTimestamp(_ line: String) -> String {
+        if let range = line.range(
+            of: #"\s+(\d{1,2}:\d{2}|昨天\s*\d{1,2}:\d{2}|今天\s*\d{1,2}:\d{2})$"#,
+            options: .regularExpression
+        ) {
+            return String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return line
+    }
+
+    private func isProbableSenderLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 40 else { return false }
+        if trimmed.rangeOfCharacter(from: CharacterSet(charactersIn: "。！？.!?，,")) != nil {
+            return false
+        }
+        if trimmed.range(of: #"^\d{1,2}:\d{2}$"#, options: .regularExpression) != nil {
+            return false
+        }
+        if isDateSeparator(trimmed) || isSystemOrMediaLine(trimmed) { return false }
+        return true
+    }
+
+    private func isDateSeparator(_ line: String) -> Bool {
+        line.range(
+            of: #"^[\-—–]+\s*(昨天|今天|星期[一二三四五六日天]|\d{1,2}月\d{1,2}日)"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private func isSystemOrMediaLine(_ line: String) -> Bool {
+        let patterns = [
+            #"^以上是历史消息$"#,
+            #"^.*撤回了一条消息$"#,
+            #"^.*拍了拍.*$"#,
+            #"^\[(图片|视频|语音|文件|动画表情|贴纸)\]$"#,
+        ]
+        return patterns.contains { line.range(of: $0, options: .regularExpression) != nil }
     }
 
     private func buildHeuristicInsight() -> String {

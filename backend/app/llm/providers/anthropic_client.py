@@ -210,7 +210,8 @@ _CONVERSATION_REPLY_SYSTEM = (
     "You are Alfred's reply agent for chat (WeChat/SMS-style). Write short replies that "
     "match each requested tone. Stay grounded in the selected conversation context. "
     "Never invent facts. Match the language of the conversation (Chinese or English). "
-    "Do not include a signature. Replies should be ready to paste into a chat input."
+    "Do not include a signature. Replies should be ready to paste into a chat input. "
+    "Always pass `replies` as a JSON array of objects (not a stringified JSON array)."
 )
 _CONVERSATION_ACTIONS_SYSTEM = (
     "You are Alfred's action extractor for chat conversations. Find actionable items the "

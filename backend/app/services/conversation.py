@@ -77,8 +77,9 @@ _SENDER_LINE_RE = re.compile(
 )
 
 # Fallback: "Name：message" / "Name: message" on one line (some export styles).
+# Avoid treating "张三 12:43" (time) as "张三 12" + content "43".
 _INLINE_SENDER_RE = re.compile(
-    r"^(?P<sender>[^:：\n]{1,40})[:：]\s*(?P<content>.+)$"
+    r"^(?P<sender>[^:：\n]{1,40})(?:：|:(?!\d))\s*(?P<content>.+)$"
 )
 
 _DEFAULT_TONES = ["natural", "caring", "brief"]
@@ -154,6 +155,84 @@ def _looks_like_wechat_blocks(text: str) -> bool:
     return senderish >= max(2, len(blocks) // 2)
 
 
+def _sender_match(line: str) -> re.Match[str] | None:
+    """Return a sender-line match when `line` looks like a WeChat display name."""
+    m = _SENDER_LINE_RE.match(line)
+    if not m:
+        return None
+    sender = m.group("sender").strip()
+    if not _is_probable_sender(sender):
+        return None
+    return m
+
+
+def _parse_dense_alternating(lines: list[str]) -> list[tuple[str, str, str | None]]:
+    """Parse sender/content pairs without requiring blank-line separators.
+
+    WeChat multi-select often pastes as::
+
+        Charlie 孙嘉谦 0608
+        感觉很牛逼诶
+        Rae
+        谢谢
+        Alex 12:43
+        明天下午见
+
+    i.e. contiguous lines with no blank separators. After a sender line the next
+    non-media line is always content (even if it looks sender-ish — short Chinese
+    replies often match the sender heuristic).
+    """
+    pairs: list[tuple[str, str, str | None]] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if _DATE_SEPARATOR_RE.match(line) or _SYSTEM_LINE_RE.match(line):
+            i += 1
+            continue
+        m = _sender_match(line)
+        if not m:
+            i += 1
+            continue
+        sender = m.group("sender").strip()
+        ts_raw = m.group("ts")
+        i += 1
+        # Skip media/system placeholders that stand alone as the bubble body.
+        skipped_media = False
+        while i < len(lines) and (
+            _SYSTEM_LINE_RE.match(lines[i]) or _is_system_or_media_placeholder(lines[i])
+        ):
+            skipped_media = True
+            i += 1
+        if i >= len(lines):
+            break
+        if _DATE_SEPARATOR_RE.match(lines[i]):
+            i += 1
+            continue
+        # Media-only bubble (e.g. name + [图片] + next name): skip empty message.
+        if skipped_media and _sender_match(lines[i]):
+            continue
+        # First content line is mandatory — never reclassify as a sender
+        # (short Chinese replies often match the sender heuristic).
+        content_parts = [lines[i]]
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            if _DATE_SEPARATOR_RE.match(nxt):
+                i += 1
+                break
+            if _sender_match(nxt):
+                break
+            if _SYSTEM_LINE_RE.match(nxt) or _is_system_or_media_placeholder(nxt):
+                i += 1
+                continue
+            content_parts.append(nxt)
+            i += 1
+        content = "\n".join(content_parts).strip()
+        if content:
+            pairs.append((sender, content, ts_raw))
+    return pairs
+
+
 def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
     """Parse WeChat multi-select copy without an LLM.
 
@@ -166,8 +245,8 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
         Sender 12:43
         message content
 
-    Also accepts single-line "Name：content" / "Name: content" when blank-line
-    blocks are sparse (some export / long-press copy styles).
+    Also accepts dense (no blank lines) alternating sender/content, and
+    single-line "Name：content" / "Name: content" export styles.
     """
     text = text.strip()
     if not text:
@@ -204,8 +283,8 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
             first = lines[0].strip()
             if _DATE_SEPARATOR_RE.match(first) and len(lines) == 1:
                 continue
-            m = _SENDER_LINE_RE.match(first)
-            if m and _is_probable_sender(m.group("sender").strip()):
+            m = _sender_match(first)
+            if m:
                 sender = m.group("sender").strip()
                 ts_raw = m.group("ts")
                 content = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
@@ -215,18 +294,24 @@ def parse_wechat_deterministic(text: str) -> ParsedConversationOut | None:
             else:
                 _append("Unknown", "\n".join(lines), None)
     else:
-        # Inline "Name：message" fallback for dense pastes without blank lines.
-        inline_hits = 0
-        for line in text.splitlines():
-            line = line.strip()
-            if not line or _DATE_SEPARATOR_RE.match(line):
-                continue
-            m = _INLINE_SENDER_RE.match(line)
-            if m and _is_probable_sender(m.group("sender").strip()):
-                _append(m.group("sender").strip(), m.group("content"), None)
-                inline_hits += 1
-        if inline_hits < 2:
-            return None
+        # Dense alternating sender/content (common when blank lines are stripped).
+        all_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        dense_pairs = _parse_dense_alternating(all_lines)
+        if len(dense_pairs) >= 2:
+            for sender, content, ts_raw in dense_pairs:
+                _append(sender, content, ts_raw)
+        else:
+            # Inline "Name：message" fallback for colon-separated exports.
+            inline_hits = 0
+            for line in all_lines:
+                if _DATE_SEPARATOR_RE.match(line):
+                    continue
+                m = _INLINE_SENDER_RE.match(line)
+                if m and _is_probable_sender(m.group("sender").strip()):
+                    _append(m.group("sender").strip(), m.group("content"), None)
+                    inline_hits += 1
+            if inline_hits < 2:
+                return None
 
     if len(messages) < 1:
         return None

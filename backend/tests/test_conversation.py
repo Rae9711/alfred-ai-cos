@@ -116,6 +116,52 @@ def test_parse_inline_colon_export_style() -> None:
     assert parsed.messages[0].content == "我需要审一下"
 
 
+SAMPLE_DENSE_GROUP = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+[图片]
+Rae
+我再试一下导入
+"""
+
+SAMPLE_DENSE_WITH_TS = """张三 12:43
+合同发我一下
+李四 昨天 21:05
+好，晚上发你
+王五
+收到
+"""
+
+
+def test_parse_dense_group_chat_no_blank_lines() -> None:
+    """WeChat multi-select often omits blank lines between bubbles."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_DENSE_GROUP)
+    assert parsed is not None
+    assert len(parsed.messages) >= 4
+    senders = [m.sender for m in parsed.messages]
+    assert "Charlie 孙嘉谦 0608" in senders
+    assert "Rae" in senders
+    assert "Alex" in senders
+    contents = [m.content for m in parsed.messages]
+    assert "感觉很牛逼诶" in contents
+    assert "布局压缩之后还能编辑吗" in contents
+    assert "[图片]" not in contents
+
+
+def test_parse_dense_with_timestamps() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_DENSE_WITH_TS)
+    assert parsed is not None
+    assert len(parsed.messages) == 3
+    assert parsed.messages[0].sender == "张三"
+    assert parsed.messages[0].timestamp is not None
+    assert parsed.messages[1].sender == "李四"
+    assert parsed.messages[2].content == "收到"
+
+
 def test_parse_meeting_sample() -> None:
     parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_MEETING)
     assert parsed is not None
@@ -300,3 +346,29 @@ def test_create_task_with_evidence_column(db: Session, user: User) -> None:
     assert task.evidence == "明天下午三点见"
     assert task.status == TaskStatus.open
     assert task.due_date is None or isinstance(task.due_date, date)
+
+
+def test_conversation_replies_result_coerces_json_string() -> None:
+    """Anthropic occasionally returns `replies` as a JSON-encoded string."""
+    from app.schemas.llm import ConversationRepliesResult
+
+    raw = {
+        "replies": '[\n  {"tone": "natural", "body": "那你先慢慢来"},\n'
+        '  {"tone": "brief", "body": "好的"}\n]'
+    }
+    result = ConversationRepliesResult.model_validate(raw)
+    assert len(result.replies) == 2
+    assert result.replies[0].tone == "natural"
+    assert result.replies[1].body == "好的"
+
+
+def test_conversation_actions_result_coerces_json_string() -> None:
+    from app.schemas.llm import ConversationActionsResult
+
+    raw = {
+        "actions": '[{"type": "task", "title": "发合同", "confidence": 0.8, '
+        '"evidence": "合同发我", "evidence_message_indexes": [0]}]'
+    }
+    result = ConversationActionsResult.model_validate(raw)
+    assert len(result.actions) == 1
+    assert result.actions[0].title == "发合同"
