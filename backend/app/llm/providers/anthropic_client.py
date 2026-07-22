@@ -208,7 +208,9 @@ _NORMALIZE_CONVERSATION_SYSTEM = (
 )
 _CONVERSATION_REPLY_SYSTEM = (
     "You are Alfred's reply agent for chat (WeChat/SMS-style). Write short replies that "
-    "match each requested tone. Stay grounded in the selected conversation context. "
+    "match each requested tone. Read the FULL conversation thread provided — do not "
+    "cherry-pick a single message. Reply to the overall situation and the latest turn "
+    "in light of all prior context. Stay grounded in the selected conversation context. "
     "Never invent facts. Match the language of the conversation (Chinese or English). "
     "Do not include a signature. Replies should be ready to paste into a chat input. "
     "Always pass `replies` as a JSON array of objects (not a stringified JSON array)."
@@ -535,7 +537,9 @@ class AnthropicLLMClient:
             user_content=(
                 f"{name_line}Reply goal: {goal or 'natural continuation'}\n"
                 f"Produce one reply for each tone: {tones}\n\n"
-                f"Conversation context:\n{context}"
+                "Conversation thread (consider ALL messages; reply to the overall "
+                "situation / last turn in context of the whole thread):\n"
+                f"{context}"
             ),
             tool=_tool_for(
                 ConversationRepliesResult, "record_replies", "Record the reply suggestions."

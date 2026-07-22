@@ -384,9 +384,17 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
     return _from_normalized(normalized)
 
 
+# Soft cap so a huge paste cannot blow the reply/action prompt; prefer the
+# most recent thread window when over the limit.
+_MAX_ANALYZE_MESSAGES = 24
+
+
 def _selected_messages(conversation: ParsedConversationOut) -> list[ConversationMessageOut]:
     selected = [m for m in conversation.messages if m.is_selected]
-    return selected or list(conversation.messages)
+    msgs = selected or list(conversation.messages)
+    if len(msgs) > _MAX_ANALYZE_MESSAGES:
+        return msgs[-_MAX_ANALYZE_MESSAGES:]
+    return msgs
 
 
 def _format_context(messages: list[ConversationMessageOut]) -> str:
@@ -518,10 +526,16 @@ def _derive_insight(
     if actions:
         title = (actions[0].title or "").strip()
         if title:
+            n = len(selected)
+            if n >= 2:
+                return f"已读 {n} 条 · {title[:56]}"
             return title[:80]
     if selected:
+        n = len(selected)
         last = selected[-1]
         snippet = (getattr(last, "content", "") or "").strip().replace("\n", " ")
+        if n >= 2 and snippet:
+            return f"已读 {n} 条消息，结合整段对话回复（最新：「{snippet[:28]}」）"
         if snippet:
             return f"围绕「{snippet[:36]}」继续推进"
     goal_clean = (goal or "").strip()

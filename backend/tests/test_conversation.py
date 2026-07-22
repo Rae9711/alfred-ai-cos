@@ -162,6 +162,78 @@ def test_parse_dense_with_timestamps() -> None:
     assert parsed.messages[2].content == "收到"
 
 
+SAMPLE_LONG_THREAD = """Alice
+早上好呀
+Bob
+今天开会吗
+Alice
+下午三点吧
+Bob
+会议室定了吗
+Alice
+A栋302可以
+Bob
+好的我带电脑
+Alice
+记得带充电器
+Bob
+投影怎么连
+Alice
+HDMI线在桌子抽屉里
+Bob
+收到谢谢
+Charlie
+我也去旁听
+Alice
+那就下午见
+"""
+
+
+def test_long_paste_selects_nearly_all_messages() -> None:
+    """~12-message multi-select should keep almost all bubbles selected by default."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_LONG_THREAD)
+    assert parsed is not None
+    assert len(parsed.messages) >= 10
+    selected = [m for m in parsed.messages if m.is_selected]
+    # Only exact noise acks (e.g. bare 收到) are deselected — contentful lines stay on.
+    assert len(selected) >= 10
+    assert len(selected) == sum(1 for m in parsed.messages if m.weight >= 1.0)
+
+
+def test_analyze_context_includes_full_selected_thread(
+    monkeypatch: pytest.MonkeyPatch, user: User
+) -> None:
+    """Analyze must send the whole selected set into the reply LLM, not one cherry-pick."""
+    fake = FakeLLM(
+        conversation_replies=[
+            ReplySuggestion(tone="natural", body="好，下午见。"),
+            ReplySuggestion(tone="caring", body="到时候见，我带好充电器。"),
+            ReplySuggestion(tone="brief", body="下午见。"),
+        ],
+        conversation_actions=[],
+    )
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_conversation(SAMPLE_LONG_THREAD, use_llm_fallback=False)
+    selected = [m for m in parsed.messages if m.is_selected]
+    assert len(selected) >= 10
+
+    result = conversation_service.analyze_conversation(
+        parsed, goal="confirm", user=user, timezone="America/New_York"
+    )
+    assert result.reply_suggestions
+    assert fake.conversation_reply_calls
+    context = fake.conversation_reply_calls[0]["context"]
+    # Numbered indexes for each selected message should appear.
+    for i in range(min(len(selected), 10)):
+        assert f"[{i}]" in context
+    assert "下午三点吧" in context
+    assert "HDMI线在桌子抽屉里" in context
+    assert "那就下午见" in context
+    # Insight should acknowledge the multi-message thread, not only the last bubble.
+    assert result.insight
+    assert "条" in result.insight or len(selected) == 1
+
+
 def test_parse_meeting_sample() -> None:
     parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_MEETING)
     assert parsed is not None

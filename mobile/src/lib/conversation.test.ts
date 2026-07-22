@@ -67,6 +67,29 @@ describe("conversation UI helpers", () => {
     expect(selectedMessageCount(conversation)).toBe(1);
   });
 
+  it("keeps most of a long paste selected by default", () => {
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      id: `m${i}`,
+      sender: i % 2 === 0 ? "Alice" : "Bob",
+      timestamp: null,
+      content: `message body ${i} about the meeting`,
+      role: "unknown" as const,
+      is_selected: true,
+      weight: 1,
+    }));
+    const conversation: ParsedConversation = {
+      id: "long",
+      source: "wechat",
+      participants: [
+        { name: "Alice", is_self: false },
+        { name: "Bob", is_self: false },
+      ],
+      imported_at: new Date().toISOString(),
+      messages,
+    };
+    expect(selectedMessageCount(conversation)).toBe(10);
+  });
+
   it("summarizes conversation inbox counts", () => {
     expect(
       summarizeInbox({

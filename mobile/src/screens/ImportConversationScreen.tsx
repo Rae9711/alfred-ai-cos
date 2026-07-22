@@ -74,7 +74,10 @@ function deriveInsight(
   if (selected.length > 0) {
     const last = selected[selected.length - 1];
     const snippet = (last?.content ?? "").trim().replace(/\n/g, " ");
-    return `围绕「${snippet.slice(0, 36)}」继续推进`;
+    if (selected.length >= 2 && snippet) {
+      return `已读 ${selected.length} 条消息，结合整段对话回复（最新：「${snippet.slice(0, 28)}」）`;
+    }
+    if (snippet) return `围绕「${snippet.slice(0, 36)}」继续推进`;
   }
   return "已分析对话，可插入回复";
 }
@@ -106,6 +109,25 @@ function handoffToConversation(h: PendingHandoff): ParsedConversation | null {
       typeof raw.imported_at === "string"
         ? raw.imported_at
         : new Date().toISOString(),
+  };
+}
+
+/** Prefer full-thread selection after parse (noise stays off). */
+function withFullThreadSelection(parsed: ParsedConversation): ParsedConversation {
+  const selectedCount = parsed.messages.filter((m) => m.is_selected).length;
+  const underSelected =
+    selectedCount === 0 ||
+    (parsed.messages.length >= 3 &&
+      selectedCount < Math.max(2, Math.ceil(parsed.messages.length / 2)));
+  if (!underSelected) return parsed;
+  const nonNoise = parsed.messages.filter((m) => (m.weight ?? 1) >= 1);
+  const keep = new Set((nonNoise.length ? nonNoise : parsed.messages).map((m) => m.id));
+  return {
+    ...parsed,
+    messages: parsed.messages.map((m) => ({
+      ...m,
+      is_selected: keep.has(m.id),
+    })),
   };
 }
 
@@ -228,7 +250,7 @@ export function ImportConversationScreen({
       }
       setRawText(text);
       const parsed = await api.parseConversation(text);
-      setConversation(parsed);
+      setConversation(withFullThreadSelection(parsed));
       setPhase("context");
     } catch (e) {
       setError(e instanceof Error ? e.message : "无法读取剪贴板");
@@ -244,7 +266,7 @@ export function ImportConversationScreen({
     setError(null);
     try {
       const parsed = await api.parseConversation(text);
-      setConversation(parsed);
+      setConversation(withFullThreadSelection(parsed));
       setPhase("context");
     } catch (e) {
       setError(e instanceof Error ? e.message : "解析失败");

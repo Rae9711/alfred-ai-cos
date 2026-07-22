@@ -369,7 +369,7 @@ final class KeyboardViewController: UIInputViewController {
             )
         )
 
-        let evidence = evidenceMessages(limit: 4)
+        let evidence = evidenceMessages(limit: 8)
         if evidence.isEmpty {
             contentStack.addArrangedSubview(
                 makeLabel("暂无可用消息，请重新导入", size: 11, color: mutedText)
@@ -674,14 +674,17 @@ final class KeyboardViewController: UIInputViewController {
             conversationId = parsed.id
             parsedMessages = parsed.messages
 
+            // Product: 复制 N 条 → 读取全部 → 再回复. Never cap to top-K.
+            // Prefer server non-noise selection; if under-selected, take all weight>=1.
             var selected = Set(parsed.messages.filter(\.is_selected).map(\.id))
+            let nonNoise = parsed.messages.filter { ($0.weight ?? 1.0) >= 1.0 }
             if selected.isEmpty {
-                let ranked = parsed.messages.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
-                selected = Set(ranked.prefix(min(8, ranked.count)).map(\.id))
-            } else if selected.count == 1, parsed.messages.count > 1 {
-                // Parser/LLM sometimes under-selects; keep top-weighted extras for context.
-                let ranked = parsed.messages.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
-                selected = Set(ranked.prefix(min(6, ranked.count)).map(\.id))
+                selected = Set((nonNoise.isEmpty ? parsed.messages : nonNoise).map(\.id))
+            } else if selected.count < parsed.messages.count,
+                      selected.count < max(2, (parsed.messages.count + 1) / 2)
+            {
+                // Parser/LLM under-selected (e.g. only 1 of 10); restore full thread.
+                selected = Set((nonNoise.isEmpty ? parsed.messages : nonNoise).map(\.id))
             }
             selectedMessageIds = selected
 
@@ -1165,10 +1168,15 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func evidenceMessages(limit: Int) -> [AlfredKeyboardAPI.Message] {
+        // Chronological thread order (not weight-ranked) so UI matches full-context analyze.
         let selected = parsedMessages.filter { selectedMessageIds.contains($0.id) }
-        let ranked = selected.sorted { ($0.weight ?? 0) > ($1.weight ?? 0) }
-        if !ranked.isEmpty { return Array(ranked.prefix(limit)) }
-        return Array(parsedMessages.prefix(limit))
+        if selected.isEmpty {
+            return Array(parsedMessages.suffix(limit))
+        }
+        if selected.count > limit {
+            return Array(selected.suffix(limit))
+        }
+        return selected
     }
 
     private func formatSuggestedTime(_ action: AlfredKeyboardAPI.Action) -> String? {
