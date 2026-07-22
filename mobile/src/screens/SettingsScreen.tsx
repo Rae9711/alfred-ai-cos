@@ -1,6 +1,7 @@
-// Settings (You) — cream alfred-ui-system chrome. Sections: Personal info,
-// Subscription, Preferences, Integrations. Real wiring: name/email from getMe,
-// quiet hours, push, disconnect Google, sign out, delete account.
+// Settings (You) — cream alfred-ui-system chrome. Four shortcut tiles act as
+// tabs (Personal / Preferences / Integrations / Security); only the selected
+// tab's rows render below. Subscription lives under Personal. Real wiring:
+// name/email from getMe, quiet hours, push, disconnect Google, sign out, delete.
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -57,6 +58,8 @@ import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 // Plan: user-main-eng-review-test-plan-20260702-172820.md, T8.
 const PILOT_HIDE_BILLING = true;
 
+type SettingsTab = "personal" | "preferences" | "integrations" | "security";
+
 export function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
@@ -64,6 +67,7 @@ export function SettingsScreen() {
   const { locale, setLocale, t } = useLocale();
   const s = t.settings ?? translations.en.settings;
   const { syncAndRefresh } = useMailbox();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("personal");
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [smsToken, setSmsToken] = useState<string | null>(null);
@@ -499,41 +503,36 @@ export function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.membershipCard}>
-        <Text style={styles.membershipLeft}>
-          {isSubscribed ? "Alfred Pro 会员" : s.subscriptionTitle}
-        </Text>
-        <Pressable
-          style={styles.membershipRight}
-          onPress={() =>
-            isSubscribed
-              ? void openBillingManage()
-              : PILOT_HIDE_BILLING
-                ? undefined
-                : void openBillingCheckout()
-          }
-        >
-          <Text style={styles.membershipMeta}>
-            {subscriptionDetail ?? s.subscriptionStatusInactive}
-          </Text>
-          <Ic.ChevronRight size={14} color="#6F6D68" stroke={2} />
-        </Pressable>
-      </View>
-
       <View style={styles.shortcutGrid}>
         {(
           [
-            { icon: Ic.User, label: s.personalInfo },
-            { icon: Ic.Sliders, label: s.preferences },
-            { icon: Ic.Bell, label: s.integrations },
-            { icon: Ic.Shield, label: s.securityCenter },
+            { id: "personal" as const, icon: Ic.User, label: s.personalInfo },
+            { id: "preferences" as const, icon: Ic.Sliders, label: s.preferences },
+            { id: "integrations" as const, icon: Ic.Bell, label: s.integrations },
+            { id: "security" as const, icon: Ic.Shield, label: s.securityCenter },
           ] as const
-        ).map((item) => (
-          <View key={item.label} style={styles.shortcutCard}>
-            <AlfredIcon icon={item.icon} tone="blue" size="small" />
-            <Text style={styles.shortcutLabel}>{item.label}</Text>
-          </View>
-        ))}
+        ).map((item) => {
+          const selected = activeTab === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setActiveTab(item.id)}
+              style={[styles.shortcutCard, selected && styles.shortcutCardActive]}
+            >
+              <AlfredIcon icon={item.icon} tone="blue" size="small" />
+              <Text
+                style={[
+                  styles.shortcutLabel,
+                  selected && styles.shortcutLabelActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.statsCard}>
@@ -565,345 +564,364 @@ export function SettingsScreen() {
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
 
-      {/* 1. Personal info — account + approvals */}
-      <SectionTitle label={s.personalInfo} />
-      <Meta style={styles.langHint}>{s.account}</Meta>
-      <View style={styles.group}>
-        <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
-        <Row label="Sign out" detail="" onPress={() => void signOut()} />
-        <Row
-          label="Delete account"
-          detail=""
-          warn
-          isLast
-          onPress={deleteAccount}
-        />
-      </View>
-
-      <SectionTitle label={s.approvalsTitle} />
-      <View style={styles.group}>
-        <ApprovalRow
-          level="L0 — Read"
-          desc="Summarize, classify, extract"
-          req="auto"
-        />
-        <ApprovalRow
-          level="L1 — Internal drafts"
-          desc="Create drafts, propose tasks"
-          req="auto"
-        />
-        <ApprovalRow
-          level="L2 — Internal writes"
-          desc="Create task, add calendar event"
-          req="optional"
-        />
-        <ApprovalRow
-          level="L3 — Send & invite"
-          desc="Email someone, message, schedule"
-          req="required"
-        />
-        <ApprovalRow
-          level="L4 — Money & legal"
-          desc="Purchase, payment, signed doc"
-          req="strong"
-          isLast
-        />
-      </View>
-
-      {/* 2. Subscription */}
-      <SectionTitle label={s.subscriptionTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
-        <View style={styles.subscriptionHead}>
-          <View style={styles.subscriptionPlanBlock}>
-            <Text style={styles.smsLabel}>{s.subscriptionCurrentPlan}</Text>
-            <Text style={styles.subscriptionPlanName}>
-              {subscription?.plan_name ?? s.subscriptionStatusInactive}
-            </Text>
-            {subscriptionDetail ? (
-              <Meta style={styles.subscriptionMeta}>{subscriptionDetail}</Meta>
-            ) : null}
+      {activeTab === "personal" ? (
+        <>
+          <SectionTitle label={s.personalInfo} />
+          <Meta style={styles.langHint}>{s.account}</Meta>
+          <View style={styles.group}>
+            <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
+            <Row label="Sign out" detail="" onPress={() => void signOut()} />
+            <Row
+              label="Delete account"
+              detail=""
+              warn
+              isLast
+              onPress={deleteAccount}
+            />
           </View>
-          <Pill
-            label={subscriptionStatusLabel(subscription?.status ?? "inactive")}
-            kind={
-              isSubscribed
-                ? "accent"
-                : subscription?.status === "past_due"
-                  ? "warn"
-                  : "muted"
-            }
-          />
-        </View>
-        {proPlan ? (
-          <>
-            <View style={styles.subscriptionDivider} />
-            <Text style={styles.subscriptionPlanName}>
-              {proPlan.name} · {proPlan.price_label}
-            </Text>
-            <Text style={styles.smsLabel}>{s.subscriptionIncludes}</Text>
-            {proPlan.features.map((feature) => (
-              <View key={feature} style={styles.subscriptionFeatureRow}>
-                <View style={styles.subscriptionBullet} />
-                <Text style={styles.subscriptionFeature}>{feature}</Text>
+
+          <SectionTitle label={s.subscriptionTitle} />
+          <View style={styles.smsCard}>
+            <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
+            <View style={styles.subscriptionHead}>
+              <View style={styles.subscriptionPlanBlock}>
+                <Text style={styles.smsLabel}>{s.subscriptionCurrentPlan}</Text>
+                <Text style={styles.subscriptionPlanName}>
+                  {subscription?.plan_name ?? s.subscriptionStatusInactive}
+                </Text>
+                {subscriptionDetail ? (
+                  <Meta style={styles.subscriptionMeta}>{subscriptionDetail}</Meta>
+                ) : null}
               </View>
-            ))}
-          </>
-        ) : null}
-        <View style={styles.smsActions}>
-          {isSubscribed ? (
-            <Btn
-              label={s.subscriptionManage}
-              kind="ghost"
-              tiny
-              onPress={() => void openBillingManage()}
-            />
-          ) : PILOT_HIDE_BILLING ? (
-            <Meta style={styles.smsHint}>{s.subscriptionComingSoon}</Meta>
-          ) : (
-            <Btn
-              label={
-                subscription?.checkout_available
-                  ? s.subscriptionSubscribe
-                  : s.subscriptionComingSoon
-              }
-              kind="accent"
-              tiny
-              onPress={() => void openBillingCheckout()}
-            />
-          )}
-        </View>
-      </View>
-
-      {/* 3. Preferences — language, chat history, notification prefs */}
-      <SectionTitle label={s.preferences} />
-      <Meta style={styles.langHint}>{s.language}</Meta>
-      <View style={styles.group}>
-        <LanguageRow
-          label={s.english}
-          selected={locale === "en"}
-          onPress={() => setLocale("en")}
-        />
-        <LanguageRow
-          label={s.chinese}
-          selected={locale === "zh"}
-          onPress={() => setLocale("zh")}
-          isLast
-        />
-      </View>
-      <Meta style={styles.langHint}>{s.languageDetail}</Meta>
-
-      <Meta style={styles.langHint}>{s.askHistoryTitle}</Meta>
-      <View style={styles.group}>
-        <Row
-          label={s.askHistoryClear}
-          detail={s.askHistoryDetail}
-          isLast
-          onPress={() => {
-            Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: s.askHistoryClear,
-                style: "destructive",
-                onPress: () => {
-                  void clearFreeChatHistory().then(() =>
-                    setNote(s.askHistoryCleared),
-                  );
-                },
-              },
-            ]);
-          }}
-        />
-      </View>
-
-      <Meta style={styles.langHint}>{s.notificationsTitle ?? "Notifications"}</Meta>
-      <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
-      <View style={styles.group}>
-        <Row
-          label={s.quietHours ?? "Quiet hours"}
-          detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
-          isLast={!editingQuietHours}
-          onPress={editQuietHours}
-        />
-      </View>
-      {editingQuietHours ? (
-        <View style={styles.quietEditor}>
-          <Text style={styles.quietHint}>
-            {s.quietHoursHint ??
-              "Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08)."}
-          </Text>
-          <TextInput
-            value={quietHoursDraft}
-            onChangeText={setQuietHoursDraft}
-            placeholder="22-08"
-            style={styles.quietInput}
-            autoCapitalize="none"
-          />
-          <View style={styles.quietActions}>
-            <Btn
-              label="Save"
-              kind="accent"
-              tiny
-              onPress={() => {
-                const v = quietHoursDraft.trim();
-                if (!v) return;
-                void api
-                  .setQuietHours(v)
-                  .then(() => api.getMe())
-                  .then((m) => {
-                    setMe(m);
-                    setEditingQuietHours(false);
-                    setNote(`Quiet hours set to ${v}.`);
-                  })
-                  .catch((e: unknown) =>
-                    setNote(e instanceof Error ? e.message : "Could not save"),
-                  );
-              }}
-            />
-            <Btn
-              label="Cancel"
-              kind="ghost"
-              tiny
-              onPress={() => setEditingQuietHours(false)}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      {/* 4. Integrations — contacts, SMS, apps, keyboard, push */}
-      <SectionTitle label={s.integrations} />
-
-      <Meta style={styles.langHint}>{s.contactsTitle}</Meta>
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{s.contactsHint}</Text>
-        {contactsNativeReady ? (
-          <>
-            <View style={styles.contactsStatusRow}>
-              <View
-                style={[
-                  styles.contactsDot,
-                  contactsStatus === "granted" && styles.contactsDotGranted,
-                  contactsStatus === "denied" && styles.contactsDotDenied,
-                ]}
+              <Pill
+                label={subscriptionStatusLabel(subscription?.status ?? "inactive")}
+                kind={
+                  isSubscribed
+                    ? "accent"
+                    : subscription?.status === "past_due"
+                      ? "warn"
+                      : "muted"
+                }
               />
-              <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
             </View>
-            {contactsStatus !== "granted" ? (
-              <View style={styles.smsActions}>
+            {proPlan ? (
+              <>
+                <View style={styles.subscriptionDivider} />
+                <Text style={styles.subscriptionPlanName}>
+                  {proPlan.name} · {proPlan.price_label}
+                </Text>
+                <Text style={styles.smsLabel}>{s.subscriptionIncludes}</Text>
+                {proPlan.features.map((feature) => (
+                  <View key={feature} style={styles.subscriptionFeatureRow}>
+                    <View style={styles.subscriptionBullet} />
+                    <Text style={styles.subscriptionFeature}>{feature}</Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+            <View style={styles.smsActions}>
+              {isSubscribed ? (
                 <Btn
-                  label={contactsActionLabel}
+                  label={s.subscriptionManage}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void openBillingManage()}
+                />
+              ) : PILOT_HIDE_BILLING ? (
+                <Meta style={styles.smsHint}>{s.subscriptionComingSoon}</Meta>
+              ) : (
+                <Btn
+                  label={
+                    subscription?.checkout_available
+                      ? s.subscriptionSubscribe
+                      : s.subscriptionComingSoon
+                  }
                   kind="accent"
                   tiny
-                  onPress={() => void handleContactsPermission()}
+                  onPress={() => void openBillingCheckout()}
+                />
+              )}
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      {activeTab === "preferences" ? (
+        <>
+          <SectionTitle label={s.preferences} />
+          <Meta style={styles.langHint}>{s.language}</Meta>
+          <View style={styles.group}>
+            <LanguageRow
+              label={s.english}
+              selected={locale === "en"}
+              onPress={() => setLocale("en")}
+            />
+            <LanguageRow
+              label={s.chinese}
+              selected={locale === "zh"}
+              onPress={() => setLocale("zh")}
+              isLast
+            />
+          </View>
+          <Meta style={styles.langHint}>{s.languageDetail}</Meta>
+
+          <Meta style={styles.langHint}>{s.askHistoryTitle}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.askHistoryClear}
+              detail={s.askHistoryDetail}
+              isLast
+              onPress={() => {
+                Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: s.askHistoryClear,
+                    style: "destructive",
+                    onPress: () => {
+                      void clearFreeChatHistory().then(() =>
+                        setNote(s.askHistoryCleared),
+                      );
+                    },
+                  },
+                ]);
+              }}
+            />
+          </View>
+
+          <Meta style={styles.langHint}>
+            {s.notificationsTitle ?? "Notifications"}
+          </Meta>
+          <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.quietHours ?? "Quiet hours"}
+              detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
+              isLast={!editingQuietHours}
+              onPress={editQuietHours}
+            />
+          </View>
+          {editingQuietHours ? (
+            <View style={styles.quietEditor}>
+              <Text style={styles.quietHint}>
+                {s.quietHoursHint ??
+                  "Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08)."}
+              </Text>
+              <TextInput
+                value={quietHoursDraft}
+                onChangeText={setQuietHoursDraft}
+                placeholder="22-08"
+                style={styles.quietInput}
+                autoCapitalize="none"
+              />
+              <View style={styles.quietActions}>
+                <Btn
+                  label="Save"
+                  kind="accent"
+                  tiny
+                  onPress={() => {
+                    const v = quietHoursDraft.trim();
+                    if (!v) return;
+                    void api
+                      .setQuietHours(v)
+                      .then(() => api.getMe())
+                      .then((m) => {
+                        setMe(m);
+                        setEditingQuietHours(false);
+                        setNote(`Quiet hours set to ${v}.`);
+                      })
+                      .catch((e: unknown) =>
+                        setNote(
+                          e instanceof Error ? e.message : "Could not save",
+                        ),
+                      );
+                  }}
+                />
+                <Btn
+                  label="Cancel"
+                  kind="ghost"
+                  tiny
+                  onPress={() => setEditingQuietHours(false)}
                 />
               </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
-        )}
-      </View>
-
-      <Meta style={styles.langHint}>{s.smsTitle}</Meta>
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{smsHint}</Text>
-        <View style={styles.smsActions}>
-          {Platform.OS === "ios" ? (
-            <Btn
-              label={s.smsInstallShortcut}
-              kind="accent"
-              tiny
-              onPress={() => void installSmsShortcut()}
-            />
+            </View>
           ) : null}
-          {smsToken ? (
-            <Btn
-              label={s.smsCopyToken}
-              kind={Platform.OS === "ios" ? "ghost" : "accent"}
-              tiny
-              onPress={() => void copySmsToken()}
+        </>
+      ) : null}
+
+      {activeTab === "integrations" ? (
+        <>
+          <SectionTitle label={s.integrations} />
+
+          <Meta style={styles.langHint}>{s.contactsTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.contactsHint}</Text>
+            {contactsNativeReady ? (
+              <>
+                <View style={styles.contactsStatusRow}>
+                  <View
+                    style={[
+                      styles.contactsDot,
+                      contactsStatus === "granted" && styles.contactsDotGranted,
+                      contactsStatus === "denied" && styles.contactsDotDenied,
+                    ]}
+                  />
+                  <Text style={styles.contactsStatusText}>
+                    {contactsStatusLabel}
+                  </Text>
+                </View>
+                {contactsStatus !== "granted" ? (
+                  <View style={styles.smsActions}>
+                    <Btn
+                      label={contactsActionLabel}
+                      kind="accent"
+                      tiny
+                      onPress={() => void handleContactsPermission()}
+                    />
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.smsTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{smsHint}</Text>
+            <View style={styles.smsActions}>
+              {Platform.OS === "ios" ? (
+                <Btn
+                  label={s.smsInstallShortcut}
+                  kind="accent"
+                  tiny
+                  onPress={() => void installSmsShortcut()}
+                />
+              ) : null}
+              {smsToken ? (
+                <Btn
+                  label={s.smsCopyToken}
+                  kind={Platform.OS === "ios" ? "ghost" : "accent"}
+                  tiny
+                  onPress={() => void copySmsToken()}
+                />
+              ) : null}
+              <Btn
+                label={s.smsSetupGuide}
+                kind="ghost"
+                tiny
+                onPress={openSmsSetupGuide}
+              />
+            </View>
+            {smsToken ? (
+              <>
+                <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
+                <Text selectable style={styles.smsMono}>
+                  {smsToken}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
+          <View style={styles.group}>
+            {connectedMailboxes.map((mailbox) => (
+              <Row
+                key={mailbox.id}
+                label={mailbox.email}
+                detail={
+                  mailbox.gmail_modify ? "Gmail · synced" : s.reconnectForRead
+                }
+                onPress={() =>
+                  mailbox.gmail_modify
+                    ? disconnectMailbox(mailbox.id, mailbox.email)
+                    : void linkGmail()
+                }
+              />
+            ))}
+            <Integration
+              name={s.addGmail}
+              detail="Link another inbox"
+              onConnect={() => void linkGmail()}
             />
-          ) : null}
-          <Btn
-            label={s.smsSetupGuide}
-            kind="ghost"
-            tiny
-            onPress={openSmsSetupGuide}
-          />
-        </View>
-        {smsToken ? (
-          <>
-            <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
-            <Text selectable style={styles.smsMono}>
-              {smsToken}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
-        )}
-      </View>
+            <Integration
+              name="Google Calendar"
+              detail="Primary calendar"
+              connected={connectedMailboxes.length > 0}
+            />
+            <Integration
+              name="Notion"
+              detail="Connect for class notes & projects"
+              onConnect={() => connectIntegration("Notion")}
+            />
+            <Integration
+              name="Todoist"
+              detail="Sync existing tasks"
+              isLast
+              onConnect={() => connectIntegration("Todoist")}
+            />
+          </View>
 
-      <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
-      <View style={styles.group}>
-        {connectedMailboxes.map((mailbox) => (
-          <Row
-            key={mailbox.id}
-            label={mailbox.email}
-            detail={
-              mailbox.gmail_modify
-                ? "Gmail · synced"
-                : s.reconnectForRead
-            }
-            onPress={() =>
-              mailbox.gmail_modify
-                ? disconnectMailbox(mailbox.id, mailbox.email)
-                : void linkGmail()
-            }
-          />
-        ))}
-        <Integration
-          name={s.addGmail}
-          detail="Link another inbox"
-          onConnect={() => void linkGmail()}
-        />
-        <Integration
-          name="Google Calendar"
-          detail="Primary calendar"
-          connected={connectedMailboxes.length > 0}
-        />
-        <Integration
-          name="Notion"
-          detail="Connect for class notes & projects"
-          onConnect={() => connectIntegration("Notion")}
-        />
-        <Integration
-          name="Todoist"
-          detail="Sync existing tasks"
-          isLast
-          onConnect={() => connectIntegration("Todoist")}
-        />
-      </View>
+          <Meta style={styles.langHint}>{s.keyboardTitle}</Meta>
+          <Meta style={styles.langHint}>{s.keyboardDetail}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.keyboardDiagnostics}
+              detail={s.keyboardDiagnosticsDetail}
+              isLast
+              onPress={() => router.push("/keyboard-diagnostics" as never)}
+            />
+          </View>
 
-      <Meta style={styles.langHint}>{s.keyboardTitle}</Meta>
-      <Meta style={styles.langHint}>{s.keyboardDetail}</Meta>
-      <View style={styles.group}>
-        <Row
-          label={s.keyboardDiagnostics}
-          detail={s.keyboardDiagnosticsDetail}
-          isLast
-          onPress={() => router.push("/keyboard-diagnostics" as never)}
-        />
-      </View>
+          <Meta style={styles.langHint}>
+            {s.notificationsTitle ?? "Notifications"}
+          </Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.enablePush ?? "Enable push"}
+              detail=""
+              isLast
+              onPress={() => void enablePush()}
+            />
+          </View>
+        </>
+      ) : null}
 
-      <Meta style={styles.langHint}>{s.notificationsTitle ?? "Notifications"}</Meta>
-      <View style={styles.group}>
-        <Row
-          label={s.enablePush ?? "Enable push"}
-          detail=""
-          isLast
-          onPress={() => void enablePush()}
-        />
-      </View>
+      {activeTab === "security" ? (
+        <>
+          <SectionTitle label={s.securityCenter} />
+          <Meta style={styles.langHint}>{s.approvalsTitle}</Meta>
+          <View style={styles.group}>
+            <ApprovalRow
+              level="L0 — Read"
+              desc="Summarize, classify, extract"
+              req="auto"
+            />
+            <ApprovalRow
+              level="L1 — Internal drafts"
+              desc="Create drafts, propose tasks"
+              req="auto"
+            />
+            <ApprovalRow
+              level="L2 — Internal writes"
+              desc="Create task, add calendar event"
+              req="optional"
+            />
+            <ApprovalRow
+              level="L3 — Send & invite"
+              desc="Email someone, message, schedule"
+              req="required"
+            />
+            <ApprovalRow
+              level="L4 — Money & legal"
+              desc="Purchase, payment, signed doc"
+              req="strong"
+              isLast
+            />
+          </View>
+        </>
+      ) : null}
 
       <Meta style={styles.version}>Alfred · 阿福 · made calmly</Meta>
       </ScrollView>
@@ -1080,31 +1098,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#77756F",
   },
-  membershipCard: {
-    ...surfaces.glassCard,
-    borderRadius: 18,
-    paddingVertical: 13,
-    paddingHorizontal: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  membershipLeft: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 10,
-    color: "#635BD4",
-  },
-  membershipRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  membershipMeta: {
-    fontFamily: fonts.sans,
-    fontSize: 10,
-    color: "#6F6D68",
-  },
   shortcutGrid: {
     flexDirection: "row",
     gap: 10,
@@ -1119,11 +1112,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  shortcutCardActive: {
+    borderColor: colors.accent,
+    backgroundColor: "#F3F7FF",
+    shadowOpacity: 0.16,
+  },
   shortcutLabel: {
     fontFamily: fonts.sans,
     fontSize: 9,
     color: "#4D586D",
     textAlign: "center",
+  },
+  shortcutLabelActive: {
+    fontFamily: fonts.sansMedium,
+    color: colors.accent,
   },
   statsCard: {
     ...surfaces.glassCard,
