@@ -55,6 +55,7 @@ export function InboxScreen() {
     mailboxes,
     inboxScope,
     inboxFilter,
+    counts,
     loading,
     tabLoading,
     syncing,
@@ -71,12 +72,20 @@ export function InboxScreen() {
 
   const mailboxTabs = useMemo(
     () => [
-      { id: "all", label: t.inbox.filters.all },
-      { id: "needs_action", label: t.inbox.filters.needsAction },
-      { id: "unread", label: t.inbox.filters.unread },
-      { id: "sms", label: t.inbox.filters.sms },
+      { id: "all" as const, label: t.inbox.filters.all, count: counts.all },
+      {
+        id: "needs_action" as const,
+        label: t.inbox.filters.needsAction,
+        count: counts.needs_action,
+      },
+      { id: "unread" as const, label: t.inbox.filters.unread, count: counts.unread },
+      { id: "sms" as const, label: t.inbox.filters.sms, count: counts.sms },
     ],
     [
+      counts.all,
+      counts.needs_action,
+      counts.sms,
+      counts.unread,
       t.inbox.filters.needsAction,
       t.inbox.filters.unread,
       t.inbox.filters.all,
@@ -86,7 +95,6 @@ export function InboxScreen() {
 
   const live = tabLoading ? [] : items;
   const filtered = live;
-  const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
     inboxFilter === "all" && inboxScope === "synced" && mailboxes.length > 1;
 
@@ -263,10 +271,7 @@ export function InboxScreen() {
                   ]}
                 >
                   {f.label}
-                  {f.id === "all" && live.length > 0 ? ` ${live.length}` : ""}
-                  {f.id === "needs_action" && unreadCount > 0
-                    ? ` ${unreadCount}`
-                    : ""}
+                  {f.count > 0 ? ` ${f.count}` : ""}
                 </Text>
               </Pressable>
             );
@@ -417,8 +422,11 @@ function InboxCard({
         ? styles.subjectFyi
         : null;
 
+  const isNeeds = status.kind === "needs";
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isNeeds && styles.cardNeeds]}>
+      {isNeeds ? <View style={styles.needsAccent} /> : null}
       <Pressable onPress={onOpen} style={styles.cardMain}>
         <AlfredIcon
           icon={item.source === "sms" ? Ic.Chat : Ic.Mail}
@@ -427,7 +435,10 @@ function InboxCard({
         />
         <View style={styles.cardCopy}>
           <View style={styles.cardMeta}>
-            <Text style={styles.sender} numberOfLines={1}>
+            <Text
+              style={[styles.sender, isNeeds && styles.senderNeeds]}
+              numberOfLines={1}
+            >
               {item.sender}
               {mailboxLabel ? ` · ${mailboxLabel}` : ""}
             </Text>
@@ -454,7 +465,7 @@ function InboxCard({
             style={[
               surfaces.statusPill,
               status.done && surfaces.statusPillDone,
-              status.kind === "needs" && styles.statusNeedsPill,
+              isNeeds && styles.statusNeedsPill,
               (status.kind === "fyi" || status.kind === "unread") &&
                 styles.statusFyiPill,
               styles.statusChip,
@@ -464,7 +475,7 @@ function InboxCard({
               style={[
                 surfaces.statusPillText,
                 status.done && surfaces.statusPillDoneText,
-                status.kind === "needs" && styles.statusNeedsText,
+                isNeeds && styles.statusNeedsText,
                 (status.kind === "fyi" || status.kind === "unread") &&
                   styles.statusFyiText,
               ]}
@@ -595,12 +606,27 @@ const styles = StyleSheet.create({
     ...surfaces.glassCard,
     padding: layout.cardPad,
     borderRadius: 20,
+    overflow: "hidden",
+    position: "relative",
+  },
+  cardNeeds: {
+    backgroundColor: "#F3F7FF",
+    borderColor: "rgba(47,102,200,0.22)",
+    borderWidth: 1,
+  },
+  needsAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: colors.blue700,
   },
   unreadDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.blue700,
   },
   cardMain: {
     flexDirection: "row",
@@ -629,6 +655,10 @@ const styles = StyleSheet.create({
     color: "#77756F",
     flex: 1,
   },
+  senderNeeds: {
+    color: colors.accentInk,
+    fontFamily: fonts.sansMedium,
+  },
   subject: {
     fontFamily: fonts.sansSemibold,
     fontSize: 12,
@@ -636,7 +666,10 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   subjectNeeds: {
-    color: colors.accent,
+    color: colors.blue700,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    letterSpacing: -0.2,
   },
   subjectFyi: {
     color: "#5F6470",
@@ -652,10 +685,15 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   statusNeedsPill: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.blue700,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   statusNeedsText: {
-    color: colors.accent,
+    color: "#FFFFFF",
+    fontFamily: fonts.sansSemibold,
+    fontSize: 10,
   },
   statusFyiPill: {
     backgroundColor: "#F0EEE9",

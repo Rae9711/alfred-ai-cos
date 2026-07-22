@@ -189,6 +189,8 @@ def accept_proposal(
     proposal_id: str,
     *,
     timezone: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
 ) -> tuple[ScheduleProposal, str]:
     """Book the proposal on the user's calendar via the audited capability spine."""
     from app.services.assistant import resolve_timezone
@@ -198,10 +200,14 @@ def accept_proposal(
         raise ValueError("Proposal is not pending")
 
     resolve_timezone(db, user, timezone or proposal.timezone)
+    start_dt = _parse_iso(start) if start else proposal.start_time
+    end_dt = _parse_iso(end) if end else proposal.end_time
+    if end_dt <= start_dt:
+        end_dt = start_dt + timedelta(hours=1)
     target: dict[str, str] = {
         "title": proposal.title,
-        "start": proposal.start_time.isoformat(),
-        "end": proposal.end_time.isoformat(),
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
     }
     if proposal.location:
         target["location"] = proposal.location

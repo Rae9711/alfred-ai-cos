@@ -366,12 +366,19 @@ export const api = {
       "/today/schedule-block",
       { method: "POST", body: JSON.stringify(body) },
     ),
-  acceptScheduleProposal: (id: string, timezone?: string) =>
+  acceptScheduleProposal: (
+    id: string,
+    opts?: { timezone?: string; start?: string; end?: string },
+  ) =>
     request<{ accepted: boolean; reply: string; event_id?: string | null }>(
       `/schedule-proposals/${id}/accept`,
       {
         method: "POST",
-        body: JSON.stringify({ timezone: timezone ?? deviceTimezone() }),
+        body: JSON.stringify({
+          timezone: opts?.timezone ?? deviceTimezone(),
+          start: opts?.start,
+          end: opts?.end,
+        }),
       },
     ),
   dismissScheduleProposal: (id: string) =>

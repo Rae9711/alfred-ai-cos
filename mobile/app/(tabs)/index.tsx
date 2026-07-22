@@ -58,10 +58,8 @@ function TabsChrome({
 }) {
   const { setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
-  const { items } = useMailbox();
-  const badgeCount = items.filter(
-    (m) => m.isUnread || m.section === "reply" || m.section === "decision",
-  ).length;
+  const { counts } = useMailbox();
+  const badgeCount = counts.needs_action;
   const atHome = tab === "inbox" || tab === "settings" || tab === "alfred";
 
   useEffect(() => {

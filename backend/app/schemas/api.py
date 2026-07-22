@@ -206,6 +206,8 @@ class ScheduleBlockResponse(BaseModel):
 
 class AcceptScheduleProposalRequest(BaseModel):
     timezone: str | None = None
+    start: str | None = None
+    end: str | None = None
 
 
 class AcceptScheduleProposalResponse(BaseModel):

@@ -37,6 +37,7 @@ import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Disclose, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
+import { ScheduleProposalCard } from "@/components/ScheduleProposalCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
 import { ScheduleViewSegment } from "@/components/schedule/ScheduleViewSegment";
 import { ScheduleWeekStrip } from "@/components/schedule/ScheduleWeekStrip";
@@ -150,7 +151,6 @@ export function HomeScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [scheduleAction, setScheduleAction] = useState(false);
   const [habitAction, setHabitAction] = useState(false);
 
   const [scheduleView, setScheduleView] = useState<ScheduleView>("day");
@@ -312,30 +312,8 @@ export function HomeScreen() {
   const topScheduleProposal = todayData?.schedule_proposals?.[0] ?? null;
   const topHabitSuggestion = todayData?.habit_suggestions?.[0] ?? null;
   const weekAhead = todayData?.week_ahead ?? null;
-  const proposalConflict = topScheduleProposal?.conflicts?.[0] ?? null;
-
-  const formatScheduleWhen = (iso: string) =>
-    new Date(iso).toLocaleString(locale === "zh" ? "zh-CN" : undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-
-  const butlerPrompt = topScheduleProposal
-    ? proposalConflict
-      ? `${t.home.scheduleProposalPrompt(
-          topScheduleProposal.counterparty ?? t.home.untitledMeeting,
-          topScheduleProposal.title,
-          formatScheduleWhen(topScheduleProposal.start_time),
-        )} ${t.home.scheduleProposalConflict(proposalConflict.title)}`
-      : t.home.scheduleProposalPrompt(
-          topScheduleProposal.counterparty ?? t.home.untitledMeeting,
-          topScheduleProposal.title,
-          formatScheduleWhen(topScheduleProposal.start_time),
-        )
-    : topHabitSuggestion
-      ? topHabitSuggestion.prompt
+  const butlerPrompt = topHabitSuggestion
+    ? topHabitSuggestion.prompt
     : nextMeeting
     ? t.home.nextScheduleReminder(
         formatMeetingTime(nextMeeting.start_time),
@@ -345,10 +323,8 @@ export function HomeScreen() {
       ? t.home.scheduleDoneForDay
       : t.home.noScheduleToday;
 
-  const butlerCta = topScheduleProposal
-    ? null
-    : topHabitSuggestion
-      ? t.home.habitBlockCta
+  const butlerCta = topHabitSuggestion
+    ? t.home.habitBlockCta
     : nextMeeting
     ? nextMeeting.prep_required
       ? t.home.viewPrep
@@ -393,47 +369,6 @@ export function HomeScreen() {
     const body = locale === "zh" ? "好的" : "Sounds good";
     openConfirmReply(topScheduleProposal.source_message_id, body);
   }, [locale, openConfirmReply, topScheduleProposal]);
-
-  const acceptScheduleProposal = useCallback(() => {
-    if (!topScheduleProposal || scheduleAction) return;
-    setScheduleAction(true);
-    void (async () => {
-      try {
-        await api.acceptScheduleProposal(topScheduleProposal.id);
-        showToast(t.home.scheduleProposalAccepted);
-        flashState("success");
-        await api.sync({ calendarOnly: true }).catch(() => undefined);
-        await load(scheduleView);
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : t.home.scheduleProposalFailed);
-      } finally {
-        setScheduleAction(false);
-      }
-    })();
-  }, [
-    load,
-    scheduleAction,
-    scheduleView,
-    showToast,
-    t.home.scheduleProposalAccepted,
-    t.home.scheduleProposalFailed,
-    topScheduleProposal,
-  ]);
-
-  const dismissScheduleProposal = useCallback(() => {
-    if (!topScheduleProposal || scheduleAction) return;
-    setScheduleAction(true);
-    void (async () => {
-      try {
-        await api.dismissScheduleProposal(topScheduleProposal.id);
-        await load(scheduleView);
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : t.home.scheduleProposalFailed);
-      } finally {
-        setScheduleAction(false);
-      }
-    })();
-  }, [load, scheduleAction, scheduleView, showToast, t.home.scheduleProposalFailed, topScheduleProposal]);
 
   const dismissHabitSuggestion = useCallback(() => {
     if (!topHabitSuggestion || habitAction) return;
@@ -674,72 +609,32 @@ export function HomeScreen() {
           <Ic.Arrow size={18} color={colors.ink4} />
         </Pressable>
 
-        {(topScheduleProposal || topHabitSuggestion) &&
-        !(todayData?.suggestions?.length) ? (
+        {topHabitSuggestion && !topScheduleProposal ? (
           <View style={styles.butlerBlock}>
             <View style={styles.proactiveCard}>
               <Serif size={18} style={styles.proactiveText}>
-                {butlerPrompt}
+                {topHabitSuggestion.prompt}
               </Serif>
-              {topHabitSuggestion && !topScheduleProposal ? (
-                <Text style={styles.habitPattern}>
-                  {topHabitSuggestion.pattern_summary}
-                </Text>
-              ) : null}
-              {topHabitSuggestion && !topScheduleProposal ? (
-                <View style={styles.habitActions}>
-                  <Btn
-                    label={butlerCta ?? t.home.habitBlockCta}
-                    onPress={onButlerPress}
-                    style={styles.proactiveBtn}
-                    disabled={habitAction}
-                  />
-                  <Pressable
-                    onPress={dismissHabitSuggestion}
-                    disabled={habitAction}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.dismissProposal}>
-                      {t.home.dismissProposal}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : butlerCta ? (
+              <Text style={styles.habitPattern}>
+                {topHabitSuggestion.pattern_summary}
+              </Text>
+              <View style={styles.habitActions}>
                 <Btn
-                  label={butlerCta}
+                  label={butlerCta ?? t.home.habitBlockCta}
                   onPress={onButlerPress}
                   style={styles.proactiveBtn}
                   disabled={habitAction}
                 />
-              ) : null}
-              {topScheduleProposal ? (
-                <View style={styles.scheduleProposalActions}>
-                  <Btn
-                    label={t.home.addToCalendar}
-                    onPress={acceptScheduleProposal}
-                    style={styles.proactiveBtn}
-                    disabled={scheduleAction}
-                  />
-                  <Btn
-                    label={t.home.replyConfirm(
-                      topScheduleProposal.counterparty ?? t.home.untitledMeeting,
-                    )}
-                    onPress={confirmScheduleReply}
-                    style={styles.proactiveBtn}
-                    kind="ghost"
-                    disabled={scheduleAction}
-                  />
-                  <Pressable
-                    onPress={dismissScheduleProposal}
-                    disabled={scheduleAction}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.dismissProposal}>
-                      {t.home.dismissProposal}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
+                <Pressable
+                  onPress={dismissHabitSuggestion}
+                  disabled={habitAction}
+                  hitSlop={8}
+                >
+                  <Text style={styles.dismissProposal}>
+                    {t.home.dismissProposal}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         ) : null}
@@ -870,11 +765,25 @@ export function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.emailCard}>
-            {homeInbox.length === 0 ? (
+          {topScheduleProposal ? (
+            <ScheduleProposalCard
+              proposal={topScheduleProposal}
+              onReply={confirmScheduleReply}
+              onChanged={() => {
+                flashState("success");
+                void api.sync({ calendarOnly: true }).catch(() => undefined);
+                void load(scheduleView);
+              }}
+            />
+          ) : null}
+
+          {homeInbox.length === 0 && !topScheduleProposal ? (
+            <View style={styles.emailCard}>
               <Text style={styles.inboxEmpty}>{t.inbox.inboxZero}</Text>
-            ) : (
-              homeInbox.map((msg, index) => {
+            </View>
+          ) : homeInbox.length > 0 ? (
+            <View style={styles.emailCard}>
+              {homeInbox.map((msg, index) => {
                 const sender = parseSenderDisplay(msg.sender);
                 const done = Boolean(msg.user_decided || msg.user_replied);
                 return (
@@ -925,9 +834,9 @@ export function HomeScreen() {
                     ) : null}
                   </Pressable>
                 );
-              })
-            )}
-          </View>
+              })}
+            </View>
+          ) : null}
         </View>
 
         {/* Day / week / month — white card chrome matching design sheet. */}
@@ -1070,7 +979,6 @@ const styles = StyleSheet.create({
   habitPattern: { fontSize: 13, color: colors.ink4, fontStyle: "italic" },
   proactiveBtn: { alignSelf: "flex-start" },
   habitActions: { gap: 10 },
-  scheduleProposalActions: { gap: 10 },
   dismissProposal: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink4 },
   sectionLabel: {
     ...surfaces.sectionKicker,
@@ -1078,6 +986,7 @@ const styles = StyleSheet.create({
   },
   inboxSection: {
     marginTop: layout.gapSection,
+    gap: 14,
   },
   inboxHeader: {
     flexDirection: "row",

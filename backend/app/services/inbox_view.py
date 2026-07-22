@@ -42,9 +42,17 @@ _HIGH_CONFIDENCE_CLASSIFICATIONS = frozenset(
         MessageClassification.meeting_scheduling,
     }
 )
-# Reply mail needs action_required; needs_decision qualifies on classification alone
-# (LLM sometimes sets action_required=false while still tagging needs_decision).
+# Reply mail needs action_required; decision-class mail qualifies on classification
+# alone (LLM sometimes sets action_required=false while still tagging needs_decision /
+# meeting_scheduling / deadline — all of which map to the Needs Decision UI bucket).
 _CORE_REPLY_CLASSIFICATIONS = frozenset({MessageClassification.needs_reply})
+_DECISION_CLASSIFICATIONS = frozenset(
+    {
+        MessageClassification.needs_decision,
+        MessageClassification.meeting_scheduling,
+        MessageClassification.deadline,
+    }
+)
 _HIGH_PRIORITIES = frozenset({Priority.critical, Priority.high})
 _UNTRUSTED_SENDERS = frozenset({"automated", "bulk", "suspicious", "muted"})
 
@@ -253,8 +261,9 @@ def message_qualifies_for_needs_action_tab(
         return False
     if message.classification not in _HIGH_CONFIDENCE_CLASSIFICATIONS:
         return False
-    # needs_decision qualifies even from automated senders (Stripe billing, etc.).
-    if message.classification == MessageClassification.needs_decision:
+    # Decision-class (incl. meeting invites / deadlines) qualifies even when the LLM
+    # left action_required=false, and even from automated senders (Stripe, etc.).
+    if message.classification in _DECISION_CLASSIFICATIONS:
         return True
     if (message.sender_classification or "") in _UNTRUSTED_SENDERS:
         return False

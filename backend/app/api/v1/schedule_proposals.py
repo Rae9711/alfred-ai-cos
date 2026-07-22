@@ -24,7 +24,7 @@ def accept_proposal(
 ) -> AcceptScheduleProposalResponse:
     try:
         proposal, detail = schedule_service.accept_proposal(
-            db, user, proposal_id, timezone=payload.timezone
+            db, user, proposal_id, timezone=payload.timezone, start=payload.start, end=payload.end
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

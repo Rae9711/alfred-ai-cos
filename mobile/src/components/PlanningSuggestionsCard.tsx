@@ -77,12 +77,24 @@ function FocusTimeBlock({
     Math.round((slot.end.getTime() - slot.start.getTime()) / 60_000),
   );
 
-  const shiftMinutes = (delta: number) => {
+  const shiftDuration = (delta: number) => {
     setSlot((s) => {
-      const start = new Date(s.start.getTime() + delta * 60_000);
-      const durationMs = s.end.getTime() - s.start.getTime();
-      const end = new Date(start.getTime() + durationMs);
-      return { ...s, start, end };
+      const nextEnd = new Date(s.end.getTime() + delta * 60_000);
+      const nextDuration = Math.round(
+        (nextEnd.getTime() - s.start.getTime()) / 60_000,
+      );
+      if (nextDuration < 15) {
+        return {
+          ...s,
+          end: new Date(s.start.getTime() + 15 * 60_000),
+        };
+      }
+      // Don't extend past the original gap end.
+      const gapEnd = initial.end.getTime();
+      if (nextEnd.getTime() > gapEnd) {
+        return { ...s, end: new Date(gapEnd) };
+      }
+      return { ...s, end: nextEnd };
     });
   };
 
@@ -139,13 +151,13 @@ function FocusTimeBlock({
       </View>
 
       <View style={styles.timeControls}>
-        <Pressable style={styles.slotBtn} onPress={() => shiftMinutes(-15)}>
+        <Pressable style={styles.slotBtn} onPress={() => shiftDuration(-15)}>
           <Text style={styles.slotBtnText}>{t.planning.earlier}</Text>
         </Pressable>
         <Text style={styles.slotDuration}>
           {formatDuration(durationMin, locale)}
         </Text>
-        <Pressable style={styles.slotBtn} onPress={() => shiftMinutes(15)}>
+        <Pressable style={styles.slotBtn} onPress={() => shiftDuration(15)}>
           <Text style={styles.slotBtnText}>{t.planning.laterSlot}</Text>
         </Pressable>
       </View>
@@ -156,15 +168,15 @@ function FocusTimeBlock({
         disabled={slot.scheduling || slot.done}
       >
         {slot.scheduling ? (
-          <ActivityIndicator color={colors.primaryInk} />
+          <ActivityIndicator color="#FFFFFF" />
         ) : slot.done ? (
           <>
-            <Ic.Check size={18} color={colors.primaryInk} stroke={2.2} />
+            <Ic.Check size={18} color="#FFFFFF" stroke={2.2} />
             <Text style={styles.primaryBtnText}>{t.planning.addedToCalendar}</Text>
           </>
         ) : (
           <>
-            <Ic.Calendar size={18} color={colors.primaryInk} stroke={1.8} />
+            <Ic.Calendar size={18} color="#FFFFFF" stroke={1.8} />
             <Text style={styles.primaryBtnText}>{t.planning.addToCalendar}</Text>
           </>
         )}
@@ -279,7 +291,7 @@ const styles = StyleSheet.create({
   focusKicker: {
     fontFamily: fonts.sansSemibold,
     fontSize: 10,
-    color: "#4B70C5",
+    color: colors.blue700,
   },
   focusHeading: {
     marginTop: 4,
@@ -347,14 +359,22 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   primaryBtn: {
-    ...surfaces.primaryButton,
-    minHeight: 40,
+    marginTop: 4,
+    minHeight: 44,
+    borderRadius: 14,
+    backgroundColor: colors.blue700,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   primaryBtnDone: {
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.success,
   },
   primaryBtnText: {
-    ...surfaces.primaryButtonText,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    color: "#FFFFFF",
   },
   quickSection: { gap: 8, marginTop: 4 },
   quickRow: {
