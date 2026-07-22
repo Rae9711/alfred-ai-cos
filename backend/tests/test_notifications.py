@@ -24,9 +24,9 @@ def _proposal(
 ) -> ActionProposal:
     return ActionProposal(
         user_id=user_id,
-        action_type=ActionType.send_email,
-        risk_level=3,
-        target={"draft_reply_id": "x"},
+        action_type=ActionType.create_task,
+        risk_level=2,
+        target={"title": "Follow up"},
         reason="Send a reply",
         approval_required=approval_required,
         status=ActionStatus.proposed,

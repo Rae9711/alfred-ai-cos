@@ -16,13 +16,6 @@ import { getToken } from "@/api/auth";
 import { Ic } from "@/components/icons";
 import { Btn, Eyebrow, IconBtn, Meta, Serif } from "@/components/ui";
 import { syncAuthToAppGroup } from "@/lib/appGroupHandoff";
-import {
-  getKeyboardLastSeen,
-  getSharedAuthToken,
-  getSharedAuthTokenUpdatedAt,
-  isAppGroupAvailable,
-  isSharedStorageNativeAvailable,
-} from "alfred-shared-storage";
 import { colors, fonts, layout } from "@/theme/theme";
 
 type DiagRow = {
@@ -59,6 +52,14 @@ export function KeyboardDiagnosticsScreen() {
         ]);
         return;
       }
+
+      const {
+        getKeyboardLastSeen,
+        getSharedAuthToken,
+        getSharedAuthTokenUpdatedAt,
+        isAppGroupAvailable,
+        isSharedStorageNativeAvailable,
+      } = await import("alfred-shared-storage");
 
       const native = isSharedStorageNativeAvailable();
       if (!native) {

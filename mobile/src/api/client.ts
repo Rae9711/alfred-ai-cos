@@ -3,7 +3,7 @@
 
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import * as Sentry from "@sentry/react-native";
+import { captureException } from "@/lib/sentry";
 import type {
   ActionProposal,
   AppNotification,
@@ -147,7 +147,7 @@ async function request<T>(
     }
     // Report to Sentry (no-op when DSN is blank). The message is already truncated above,
     // so no raw server detail leaves the device.
-    Sentry.captureException(e);
+    captureException(e);
     throw e;
   } finally {
     if (timer != null) clearTimeout(timer);

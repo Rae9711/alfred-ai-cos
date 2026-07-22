@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, update
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -23,7 +23,7 @@ from app.db.enums import ActionStatus, ActionType
 from app.db.models import ActionProposal, ComposeDraft, DraftReply, User
 from app.schemas.api import ActionProposalOut, ProposeActionRequest
 from app.services import execution
-from app.services.actions import propose_action_internal
+from app.services.actions import list_pending_proposals, propose_action_internal
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 
@@ -130,17 +130,13 @@ def list_pending(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ActionProposal]:
-    """Proposals awaiting the user's decision (PRD 10.6 approval queue)."""
-    return list(
-        db.scalars(
-            select(ActionProposal)
-            .where(
-                ActionProposal.user_id == user.id,
-                ActionProposal.status == ActionStatus.proposed,
-            )
-            .order_by(ActionProposal.created_at.desc())
-        )
-    )
+    """Proposals awaiting the user's decision (PRD 10.6 approval queue).
+
+    Orphan send/draft proposals (deleted draft, missing or already-read source mail)
+    are auto-rejected so the home banner does not keep nagging after the user has
+    moved on.
+    """
+    return list_pending_proposals(db, user.id)
 
 
 @router.post("/{action_id}/approve", response_model=ActionProposalOut)

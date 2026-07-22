@@ -1,4 +1,4 @@
-// Local persistence for Ask free-chat messages (not email task threads).
+// Local persistence for Alfred free-chat messages (not email/SMS task threads).
 // Uses secureStorage.ts — Keychain on native, localStorage on web dev.
 
 import {

@@ -21,10 +21,6 @@ import type {
   ReplySuggestion,
 } from "@albert/shared-types";
 import * as Clipboard from "expo-clipboard";
-import {
-  takePendingConversationHandoff,
-  type PendingHandoff,
-} from "alfred-shared-storage";
 
 import { api } from "@/api/client";
 import { Ic } from "@/components/icons";
@@ -33,6 +29,17 @@ import { scheduleLocalTaskReminder } from "@/lib/taskReminders";
 import { colors, fonts, layout } from "@/theme/theme";
 
 type Phase = "paste" | "context" | "results";
+
+/** Keyboard App Group payload — kept local so we never static-import the native module. */
+type PendingHandoff = {
+  conversation_id?: string;
+  conversation?: Record<string, unknown>;
+  insight?: string;
+  replies?: unknown[];
+  actions?: unknown[];
+  clipboard_text?: string;
+  [key: string]: unknown;
+};
 
 type GoalId = "comfort" | "follow_up" | "confirm" | "custom";
 
@@ -201,10 +208,13 @@ export function ImportConversationScreen({
   );
 
   // Consume keyboard App Group handoff when opened via 展开 / deep link.
+  // Dynamic import only — static alfred-shared-storage at route load can hard-crash
+  // cold start on a bad native bridge.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
+        const { takePendingConversationHandoff } = await import("alfred-shared-storage");
         const handoff = await takePendingConversationHandoff();
         if (cancelled || !handoff) {
           if (deepLinkConversationId && deepLinkConversationId !== "pending") {
@@ -344,9 +354,9 @@ export function ImportConversationScreen({
             hour: "numeric",
             minute: "2-digit",
           });
-          Alert.alert("已加入 Alfred", `已设本地提醒 · ${when}\n可在首页「从对话中发现」查看证据。`);
+          Alert.alert("已加入 Alfred", `已设本地提醒 · ${when}\n可在首页「需要跟进」查看。`);
         } else {
-          Alert.alert("已加入 Alfred", "可在首页「从对话中发现」查看证据。");
+          Alert.alert("已加入 Alfred", "可在首页「需要跟进」查看。");
         }
       } catch (e) {
         Alert.alert("保存失败", e instanceof Error ? e.message : "请稍后再试");

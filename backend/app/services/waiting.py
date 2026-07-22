@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.db.enums import CommitmentOwner, CommitmentStatus
 from app.db.models import Commitment
-from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
+from app.services.inbox_resolution import (
+    filter_actionable_commitments,
+    handled_message_ids,
+    user_message_ids,
+)
 
 
 @dataclass
@@ -47,6 +51,7 @@ def build_waiting(db: Session, user_id: str) -> WaitingView:
             )
         ),
         handled_message_ids(db, user_id),
+        known_message_ids=user_message_ids(db, user_id),
     )
     waiting_on_you: list[WaitingEntry] = []
     you_are_waiting_on: list[WaitingEntry] = []

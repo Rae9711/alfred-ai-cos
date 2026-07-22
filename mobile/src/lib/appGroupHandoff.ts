@@ -1,42 +1,46 @@
 // Drain keyboard-confirmed actions from the App Group and schedule local
 // reminders only when the user already confirmed a time-bearing action.
+//
+// Never statically import `alfred-shared-storage` — `requireNativeModule` on a
+// missing native module can hard-crash older IPAs. Always dynamic-import and
+// soft-fail so login / cold start stay alive even when the bridge is absent.
 
 import { AppState, type AppStateStatus, Platform } from "react-native";
-import Constants from "expo-constants";
-
-import {
-  AppGroupSyncError,
-  drainKeyboardConfirmedActions,
-  setSharedApiBaseUrl,
-  setSharedAuthToken,
-  type ConfirmedAction,
-} from "alfred-shared-storage";
-import { scheduleLocalTaskReminder } from "./taskReminders";
 
 export type SyncAuthResult = { ok: boolean; error?: string };
+
+export type ConfirmedAction = {
+  kind?: string;
+  id?: string;
+  title?: string;
+  evidence?: string | null;
+  remind_at?: string | null;
+  confirmed_at?: string;
+};
 
 /**
  * Sync the session token + API base URL into the App Group so the keyboard
  * extension can call Alfred's backend (requires Full Access).
- * Soft-fails with `{ ok: false }` so login / cold-start never crash when the
- * native bridge is missing (old IPA) or App Group is mis-provisioned.
+ * Soft-fails with `{ ok: false }` so login / cold-start never crash.
  */
 export async function syncAuthToAppGroup(token: string | null): Promise<SyncAuthResult> {
   if (Platform.OS !== "ios") return { ok: true };
-  const base =
-    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
-    "https://alfredaitech.com";
   try {
+    const {
+      AppGroupSyncError,
+      setSharedApiBaseUrl,
+      setSharedAuthToken,
+    } = await import("alfred-shared-storage");
+    const Constants = (await import("expo-constants")).default;
+    const base =
+      (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
+      "https://alfredaitech.com";
     await setSharedApiBaseUrl(base);
     await setSharedAuthToken(token);
     return { ok: true };
   } catch (e) {
     const message =
-      e instanceof AppGroupSyncError
-        ? e.message
-        : e instanceof Error
-          ? e.message
-          : "同步失败";
+      e instanceof Error ? e.message : "同步失败";
     return { ok: false, error: message };
   }
 }
@@ -47,33 +51,51 @@ export async function syncAuthToAppGroup(token: string | null): Promise<SyncAuth
  */
 export async function drainAndScheduleFromKeyboard(): Promise<ConfirmedAction[]> {
   if (Platform.OS !== "ios") return [];
-  const items = await drainKeyboardConfirmedActions();
-  for (const item of items) {
-    if (item.kind === "task" && item.id && item.remind_at) {
-      await scheduleLocalTaskReminder({
-        taskId: item.id,
-        title: item.title ?? "Reminder",
-        remindAt: item.remind_at,
-      });
+  try {
+    const { drainKeyboardConfirmedActions } = await import("alfred-shared-storage");
+    const { scheduleLocalTaskReminder } = await import("./taskReminders");
+    const items = await drainKeyboardConfirmedActions();
+    for (const item of items) {
+      if (item.kind === "task" && item.id && item.remind_at) {
+        await scheduleLocalTaskReminder({
+          taskId: item.id,
+          title: item.title ?? "Reminder",
+          remindAt: item.remind_at,
+        });
+      }
     }
+    return items;
+  } catch {
+    return [];
   }
-  return items;
 }
 
-/** Subscribe once at app root — drains on active. */
+/** Subscribe once at app root — drains on active (deferred off the cold-start path). */
 export function startAppGroupHandoffListener(
   onDrained?: (items: ConfirmedAction[]) => void,
 ): () => void {
   if (Platform.OS !== "ios") return () => undefined;
 
-  const handle = (state: AppStateStatus) => {
-    if (state !== "active") return;
+  let cancelled = false;
+
+  const runDrain = () => {
+    if (cancelled) return;
     void drainAndScheduleFromKeyboard().then((items) => {
-      if (items.length > 0) onDrained?.(items);
+      if (!cancelled && items.length > 0) onDrained?.(items);
     });
   };
 
+  const handle = (state: AppStateStatus) => {
+    if (state !== "active") return;
+    // Defer so AuthProvider / fonts finish first; avoids native bridge work on
+    // the synchronous cold-start stack that previously hard-crashed some IPAs.
+    setTimeout(runDrain, 500);
+  };
+
   const sub = AppState.addEventListener("change", handle);
-  handle("active");
-  return () => sub.remove();
+  handle(AppState.currentState);
+  return () => {
+    cancelled = true;
+    sub.remove();
+  };
 }

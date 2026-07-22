@@ -1,11 +1,10 @@
 // The tab container, built from plain primitives. No native navigator.
 //
-// Custom bottom bar: Today · Inbox · (center cloud cottage → Capture) · Ask · You.
+// Custom bottom bar: Today · Inbox · (center avatar → Alfred hub) · Chats · You.
 // MailboxProvider + WorkflowProvider wire Inbox → Chat with live Gmail data.
 
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 
 import { CompanionAvatarHome } from "@/components/CompanionAvatar";
@@ -19,7 +18,12 @@ import {
   useWorkflow,
   type TabKey,
 } from "@/context/WorkflowContext";
-import { AskScreen } from "@/screens/AskScreen";
+import {
+  consumeAlfredTabRequest,
+  subscribeAlfredLaunch,
+} from "@/lib/alfredLaunch";
+import { AlfredHubScreen } from "@/screens/AlfredHubScreen";
+import { ChatsScreen } from "@/screens/ChatsScreen";
 import { HomeScreen } from "@/screens/HomeScreen";
 import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
@@ -36,14 +40,13 @@ export default function TabsHome() {
 }
 
 function TabsHomeInner() {
-  const router = useRouter();
   const [tab, setTab] = useState<TabKey>("today");
   const setTabStable = useCallback((t: TabKey) => setTab(t), []);
 
   return (
     <MailboxProvider>
       <WorkflowProvider setTab={setTabStable}>
-        <TabsChrome tab={tab} setTab={setTab} router={router} />
+        <TabsChrome tab={tab} setTab={setTab} />
       </WorkflowProvider>
     </MailboxProvider>
   );
@@ -52,22 +55,29 @@ function TabsHomeInner() {
 function TabsChrome({
   tab,
   setTab,
-  router,
 }: {
   tab: TabKey;
   setTab: (t: TabKey) => void;
-  router: ReturnType<typeof useRouter>;
 }) {
   const { meta, state, setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
   const { openFreeChat } = useWorkflow();
-  const atHome = tab === "inbox" || tab === "settings";
+  // Alfred hub + Inbox/You: companion is "at home" on the center button.
+  const atHome = tab === "inbox" || tab === "settings" || tab === "alfred";
 
   useEffect(() => {
     if (tab === "today") setPlacement("today");
     else if (tab === "ask") setPlacement("ask");
-    else setPlacement("home");
+    else setPlacement("home"); // alfred, inbox, settings
   }, [tab, setPlacement]);
+
+  useEffect(() => {
+    const openAlfredIfRequested = () => {
+      if (consumeAlfredTabRequest()) setTab("alfred");
+    };
+    openAlfredIfRequested();
+    return subscribeAlfredLaunch(openAlfredIfRequested);
+  }, [setTab]);
 
   useEffect(() => {
     const openFromPush = (data: unknown) => {
@@ -95,7 +105,8 @@ function TabsChrome({
         <View style={styles.content}>
           {tab === "today" ? <HomeScreen /> : null}
           {tab === "inbox" ? <InboxScreen /> : null}
-          {tab === "ask" ? <AskScreen /> : null}
+          {tab === "alfred" ? <AlfredHubScreen /> : null}
+          {tab === "ask" ? <ChatsScreen /> : null}
           {tab === "settings" ? <SettingsScreen /> : null}
         </View>
 
@@ -118,9 +129,9 @@ function TabsChrome({
               color={meta.color}
               state={state}
               occupied={atHome}
-              onPress={() => router.push("/capture")}
+              onPress={() => setTab("alfred")}
               accessibilityLabel={
-                atHome ? t.a11y.captureHome : t.a11y.captureAway
+                atHome ? t.a11y.alfredHome : t.a11y.alfredAway
               }
             />
           </View>

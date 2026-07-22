@@ -14,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { type Me, type Task, TaskStatus, type TodayDashboard, type UpcomingMeeting, type ConversationInboxItem } from "@albert/shared-types";
+import { type Me, type Task, TaskStatus, CommitmentStatus, type TodayDashboard, type UpcomingMeeting, type ConversationInboxItem } from "@albert/shared-types";
 
 import { api } from "@/api/client";
 import { CompanionAvatar } from "@/components/CompanionAvatar";
@@ -82,7 +82,7 @@ export function HomeScreen() {
   const { meta, state, setThinking, flashState } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
-  const { openFreeChat, openConfirmReply } = useWorkflow();
+  const { openAlfred, openConfirmReply } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
@@ -130,8 +130,16 @@ export function HomeScreen() {
       setMeetings(upcoming);
       setTodayData(today);
       setReminders(upcomingReminders);
-      setConversationItems(conversationInbox.items);
-      setConversationCounts(conversationInbox.counts);
+      setConversationItems(
+        Array.isArray(conversationInbox?.items) ? conversationInbox.items : [],
+      );
+      setConversationCounts(
+        conversationInbox?.counts &&
+          typeof conversationInbox.counts === "object" &&
+          !Array.isArray(conversationInbox.counts)
+          ? (conversationInbox.counts as Record<string, number>)
+          : {},
+      );
       if (upcomingReminders.length > 0) {
         void syncLocalRemindersForTasks(upcomingReminders);
       }
@@ -285,7 +293,8 @@ export function HomeScreen() {
 
     const smsIntent = parseSmsComposeIntent(q);
     if (smsIntent) {
-      openFreeChat(q);
+      // SMS compose is an Alfred hub capability, not Chats.
+      openAlfred({ text: q, mode: "sms" });
       return;
     }
 
@@ -440,6 +449,85 @@ export function HomeScreen() {
       if (task) completeReminder(task);
     },
     [completeReminder, reminders],
+  );
+
+  const removeConversationItem = useCallback((item: ConversationInboxItem) => {
+    setConversationItems((rows) =>
+      (Array.isArray(rows) ? rows : []).filter(
+        (r) => !(r.id === item.id && r.kind === item.kind),
+      ),
+    );
+  }, []);
+
+  const resolveConversationItem = useCallback(
+    async (
+      item: ConversationInboxItem,
+      status: "done" | "dismissed",
+      opts?: { silent?: boolean },
+    ) => {
+      try {
+        if (item.kind === "task") {
+          await api.updateTaskStatus(item.id, TaskStatus.Done);
+          await cancelLocalTaskReminder(item.id);
+        } else {
+          await api.updateCommitmentStatus(
+            item.id,
+            status === "done" ? CommitmentStatus.Done : CommitmentStatus.Dismissed,
+          );
+        }
+        removeConversationItem(item);
+        if (!opts?.silent) {
+          showToast(
+            status === "done" ? t.home.followUpMarkedDone : t.home.followUpIgnored,
+          );
+          flashState("success");
+        }
+        await load(scheduleView);
+        return true;
+      } catch {
+        showToast(t.home.followUpUpdateFailed);
+        return false;
+      }
+    },
+    [
+      flashState,
+      load,
+      removeConversationItem,
+      scheduleView,
+      showToast,
+      t.home.followUpIgnored,
+      t.home.followUpMarkedDone,
+      t.home.followUpUpdateFailed,
+    ],
+  );
+
+  const addConversationToCalendar = useCallback(
+    async (item: ConversationInboxItem) => {
+      try {
+        const evidence = item.evidence ? ` Context: ${item.evidence}` : "";
+        const res = await api.ask(
+          `Add this to my calendar: ${item.title}.${evidence}`,
+        );
+        if (res.action === "booked" || res.action === "created" || res.action === "updated") {
+          const resolved = await resolveConversationItem(item, "done", { silent: true });
+          if (resolved) {
+            showToast(t.home.followUpCalendarOk);
+            flashState("success");
+          }
+        } else {
+          showToast(res.reply || t.home.followUpCalendarFailed);
+        }
+      } catch {
+        showToast(t.home.followUpCalendarFailed);
+      }
+    },
+    [
+      flashState,
+      resolveConversationItem,
+      showToast,
+      t.home.followUpCalendarFailed,
+      t.home.followUpCalendarOk,
+    ],
   );
 
   const displayName =
@@ -601,14 +689,9 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.conversationBlock}>
-          <View style={styles.conversationHead}>
+        {conversationItems.length > 0 ? (
+          <View style={styles.conversationBlock}>
             <Text style={styles.butlerLabel}>{t.home.fromConversations}</Text>
-            <Pressable onPress={() => router.push("/import")} hitSlop={8}>
-              <Text style={styles.importLink}>{t.home.importConversation}</Text>
-            </Pressable>
-          </View>
-          {conversationItems.length > 0 ? (
             <View style={styles.conversationCard}>
               <Text style={styles.conversationSummary}>
                 {t.home.fromConversationsSummary(
@@ -635,12 +718,38 @@ export function HomeScreen() {
                         ? t.home.conversationEvidence(item.evidence)
                         : item.source_label || t.home.conversationSource}
                     </Text>
+                    <View style={styles.conversationActions}>
+                      <Pressable
+                        onPress={() => void addConversationToCalendar(item)}
+                        hitSlop={6}
+                      >
+                        <Text style={styles.conversationActionAccent}>
+                          {t.home.followUpAddCalendar}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void resolveConversationItem(item, "dismissed")}
+                        hitSlop={6}
+                      >
+                        <Text style={styles.conversationActionMuted}>
+                          {t.home.followUpIgnore}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void resolveConversationItem(item, "done")}
+                        hitSlop={6}
+                      >
+                        <Text style={styles.conversationActionMuted}>
+                          {t.home.followUpDone}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
               ))}
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
         {scheduleView === "day" ? (
           <PlanningSuggestionsCard
@@ -753,12 +862,6 @@ const styles = StyleSheet.create({
   searchBtn: { paddingTop: 8 },
   butlerBlock: { marginTop: spacing.lg, gap: 8 },
   conversationBlock: { marginTop: spacing.lg, gap: 8 },
-  conversationHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  importLink: { fontSize: 13, color: colors.accent, fontWeight: "600" },
   conversationCard: {
     backgroundColor: colors.card,
     borderRadius: radius.card,
@@ -773,6 +876,22 @@ const styles = StyleSheet.create({
   conversationBody: { flex: 1, gap: 2 },
   conversationTitle: { fontSize: 14, color: colors.ink, lineHeight: 20 },
   conversationMeta: { fontSize: 12, color: colors.ink4, fontStyle: "italic" },
+  conversationActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 6,
+  },
+  conversationActionAccent: {
+    fontSize: 13,
+    color: colors.accent,
+    fontWeight: "600",
+  },
+  conversationActionMuted: {
+    fontSize: 13,
+    color: colors.ink3,
+    fontWeight: "500",
+  },
   butlerLabel: {
     fontFamily: fonts.mono,
     fontSize: 10,

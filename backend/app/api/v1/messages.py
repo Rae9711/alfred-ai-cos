@@ -30,6 +30,7 @@ from app.services.assistant import interpret_and_book, resolve_timezone
 from app.services.connected_accounts import list_google_accounts
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_resolution import resolve_derivatives_for_message
+from app.services.actions import reject_proposals_for_message
 from app.services.inbox_view import (
     clear_message_user_decided,
     effective_inbox_category,
@@ -230,6 +231,9 @@ def mark_read(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Could not update Gmail") from exc
+    # Read mail is treated as handled for surfacing — drop staged chase/send
+    # proposals so the home "pending approvals" banner clears with the inbox.
+    reject_proposals_for_message(db, user.id, message.id)
     return MessageReadOut(
         id=message.id,
         is_unread=is_message_unread(message),
@@ -253,6 +257,7 @@ def mark_decided(
     if not message.body_summary:
         message.body_summary = "Marked as decided."
     resolve_derivatives_for_message(db, user.id, message.id)
+    reject_proposals_for_message(db, user.id, message.id)
     db.commit()
     # Correction signal: the user closed a message we surfaced as actionable without
     # replying — a mild "you got this wrong" attributed to the sender/category.

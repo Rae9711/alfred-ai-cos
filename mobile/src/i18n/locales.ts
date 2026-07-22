@@ -9,7 +9,8 @@ export const translations = {
     tabs: {
       today: "Today",
       inbox: "Inbox",
-      ask: "Ask",
+      alfred: "Alfred",
+      ask: "Chats",
       you: "You",
     },
     greeting: {
@@ -59,7 +60,7 @@ export const translations = {
       habitBlockScheduled: "Added to your calendar.",
       habitBlockFailed: "Couldn't schedule — try again.",
       weekAheadLabel: "Week ahead",
-      fromConversations: "From conversations",
+      fromConversations: "Needs follow-up",
       fromConversationsSummary: (tasks: number, followUps: number, commitments: number) => {
         const parts: string[] = [];
         if (tasks) parts.push(`${tasks} task${tasks === 1 ? "" : "s"}`);
@@ -69,7 +70,15 @@ export const translations = {
       },
       importConversation: "Import WeChat chat",
       conversationEvidence: (quote: string) => `From: “${quote}”`,
-      conversationSource: "WeChat chat",
+      conversationSource: "Chat",
+      followUpAddCalendar: "Add to calendar",
+      followUpIgnore: "Ignore",
+      followUpDone: "Done",
+      followUpCalendarOk: "Added to calendar.",
+      followUpCalendarFailed: "Couldn't add to calendar — try again.",
+      followUpMarkedDone: "Marked done.",
+      followUpIgnored: "Ignored.",
+      followUpUpdateFailed: "Couldn't update — try again.",
     },
     planning: {
       sectionLabel: "Planning",
@@ -154,8 +163,11 @@ export const translations = {
       revisePlaceholder: "Tell Alfred how to adjust…",
       freeTitleEm: "mind?",
       freeTitlePlain: "What's on your",
-      freePlaceholder: "Ask about your schedule, book time, or text someone…",
+      freePlaceholder: "Ask about schedule, book time, paste a chat, or text someone…",
       inboxHint: "Email & SMS replies — open a thread from Inbox",
+      pasteChatPrompt:
+        "You can also paste a chat (WeChat / WhatsApp / SMS) — Alfred will draft a reply and pull out follow-ups.",
+      pasteChatCta: "Paste a conversation",
       thinking: "Alfred · thinking…",
       taskOpenReply: (sender: string) =>
         `Got it. I'll help you reply to ${sender} — I've read the thread.`,
@@ -256,7 +268,7 @@ export const translations = {
         "Text forwarded! Pull to refresh Inbox → SMS to see it.",
       contactsTitle: "Contacts",
       contactsHint:
-        "Needed when you ask Alfred to text someone by name in Ask — e.g. “text Mom: see you tomorrow”. Alfred looks up the number in your contacts; nothing is uploaded.",
+        "Needed when you ask Alfred to text someone by name — e.g. “text Mom: see you tomorrow”. Alfred looks up the number in your contacts; nothing is uploaded.",
       contactsStatusGranted: "Access granted",
       contactsStatusDenied: "Denied",
       contactsStatusUndetermined: "Not set",
@@ -291,10 +303,10 @@ export const translations = {
       quietHoursNotSet: "Not set",
       quietHoursHint:
         "During quiet hours, only needs-action mail still alerts you (format HH-HH, e.g. 22-08).",
-      askHistoryTitle: "Ask chat history",
+      askHistoryTitle: "Alfred chat history",
       askHistoryDetail: "Stored on this device only",
-      askHistoryClear: "Clear Ask history",
-      askHistoryCleared: "Ask history cleared.",
+      askHistoryClear: "Clear Alfred history",
+      askHistoryCleared: "Alfred history cleared.",
     },
     smsSetupGuide: {
       title: "SMS forwarding setup",
@@ -394,9 +406,52 @@ export const translations = {
     a11y: {
       captureHome: "Alfred companion home — open capture",
       captureAway: "Alfred away working — open capture",
+      alfredHome: "Alfred companion home — open Alfred",
+      alfredAway: "Alfred away working — open Alfred",
       back: "Back",
       send: "Send",
       voiceSoon: "Voice input (coming soon)",
+    },
+    alfredHub: {
+      eyebrow: "Alfred",
+      butlerName: "Alfred",
+      sub: "Schedule, text, remind, or capture — I'll handle the rest.",
+      actionSchedule: "Schedule",
+      actionSms: "Text",
+      actionReminder: "Remind",
+      actionCapture: "Capture",
+      hintSchedule: "Ask me to check or book your calendar.",
+      hintSms: "Tell me who to text and what to say.",
+      hintReminder: "Tell me what to remind you about, and when.",
+      hintCapture: "Speak or type a note — I'll pull out tasks and dates.",
+      composerPlaceholder: "Ask Alfred…",
+      seed:
+        "I can check or book your calendar, draft a text or email by name, or set a reminder — you confirm before anything sends.",
+      seedReminder: "Remind me ",
+    },
+    chats: {
+      eyebrow: "Conversations",
+      title: "Chats",
+      sub: "WeChat, SMS, and WhatsApp — paste, import, or reply.",
+      channelWechat: "WeChat",
+      channelSms: "SMS",
+      channelWhatsapp: "WhatsApp",
+      importCta: "Paste a conversation",
+      explainWechat:
+        "Paste a WeChat multi-select chat and Alfred will draft a reply plus follow-ups.",
+      explainSms: "Recent texts from your SMS inbox. Tap a thread to draft a reply.",
+      explainWhatsapp:
+        "Paste a WhatsApp chat and Alfred will draft a reply plus follow-ups.",
+      keyboardHint:
+        "Or use the Alfred keyboard’s Expand button to hand a chat into this app.",
+      followUpsTitle: "From conversations",
+      replyCta: "Reply",
+      loadFailed: "Couldn't load chats — pull to retry.",
+      emptyWechat: "No WeChat follow-ups yet.",
+      emptySms: "No SMS threads yet.",
+      emptyWhatsapp: "No WhatsApp follow-ups yet.",
+      emptyHint: "Paste a chat to draft a reply and pull out follow-ups.",
+      emptyHintSms: "Set up SMS forwarding in You, then texts will show up here.",
     },
     askHintGroups: [
       {
@@ -421,17 +476,18 @@ export const translations = {
     ],
     freeChat: {
       seed:
-        "I can check or book your calendar, draft a text or email by name — you confirm before anything sends. Tap an example below, or open a thread from Inbox to draft a reply.",
+        "I can check or book your calendar, draft a text or email by name, or turn a pasted chat into a reply — you confirm before anything sends. Tap an example below, or paste a conversation.",
       fallback: "Something went wrong — try again in a moment.",
       legacyRefusal:
-        "I can check or book your calendar, draft a text by name, or help reply from Inbox.",
+        "I can check or book your calendar, draft a text by name, help reply from Inbox, or work from a pasted chat.",
     },
   },
   zh: {
     tabs: {
       today: "首页",
       inbox: "收件箱",
-      ask: "对话",
+      alfred: "管家",
+      ask: "会话",
       you: "我的",
     },
     greeting: {
@@ -480,7 +536,7 @@ export const translations = {
       habitBlockScheduled: "已加入日历。",
       habitBlockFailed: "无法预约 — 请重试。",
       weekAheadLabel: "下周预览",
-      fromConversations: "从对话中发现",
+      fromConversations: "需要跟进",
       fromConversationsSummary: (tasks: number, followUps: number, commitments: number) => {
         const parts: string[] = [];
         if (tasks) parts.push(`${tasks} 个待办`);
@@ -490,7 +546,15 @@ export const translations = {
       },
       importConversation: "导入微信对话",
       conversationEvidence: (quote: string) => `来自：「${quote}」`,
-      conversationSource: "微信对话",
+      conversationSource: "对话",
+      followUpAddCalendar: "加入日历",
+      followUpIgnore: "忽略",
+      followUpDone: "已完成",
+      followUpCalendarOk: "已加入日历。",
+      followUpCalendarFailed: "无法加入日历 — 请重试。",
+      followUpMarkedDone: "已标记完成。",
+      followUpIgnored: "已忽略。",
+      followUpUpdateFailed: "无法更新 — 请重试。",
     },
     planning: {
       sectionLabel: "时间块建议",
@@ -573,8 +637,11 @@ export const translations = {
       revisePlaceholder: "告诉管家如何调整…",
       freeTitleEm: "什么？",
       freeTitlePlain: "想聊点",
-      freePlaceholder: "问日程、订时间，或按姓名发短信…",
+      freePlaceholder: "问日程、订时间、粘贴聊天，或按姓名发短信…",
       inboxHint: "邮件/短信回复 — 从收件箱进入",
+      pasteChatPrompt:
+        "也可以粘贴聊天内容（微信 / WhatsApp / 短信）— Alfred 会帮你起草回复并找出需要跟进的事项。",
+      pasteChatCta: "粘贴对话",
       thinking: "管家 · 思考中…",
       taskOpenReply: (sender: string) =>
         `收到。我来帮您回复${sender}，已读取邮件内容。`,
@@ -668,7 +735,7 @@ export const translations = {
       smsFirstForwardTip: "短信已转发！在收件箱 → 短信下拉刷新即可看到。",
       contactsTitle: "通讯录",
       contactsHint:
-        "在「对话」里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Alfred 只在本地查找号码，不会上传通讯录。",
+        "在管家里按姓名发短信时需要 — 例如「给 Mom 发：明天见」。Alfred 只在本地查找号码，不会上传通讯录。",
       contactsStatusGranted: "已授权",
       contactsStatusDenied: "已拒绝",
       contactsStatusUndetermined: "未设置",
@@ -702,10 +769,10 @@ export const translations = {
       quietHoursNotSet: "未设置",
       quietHoursHint:
         "免打扰时段内，仅高置信度需处理邮件仍会提醒（格式 HH-HH，如 22-08）。",
-      askHistoryTitle: "对话记录",
+      askHistoryTitle: "管家对话记录",
       askHistoryDetail: "仅保存在本设备",
-      askHistoryClear: "清除对话记录",
-      askHistoryCleared: "对话记录已清除。",
+      askHistoryClear: "清除管家对话记录",
+      askHistoryCleared: "管家对话记录已清除。",
     },
     smsSetupGuide: {
       title: "短信转发设置",
@@ -802,9 +869,49 @@ export const translations = {
     a11y: {
       captureHome: "管家在家 — 打开速记",
       captureAway: "管家外出工作中 — 打开速记",
+      alfredHome: "管家在家 — 打开管家",
+      alfredAway: "管家外出工作中 — 打开管家",
       back: "返回",
       send: "发送",
       voiceSoon: "语音输入（即将推出）",
+    },
+    alfredHub: {
+      eyebrow: "管家",
+      butlerName: "管家",
+      sub: "安排日程、发短信、设提醒，或速记 — 其余交给我。",
+      actionSchedule: "日程",
+      actionSms: "短信",
+      actionReminder: "提醒",
+      actionCapture: "速记",
+      hintSchedule: "让我帮你查看或预订日历。",
+      hintSms: "告诉我发给谁、说什么。",
+      hintReminder: "告诉我提醒什么、什么时候。",
+      hintCapture: "说话或打字记下笔记 — 我会整理任务和日期。",
+      composerPlaceholder: "问管家…",
+      seed:
+        "我可以帮你查看或预订日历、按名字起草短信或邮件、设置提醒 — 发送前都会先请你确认。",
+      seedReminder: "提醒我 ",
+    },
+    chats: {
+      eyebrow: "对话",
+      title: "会话",
+      sub: "微信、短信、WhatsApp — 粘贴、导入或回复。",
+      channelWechat: "微信",
+      channelSms: "短信",
+      channelWhatsapp: "WhatsApp",
+      importCta: "粘贴对话",
+      explainWechat: "粘贴微信多选聊天，管家会起草回复并提取跟进事项。",
+      explainSms: "来自短信收件箱的近期消息。点开线程即可起草回复。",
+      explainWhatsapp: "粘贴 WhatsApp 聊天，管家会起草回复并提取跟进事项。",
+      keyboardHint: "也可以用 Alfred 键盘的「展开」把对话交到 App 里。",
+      followUpsTitle: "来自对话",
+      replyCta: "回复",
+      loadFailed: "无法加载会话 — 下拉重试。",
+      emptyWechat: "还没有微信跟进项。",
+      emptySms: "还没有短信会话。",
+      emptyWhatsapp: "还没有 WhatsApp 跟进项。",
+      emptyHint: "粘贴聊天以起草回复并提取跟进事项。",
+      emptyHintSms: "在「我的」配置短信转发后，短信会出现在这里。",
     },
     askHintGroups: [
       {
@@ -829,9 +936,9 @@ export const translations = {
     ],
     freeChat: {
       seed:
-        "可以查/订日历、按姓名起草短信或邮件 — 发送前需要你确认。点下面的例子试试，或从收件箱进入起草回复。",
+        "可以查/订日历、按姓名起草短信或邮件，也可以粘贴聊天让我起草回复 — 发送前需要你确认。点下面的例子试试，或点「粘贴对话」。",
       fallback: "出了点问题，请稍后再试。",
-      legacyRefusal: "我可以查/订日历、按姓名起草短信，或从收件箱回复。",
+      legacyRefusal: "我可以查/订日历、按姓名起草短信，从收件箱回复，或处理粘贴的聊天。",
     },
   },
 } as const;

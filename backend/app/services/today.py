@@ -22,7 +22,11 @@ from app.schemas.today import (
     WaitingItem,
 )
 from app.services.habits import build_habit_suggestions
-from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
+from app.services.inbox_resolution import (
+    filter_actionable_commitments,
+    handled_message_ids,
+    user_message_ids,
+)
 from app.services.meeting_prep import today_events, upcoming_events
 from app.services.planning import build_planning_suggestions
 from app.services.priority import build_context, score_commitment
@@ -77,6 +81,7 @@ def build_today(db: Session, user_id: str, *, today: date, locale: str = "en") -
             )
         ),
         handled_message_ids(db, user_id),
+        known_message_ids=user_message_ids(db, user_id),
     )
     # Build the per-user ranking context once, then score every commitment against
     # it. The context captures VIP/stranger/engagement/dismissal/thread signals so

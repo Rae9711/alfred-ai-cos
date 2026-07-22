@@ -1,5 +1,6 @@
-// Cross-tab workflow: Inbox → Chat (task thread) with real drafts + send.
-// Free chat stays on AskScreen; task threads load LLM drafts from the API.
+// Cross-tab workflow: Inbox → Chats (task thread) with real drafts + send.
+// Alfred hub is the assistant tab; Chats is the conversation workbench.
+// Task threads still load LLM drafts from the API.
 
 import {
   createContext,
@@ -18,9 +19,16 @@ import {
   getWorkflowProactive,
   type WorkflowDraft,
 } from "@/data/workflowDemo";
+import {
+  setPendingAlfredLaunch,
+  type AlfredLaunchOpts,
+} from "@/lib/alfredLaunch";
 import { enrichSmsDetailFields } from "@/lib/smsSenderDisplay";
 
-export type TabKey = "today" | "inbox" | "ask" | "settings";
+export type { AlfredLaunchOpts };
+
+/** Tab bar keys. `"ask"` is the Chats workbench; `"alfred"` is the center hub. */
+export type TabKey = "today" | "inbox" | "alfred" | "ask" | "settings";
 
 export type ChatMode = "free" | "reply" | "delegate" | "proactive";
 
@@ -42,14 +50,32 @@ export type WorkflowThread = {
   revisionHistory: string[];
 };
 
+export type OpenChatSeed = {
+  source?: "email" | "sms";
+  replyPhone?: string | null;
+  sender?: string;
+  title?: string;
+  take?: string;
+};
+
 type WorkflowApi = {
   thread: WorkflowThread | null;
-  openChatFromInbox: (messageId: string, mode: "reply" | "delegate") => void;
-  /** Opens Ask with a pre-filled short confirmation reply to an email thread. */
+  openChatFromInbox: (
+    messageId: string,
+    mode: "reply" | "delegate",
+    seed?: OpenChatSeed,
+  ) => void;
+  /** Opens Chats with a pre-filled short confirmation reply to an email thread. */
   openConfirmReply: (messageId: string, draftBody: string) => void;
   openChatFromHome: () => void;
-  /** Opens Ask free chat; optional message is sent once the screen mounts. */
+  /**
+   * Opens the Chats tab (formerly Ask free chat).
+   * Optional message is consumed once Chats/Ask thread UI mounts.
+   * SMS compose from Home should use `openAlfred` instead (redirects-i18n).
+   */
   openFreeChat: (initialMessage?: string) => void;
+  /** Opens the Alfred hub tab (schedule / SMS / reminder / capture). */
+  openAlfred: (opts?: AlfredLaunchOpts) => void;
   consumePendingFreeChatMessage: () => string | null;
   completeChat: () => void;
   cancelChat: () => void;
@@ -75,7 +101,12 @@ export function WorkflowProvider({
   const { itemById } = useMailbox();
 
   const loadDraft = useCallback(
-    async (messageId: string, mode: "reply" | "delegate", tone = "concise") => {
+    async (
+      messageId: string,
+      mode: "reply" | "delegate",
+      tone = "concise",
+      seed?: OpenChatSeed,
+    ) => {
       const instruction =
         mode === "delegate"
           ? "Draft a clear, polite reply on my behalf."
@@ -88,8 +119,8 @@ export function WorkflowProvider({
       const item = itemById(messageId);
       return {
         draft: {
-          to: item?.sender ?? "Contact",
-          subject: d.subject ?? `Re: ${item?.title ?? ""}`,
+          to: seed?.sender ?? item?.sender ?? "Contact",
+          subject: d.subject ?? `Re: ${seed?.title ?? item?.title ?? ""}`,
           body: d.body,
         },
         draftId: d.id,
@@ -99,20 +130,25 @@ export function WorkflowProvider({
   );
 
   const openChatFromInbox = useCallback(
-    (messageId: string, mode: "reply" | "delegate") => {
+    (messageId: string, mode: "reply" | "delegate", seed?: OpenChatSeed) => {
       const item = itemById(messageId);
+      const sender = seed?.sender ?? item?.sender ?? "Contact";
+      const title = seed?.title ?? item?.title ?? "Message";
+      const take = seed?.take ?? item?.take ?? null;
+      const source = seed?.source ?? item?.source ?? "email";
+      const replyPhone = seed?.replyPhone ?? item?.replyPhone ?? null;
       setThread({
         messageId,
-        source: item?.source ?? "email",
-        replyPhone: item?.replyPhone ?? null,
-        sender: item?.sender ?? "Contact",
-        subject: item?.title ?? "Message",
-        summary: item?.take || null,
+        source,
+        replyPhone,
+        sender,
+        subject: title,
+        summary: take || null,
         body: "",
         bodyLoading: true,
         bodyError: null,
         mode,
-        draft: { to: item?.sender ?? "", subject: "", body: "" },
+        draft: { to: sender, subject: "", body: "" },
         draftId: null,
         draftLoading: true,
         draftError: null,
@@ -121,7 +157,7 @@ export function WorkflowProvider({
       setTab("ask");
       void (async () => {
         const detailPromise = api.getMessage(messageId);
-        const draftPromise = loadDraft(messageId, mode);
+        const draftPromise = loadDraft(messageId, mode, "concise", seed);
 
         const [detailResult, draftResult] = await Promise.allSettled([
           detailPromise,
@@ -131,7 +167,7 @@ export function WorkflowProvider({
         if (detailResult.status === "fulfilled") {
           const detail = detailResult.value;
           const enriched = await enrichSmsDetailFields(detail, {
-            preferSender: item?.sender,
+            preferSender: sender,
           });
           setThread((current) =>
             current?.messageId === messageId
@@ -282,6 +318,16 @@ export function WorkflowProvider({
     [setTab],
   );
 
+  const openAlfred = useCallback(
+    (opts?: AlfredLaunchOpts) => {
+      if (opts && (opts.capture || opts.text || opts.mode || opts.seed)) {
+        setPendingAlfredLaunch(opts);
+      }
+      setTab("alfred");
+    },
+    [setTab],
+  );
+
   const consumePendingFreeChatMessage = useCallback(() => {
     const msg = pendingFreeChatMessage;
     setPendingFreeChatMessage(null);
@@ -355,6 +401,7 @@ export function WorkflowProvider({
       openConfirmReply,
       openChatFromHome,
       openFreeChat,
+      openAlfred,
       consumePendingFreeChatMessage,
       completeChat,
       cancelChat,
@@ -367,6 +414,7 @@ export function WorkflowProvider({
       openConfirmReply,
       openChatFromHome,
       openFreeChat,
+      openAlfred,
       consumePendingFreeChatMessage,
       completeChat,
       cancelChat,

@@ -27,7 +27,7 @@ import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { EmailComposeSheet } from "@/screens/sheets/EmailComposeSheet";
 import { SmsComposeSheet } from "@/screens/sheets/SmsComposeSheet";
-import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
+import { Btn, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
 import {
   pickAutoContact,
   requestContactsPermission,
@@ -950,28 +950,7 @@ export function AskScreen() {
         {thinking ? (
           <Text style={styles.thinking}>{t.ask.thinking}</Text>
         ) : null}
-        {freeChat.length <= 1 && !thinking ? (
-          <View style={styles.suggest}>
-            {t.askHintGroups.map((group) => (
-              <View key={group.label} style={styles.hintGroup}>
-                <Eyebrow style={styles.hintEyebrow}>{group.label}</Eyebrow>
-                {group.examples.map((q) => (
-                  <Pressable
-                    key={q}
-                    style={styles.suggestItem}
-                    onPress={() => sendFree(q)}
-                  >
-                    <Serif size={14} italic color={colors.ink2}>
-                      "{q}"
-                    </Serif>
-                    <Ic.Arrow size={14} color={colors.ink4} />
-                  </Pressable>
-                ))}
-              </View>
-            ))}
-            <Text style={styles.inboxHint}>{t.ask.inboxHint}</Text>
-          </View>
-        ) : null}
+        {/* Calendar/SMS/email hints + paste-chat live on Alfred / Chats; keep empty. */}
       </ScrollView>
 
       <View style={styles.companionDock} pointerEvents="box-none">
@@ -1261,28 +1240,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
     maxHeight: 100,
-  },
-  suggest: { marginTop: 8, gap: 16 },
-  hintGroup: { gap: 6 },
-  hintEyebrow: { marginBottom: 2 },
-  inboxHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.ink4,
-    marginTop: 4,
-  },
-  suggestItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    marginBottom: 6,
   },
   thinking: {
     fontFamily: fonts.mono,

@@ -770,7 +770,7 @@ export function SettingsScreen() {
         />
       </View>
 
-      {/* Ask chat history */}
+      {/* Alfred free-chat history (device-local) */}
       <SectionTitle label={s.askHistoryTitle} />
       <View style={styles.group}>
         <Row

@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.enums import CommitmentStatus, TaskStatus
+from app.db.enums import CommitmentStatus, SourceType, TaskStatus
 from app.db.models import Commitment, Message, Task
 from app.services.inbox_view import message_is_handled, user_replied_message_ids
 
@@ -28,6 +28,11 @@ def handled_message_ids(db: Session, user_id: str) -> set[str]:
     return ids
 
 
+def user_message_ids(db: Session, user_id: str) -> set[str]:
+    """All message ids currently stored for the user (for orphan-source filtering)."""
+    return set(db.scalars(select(Message.id).where(Message.user_id == user_id)))
+
+
 def is_source_message_handled(source_id: str | None, handled_ids: set[str]) -> bool:
     return bool(source_id and source_id in handled_ids)
 
@@ -35,8 +40,27 @@ def is_source_message_handled(source_id: str | None, handled_ids: set[str]) -> b
 def filter_actionable_commitments(
     commitments: list[Commitment],
     handled_ids: set[str],
+    *,
+    known_message_ids: set[str] | None = None,
 ) -> list[Commitment]:
-    return [c for c in commitments if not is_source_message_handled(c.source_id, handled_ids)]
+    """Drop commitments sourced from handled mail, or from deleted Gmail messages.
+
+    Missing source messages are treated as non-actionable: chase/Today should not
+    keep looping on loops whose email is gone (e.g. purged after the user read it).
+    """
+    out: list[Commitment] = []
+    for c in commitments:
+        if is_source_message_handled(c.source_id, handled_ids):
+            continue
+        if (
+            known_message_ids is not None
+            and c.source_type == SourceType.gmail
+            and c.source_id
+            and c.source_id not in known_message_ids
+        ):
+            continue
+        out.append(c)
+    return out
 
 
 def filter_actionable_tasks(tasks: list[Task], handled_ids: set[str]) -> list[Task]:

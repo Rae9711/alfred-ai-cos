@@ -17,37 +17,22 @@ import {
   GeistMono_400Regular,
   GeistMono_500Medium,
 } from "@expo-google-fonts/geist-mono";
-import {
-  Geist_400Regular,
-  Geist_500Medium,
-  Geist_600SemiBold,
-} from "@expo-google-fonts/geist";
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import Constants from "expo-constants";
-import * as Sentry from "@sentry/react-native";
 
 import { setToken } from "@/api/auth";
 import { AuthProvider, useAuth } from "@/api/AuthContext";
 import { queryClient } from "@/api/queryClient";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { CompanionAvatarProvider } from "@/context/CompanionAvatarContext";
+import { requestAlfredOpen } from "@/lib/alfredLaunch";
 import { handleSharedTextUrl } from "@/lib/shareIntent";
 import { startAppGroupHandoffListener } from "@/lib/appGroupHandoff";
+import { wrapWithSentry } from "@/lib/sentry";
 import { colors } from "@/theme/theme";
 import { View } from "react-native";
 
 void SplashScreen.preventAutoHideAsync();
-
-// Crash + error reporting. A blank DSN (the default in app config) disables Sentry, so
-// dev/local builds never phone home. PII is scrubbed at the source in api/client.ts.
-const sentryDsn = Constants.expoConfig?.extra?.sentryDsn as string | undefined;
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: __DEV__ ? "development" : "production",
-    sendDefaultPii: false,
-  });
-}
 
 function DeepLinkHandler() {
   const { refresh } = useAuth();
@@ -75,6 +60,19 @@ function DeepLinkHandler() {
         const m = url.match(/:\/\/conversation\/([^/?#]+)/);
         if (m?.[1]) conversationId = m[1];
       }
+      // Shortcuts / capture: albert://capture?text=… → Alfred hub capture mode
+      const isCapture =
+        host === "capture" ||
+        rawPath === "capture" ||
+        rawPath.startsWith("capture/");
+      if (isCapture) {
+        const textParam = parsed.queryParams?.text;
+        const text = typeof textParam === "string" ? textParam : undefined;
+        requestAlfredOpen({ capture: true, text, mode: "capture" });
+        router.replace("/(tabs)" as never);
+        return;
+      }
+
       if (conversationId) {
         router.push(`/conversation/${conversationId}` as never);
         return;
@@ -128,13 +126,16 @@ function RootLayout() {
   }, [fontsLoaded]);
 
   useEffect(() => {
+    // Disabled: auto-reload into a bad OTA caused an unrecoverable 闪退 loop.
+    // Users pull updates on the next cold start via the default expo-updates check,
+    // or we re-enable explicit reload after the startup crash is fixed.
     if (!Updates.isEnabled) return;
     void (async () => {
       try {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
+          // Do not reloadAsync() here — apply on next launch to avoid kill-loops.
         }
       } catch {
         // Dev / Expo Go — updates not available.
@@ -149,19 +150,21 @@ function RootLayout() {
   return (
     // QueryClientProvider wraps everything so every screen (and the deep-link-reachable
     // approvals route) shares one React Query cache.
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        {/* Hoisted from (tabs)/index.tsx (design: docs/designs/2026-07-02-avatar-
-            interaction-space.md, T4). approvals.tsx is a top-level route sibling to
-            (tabs), reachable directly from a cold-start push-notification deep link
-            (see DeepLinkHandler above) — it needs avatar/XP access before the tab
-            shell ever mounts, not after. One provider instance for the whole app. */}
-        <CompanionAvatarProvider>
-          <DeepLinkHandler />
-        </CompanionAvatarProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          {/* Hoisted from (tabs)/index.tsx (design: docs/designs/2026-07-02-avatar-
+              interaction-space.md, T4). approvals.tsx is a top-level route sibling to
+              (tabs), reachable directly from a cold-start push-notification deep link
+              (see DeepLinkHandler above) — it needs avatar/XP access before the tab
+              shell ever mounts, not after. One provider instance for the whole app. */}
+          <CompanionAvatarProvider>
+            <DeepLinkHandler />
+          </CompanionAvatarProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default wrapWithSentry(RootLayout);
