@@ -32,7 +32,8 @@ import {
 } from "@/lib/alfredLaunch";
 import { openSmsCompose } from "@/lib/sms";
 import { CaptureScreen } from "@/screens/CaptureScreen";
-import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { colors, fonts, layout, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
 
 type HubMode = "idle" | "schedule" | "sms" | "reminder" | "capture";
 
@@ -140,13 +141,6 @@ export function AlfredHubScreen({
     }
   };
 
-  const actions: { key: HubMode; label: string }[] = [
-    { key: "schedule", label: hub.actionSchedule },
-    { key: "sms", label: hub.actionSms },
-    { key: "reminder", label: hub.actionReminder },
-    { key: "capture", label: hub.actionCapture },
-  ];
-
   const scheduleExamples = t.askHintGroups[0]?.examples ?? [];
 
   if (mode === "capture") {
@@ -174,36 +168,33 @@ export function AlfredHubScreen({
           scrollRef.current?.scrollToEnd({ animated: true })
         }
       >
-        <Eyebrow>{hub.eyebrow}</Eyebrow>
         <View style={styles.hero}>
+          <Eyebrow>{hub.eyebrow}</Eyebrow>
           <AlfredMiniAvatar size={112} accessibilityLabel="Alfred" />
-          <Serif size={36} display style={styles.greeting}>
+          <Serif size={32} display style={styles.greeting}>
             {greeting} <SerifEm>{hub.butlerName}</SerifEm>
           </Serif>
           <Text style={styles.sub}>{hub.sub}</Text>
         </View>
 
         <View style={styles.actions}>
-          {actions.map((a) => {
+          {(
+            [
+              { key: "schedule" as const, label: hub.actionSchedule, icon: Ic.Calendar, tone: "blue" as const },
+              { key: "sms" as const, label: hub.actionSms, icon: Ic.Chat, tone: "green" as const },
+              { key: "reminder" as const, label: hub.actionReminder, icon: Ic.Bell, tone: "yellow" as const },
+              { key: "capture" as const, label: hub.actionCapture, icon: Ic.Mic, tone: "purple" as const },
+            ] as const
+          ).map((a) => {
             const active = mode === a.key;
-            const primary = a.key === "schedule";
             return (
               <Pressable
                 key={a.key}
                 onPress={() => onAction(a.key)}
-                style={[
-                  styles.actionChip,
-                  primary && styles.actionChipPrimary,
-                  active && styles.actionChipActive,
-                ]}
+                style={[styles.hubChip, active && styles.hubChipActive]}
               >
-                <Text
-                  style={[
-                    styles.actionLabel,
-                    primary && !active && styles.actionLabelPrimary,
-                    active && styles.actionLabelActive,
-                  ]}
-                >
+                <AlfredIcon icon={a.icon} tone={a.tone} size="small" />
+                <Text style={[styles.hubChipLabel, active && styles.hubChipLabelActive]}>
                   {a.label}
                 </Text>
               </Pressable>
@@ -259,43 +250,47 @@ export function AlfredHubScreen({
 
       <View style={styles.composerWrap}>
         <View style={styles.composerInner}>
+          {Platform.OS === "android" && chat.voice.state !== "idle" ? (
+            <Pressable
+              style={styles.composerIconBtn}
+              onPress={() => void chat.voice.stop()}
+              accessibilityLabel="Voice input"
+            >
+              <ActivityIndicator size="small" color={colors.accent} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.composerIconBtn}
+              onPress={
+                Platform.OS === "android"
+                  ? () => void chat.voice.start()
+                  : undefined
+              }
+              accessibilityLabel="Voice input"
+            >
+              <Ic.Mic size={17} color="#60708D" stroke={2} />
+            </Pressable>
+          )}
           <TextInput
             style={styles.composer}
             value={chat.input}
             onChangeText={chat.setInput}
-            placeholder={chat.placeholder}
+            placeholder={chat.placeholder || hub.composerPlaceholder}
             placeholderTextColor={inputPlaceholder}
             multiline
             keyboardType={chat.keyboardType}
             onSubmitEditing={() => chat.sendFree(chat.input)}
           />
-          <AlfredIcon
-            icon={Ic.ArrowUp}
-            variant="dark"
-            size="small"
-            label={t.a11y.send}
+          <Pressable
+            style={styles.sendBtn}
             onPress={() => chat.sendFree(chat.input)}
-          />
-          {Platform.OS === "android" ? (
-            chat.voice.state !== "idle" ? (
-              <AlfredIcon
-                variant="assistant"
-                size="small"
-                label="Voice input"
-                onPress={() => void chat.voice.stop()}
-              >
-                <ActivityIndicator size="small" color="#fff" />
-              </AlfredIcon>
-            ) : (
-              <AlfredIcon
-                icon={Ic.Mic}
-                variant="assistant"
-                size="small"
-                label="Voice input"
-                onPress={() => void chat.voice.start()}
-              />
-            )
-          ) : null}
+            accessibilityLabel={t.a11y.send}
+          >
+            <Ic.Send size={15} color="#FFFFFF" stroke={2} />
+          </Pressable>
+          <Pressable style={styles.composerIconBtn} accessibilityLabel="Alfred">
+            <Ic.Sparkles size={17} color="#60708D" stroke={2} />
+          </Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -322,9 +317,9 @@ function FreeBubble({
     <View style={[styles.bubbleWrap, isAlf ? styles.left : styles.right]}>
       {isAlf ? (
         <>
-          <Serif size={17} style={styles.alfText}>
-            {msg.text}
-          </Serif>
+          <View style={styles.hubBubble}>
+            <Text style={styles.alfText}>{msg.text}</Text>
+          </View>
           {msg.smsDraft ? (
             <View style={styles.smsDraftCard}>
               <Text style={styles.smsDraftTo}>
@@ -378,60 +373,43 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    marginHorizontal: -layout.padX,
-    paddingHorizontal: layout.padX,
-    backgroundColor: "transparent",
-    marginBottom: spacing.sm,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
   },
-  greeting: { textAlign: "center" },
+  greeting: { textAlign: "center", letterSpacing: -0.8 },
   sub: {
     fontFamily: fonts.sans,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
     color: colors.ink3,
     textAlign: "center",
     maxWidth: 280,
-    letterSpacing: 0.1,
   },
   actions: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
-    justifyContent: "center",
-    marginTop: spacing.sm,
+    width: "100%",
+    marginTop: 4,
   },
-  actionChip: {
-    borderWidth: 1,
-    borderColor: colors.hair,
-    borderRadius: radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    backgroundColor: colors.glassSoft,
+  hubChip: {
+    flex: 1,
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "transparent",
   },
-  actionChipPrimary: {
-    backgroundColor: colors.accentSoft,
-    borderColor: "rgba(47,102,200,0.28)",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  hubChipActive: {
+    opacity: 1,
   },
-  actionChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentWell,
-  },
-  actionLabel: {
+  hubChipLabel: {
     fontFamily: fonts.sansMedium,
-    fontSize: 12,
-    letterSpacing: 0.2,
-    color: colors.ink3,
+    fontSize: 10,
+    color: "#465574",
   },
-  actionLabelPrimary: {
+  hubChipLabelActive: {
+    color: colors.accent,
     fontFamily: fonts.sansSemibold,
-    color: colors.accentInk,
-    fontSize: 12,
   },
-  actionLabelActive: { color: colors.accentDeep },
   modeHint: {
     fontFamily: fonts.sans,
     fontSize: 13,
@@ -474,7 +452,18 @@ const styles = StyleSheet.create({
   bubbleWrap: { marginBottom: 14, maxWidth: "88%" },
   left: { alignSelf: "flex-start" },
   right: { alignSelf: "flex-end" },
-  alfText: { lineHeight: 25 },
+  alfText: {
+    fontFamily: fonts.serif,
+    fontSize: 15,
+    lineHeight: 23,
+    color: colors.ink,
+  },
+  hubBubble: {
+    ...surfaces.glassCard,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
   smsDraftCard: {
     marginTop: 12,
     padding: 14,
@@ -509,7 +498,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   composerWrap: {
-    borderTopWidth: 0,
     paddingHorizontal: layout.padX,
     paddingTop: 8,
     paddingBottom: 12,
@@ -517,13 +505,12 @@ const styles = StyleSheet.create({
   },
   composerInner: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: 8,
     backgroundColor: colors.glass,
-    borderRadius: 24,
-    paddingVertical: 6,
-    paddingLeft: 14,
-    paddingRight: 6,
+    borderRadius: 18,
+    paddingVertical: 7,
+    paddingHorizontal: 7,
     borderWidth: 1,
     borderColor: colors.hair,
     shadowColor: "#2D3D5A",
@@ -531,13 +518,27 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
   },
+  composerIconBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   composer: {
     flex: 1,
-    minHeight: 36,
-    maxHeight: 120,
+    minHeight: 32,
+    maxHeight: 100,
     fontFamily: fonts.sans,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.ink,
     paddingVertical: 6,
   },

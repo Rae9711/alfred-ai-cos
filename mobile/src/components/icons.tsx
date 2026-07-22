@@ -274,6 +274,36 @@ export const Ic = {
       <Path d="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 12c4.4 0 8 2.1 8 5.2V21a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1.8C4 16.1 7.6 14 12 14Z" />
     </Fill24>
   ),
+  ChevronRight: (p: IconProps) => (
+    <Line24 {...p}>
+      <Polyline points="9 18 15 12 9 6" />
+    </Line24>
+  ),
+  MoreHorizontal: (p: IconProps) => (
+    <Line24 {...p}>
+      <Circle cx={12} cy={12} r={1} />
+      <Circle cx={19} cy={12} r={1} />
+      <Circle cx={5} cy={12} r={1} />
+    </Line24>
+  ),
+  Shield: (p: IconProps) => (
+    <Line24 {...p}>
+      <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </Line24>
+  ),
+  ClipboardPaste: (p: IconProps) => (
+    <Line24 {...p}>
+      <Path d="M9 2h6a2 2 0 0 1 2 2v1H7V4a2 2 0 0 1 2-2z" />
+      <Path d="M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <Path d="M10 12h8M10 16h5" />
+    </Line24>
+  ),
+  ListTodo: (p: IconProps) => (
+    <Line24 {...p}>
+      <Path d="M11 5h10M11 12h10M11 19h10" />
+      <Path d="m3 5 1.5 1.5L7 4M3 12l1.5 1.5L7 11M3 19l1.5 1.5L7 18" />
+    </Line24>
+  ),
 };
 
 // The Albert logo glyph (阿福 → a calm rounded "A" mark). Filled or outline.

@@ -12,7 +12,7 @@ import { Ic } from "@/components/icons";
 import { ShellProvider } from "@/components/Shell";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
-import { MailboxProvider } from "@/context/MailboxContext";
+import { MailboxProvider, useMailbox } from "@/context/MailboxContext";
 import {
   WorkflowProvider,
   type TabKey,
@@ -26,7 +26,7 @@ import { ChatsScreen } from "@/screens/ChatsScreen";
 import { HomeScreen } from "@/screens/HomeScreen";
 import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
-import { colors, fonts } from "@/theme/theme";
+import { colors, fonts, layout } from "@/theme/theme";
 
 export default function TabsHome() {
   return (
@@ -58,6 +58,10 @@ function TabsChrome({
 }) {
   const { setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
+  const { items } = useMailbox();
+  const badgeCount = items.filter(
+    (m) => m.isUnread || m.section === "reply" || m.section === "decision",
+  ).length;
   const atHome = tab === "inbox" || tab === "settings" || tab === "alfred";
 
   useEffect(() => {
@@ -117,6 +121,7 @@ function TabsChrome({
             active={tab === "inbox"}
             onPress={() => setTab("inbox")}
             icon={Ic.Inbox}
+            badge={badgeCount > 0 ? badgeCount : undefined}
           />
           <View style={styles.capture}>
             <AlfredMiniAvatar
@@ -152,11 +157,13 @@ function Tab({
   active,
   onPress,
   icon: Icon,
+  badge,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
   icon: ComponentType<{ size?: number; color?: string; stroke?: number }>;
+  badge?: number;
 }) {
   const color = active ? colors.accent : "#8D8B85";
   return (
@@ -164,7 +171,16 @@ function Tab({
       style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
       onPress={onPress}
     >
-      <Icon size={21} color={color} stroke={2} />
+      <View>
+        <Icon size={21} color={color} stroke={2} />
+        {badge != null ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {badge > 99 ? "99+" : String(badge)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.label, { color }]}>{label}</Text>
     </Pressable>
   );
@@ -178,12 +194,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 76,
+    height: layout.tabBarHeight,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
     paddingHorizontal: 18,
-    paddingBottom: 8,
+    paddingBottom: layout.homeIndicator,
     paddingTop: 5,
     borderTopWidth: 1,
     borderTopColor: "rgba(150,140,120,0.14)",
@@ -204,6 +220,26 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansMedium,
     fontSize: 9,
     letterSpacing: 0.1,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -10,
+    minWidth: 15,
+    height: 15,
+    paddingHorizontal: 3,
+    borderRadius: 999,
+    backgroundColor: "#EF5D69",
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 7,
+    color: "#FFFFFF",
+    lineHeight: 9,
   },
   capture: {
     width: 70,

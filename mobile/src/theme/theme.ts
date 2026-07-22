@@ -1,6 +1,7 @@
 // Alfred UI System tokens — warm cream paper (alfred-ui-system/src/styles.css).
 // Display: Noto Serif SC. Brand italic: Georgia. Body: DM Sans.
 
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { Priority } from "@albert/shared-types";
 
@@ -80,14 +81,19 @@ export const colors = {
   successSoft: "#E8F7EE",
 } as const;
 
+/** iPhone status bar + small breathing room (preview status-bar is 56px). */
+const statusTop = Math.max(44, Constants.statusBarHeight ?? 47);
+
 export const layout = {
   padX: 18,
   gapCard: 14,
   gapSection: 20,
   cardPad: 14,
-  topPad: 12,
-  // Edge-to-edge bottom nav (76) + elevated center avatar clearance.
-  tabBarInset: 96,
+  topPad: statusTop + 8,
+  // Bottom nav 76 + home-indicator inset + elevated center avatar clearance.
+  tabBarInset: 110,
+  tabBarHeight: 90,
+  homeIndicator: 20,
 } as const;
 
 // Font family keys must match names registered in app/_layout.tsx useFonts().

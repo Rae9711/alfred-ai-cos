@@ -473,18 +473,15 @@ export function SettingsScreen() {
       >
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
-          <Serif size={28} display>
+          <Serif size={26} display>
             {s.you}
           </Serif>
-          <AlfredIcon
-            icon={Ic.Sliders}
-            variant="minimal"
-            size="small"
-            label={s.you}
-          />
+          <Pressable style={surfaces.roundButton}>
+            <Ic.Sliders size={18} color="#4B5C7C" stroke={2} />
+          </Pressable>
         </View>
         <View style={styles.profileHero}>
-          <AlfredMiniAvatar size={96} accessibilityLabel="Alfred" />
+          <AlfredMiniAvatar size={112} accessibilityLabel="Alfred" />
           <View style={styles.profileCopy}>
             <View style={styles.profileNameRow}>
               <Serif size={22} display>
@@ -497,8 +494,74 @@ export function SettingsScreen() {
                 </View>
               ) : null}
             </View>
-            <Meta>{me?.email ?? "Connected account"}</Meta>
+            <Text style={styles.profileEmail}>
+              {me?.email ?? "Connected account"}
+            </Text>
           </View>
+        </View>
+      </View>
+
+      <View style={styles.membershipCard}>
+        <Text style={styles.membershipLeft}>
+          {isSubscribed ? "Alfred Pro 会员" : s.subscriptionTitle}
+        </Text>
+        <Pressable
+          style={styles.membershipRight}
+          onPress={() =>
+            isSubscribed
+              ? void openBillingManage()
+              : PILOT_HIDE_BILLING
+                ? undefined
+                : void openBillingCheckout()
+          }
+        >
+          <Text style={styles.membershipMeta}>
+            {subscriptionDetail ?? s.subscriptionStatusInactive}
+          </Text>
+          <Ic.ChevronRight size={14} color="#6F6D68" stroke={2} />
+        </Pressable>
+      </View>
+
+      <View style={styles.shortcutGrid}>
+        {(
+          [
+            { icon: Ic.User, label: s.you },
+            { icon: Ic.Sliders, label: s.language },
+            { icon: Ic.Bell, label: s.notificationsTitle ?? "Notifications" },
+            { icon: Ic.Shield, label: "安全中心" },
+          ] as const
+        ).map((item) => (
+          <View key={item.label} style={styles.shortcutCard}>
+            <AlfredIcon icon={item.icon} tone="blue" size="small" />
+            <Text style={styles.shortcutLabel}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.statsCard}>
+        <View style={styles.statsHeader}>
+          <Text style={styles.statsTitle}>AI 统计</Text>
+          <View style={styles.statsPeriod}>
+            <Text style={styles.statsPeriodText}>本周</Text>
+          </View>
+        </View>
+        <View style={styles.statsGrid}>
+          {(
+            [
+              ["对话次数", "—"],
+              ["节省时间", "—"],
+              ["完成任务", "—"],
+              ["处理邮件", "—"],
+            ] as const
+          ).map(([label, value], i) => (
+            <View
+              key={label}
+              style={[styles.statsCell, i === 3 && styles.statsCellLast]}
+            >
+              <Text style={styles.statsLabel}>{label}</Text>
+              <Text style={styles.statsValue}>{value}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -1004,6 +1067,107 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansMedium,
     fontSize: 9,
     color: "#9B7A43",
+  },
+  profileEmail: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: "#77756F",
+  },
+  membershipCard: {
+    ...surfaces.glassCard,
+    borderRadius: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  membershipLeft: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: "#635BD4",
+  },
+  membershipRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  membershipMeta: {
+    fontFamily: fonts.sans,
+    fontSize: 10,
+    color: "#6F6D68",
+  },
+  shortcutGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
+  shortcutCard: {
+    flex: 1,
+    ...surfaces.glassCard,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    gap: 8,
+  },
+  shortcutLabel: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: "#4D586D",
+    textAlign: "center",
+  },
+  statsCard: {
+    ...surfaces.glassCard,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 14,
+  },
+  statsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  statsTitle: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  statsPeriod: {
+    borderWidth: 1,
+    borderColor: "#E3DDD3",
+    backgroundColor: "#FFFAF4",
+    borderRadius: radius.pill,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+  },
+  statsPeriodText: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: colors.ink3,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    marginTop: 14,
+  },
+  statsCell: {
+    flex: 1,
+    alignItems: "center",
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.line,
+  },
+  statsCellLast: { borderRightWidth: 0 },
+  statsLabel: {
+    fontFamily: fonts.sans,
+    fontSize: 8,
+    color: "#77756F",
+  },
+  statsValue: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    color: colors.ink,
+    marginTop: 6,
   },
   name: { marginTop: 2 },
   note: { color: colors.accentInk, fontSize: 13, marginTop: spacing.sm },

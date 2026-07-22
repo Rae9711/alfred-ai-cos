@@ -654,25 +654,26 @@ export function HomeScreen() {
         <View style={styles.topBar}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrowDate}>{eyebrowDate}</Text>
-              <Serif size={36} display style={styles.greeting}>
-                {greeting}
-                {" "}
-                <SerifEm>{displayName}</SerifEm>
-              </Serif>
+            <Serif size={31} display style={styles.greeting}>
+              {greeting}{" "}
+              <SerifEm>{displayName}</SerifEm>
+            </Serif>
             <Text style={styles.greetingDesc} numberOfLines={2}>
               {todayData?.day_overview?.trim() || t.home.greetingReady}
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <AlfredIcon
-              icon={Ic.Bell}
-              variant="minimal"
-              size="small"
-              notification={pendingCount > 0 ? pendingCount : undefined}
-              label="Notifications"
+            <Pressable
+              style={surfaces.roundButton}
               onPress={() => router.push("/approvals")}
-            />
-            <AlfredMiniAvatar size={76} accessibilityLabel="Alfred" />
+              accessibilityLabel="Notifications"
+            >
+              <Ic.Bell size={18} color="#4B5C7C" stroke={2} />
+              {pendingCount > 0 ? (
+                <View style={styles.bellDot} />
+              ) : null}
+            </Pressable>
+            <AlfredMiniAvatar size={88} accessibilityLabel="Alfred" />
           </View>
         </View>
 
@@ -1017,12 +1018,9 @@ export function HomeScreen() {
       </ScrollView>
 
       <View style={styles.commandBox}>
-        <AlfredIcon
-          icon={Ic.Sparkles}
-          variant="assistant"
-          size="small"
-          label="Alfred"
-        />
+        <View style={styles.sparkleDot}>
+          <Ic.Sparkles size={17} color="#5D5CE6" stroke={2} />
+        </View>
         <TextInput
           value={composer}
           onChangeText={setComposer}
@@ -1036,26 +1034,28 @@ export function HomeScreen() {
           onSubmitEditing={submitComposer}
           editable={!asking}
         />
-        <AlfredIcon
-          icon={Ic.Mic}
-          variant="minimal"
-          size="small"
-          label="Voice input"
+        <Pressable
+          style={styles.composerMic}
           onPress={() => openAlfred()}
-        />
+          accessibilityLabel="Voice input"
+        >
+          <Ic.Mic size={17} color="#60708D" stroke={2} />
+        </Pressable>
         {asking ? (
-          <AlfredIcon variant="dark" size="small" style={styles.sendDisabled}>
+          <View style={styles.sendCircle}>
             <ActivityIndicator size="small" color="#fff" />
-          </AlfredIcon>
+          </View>
         ) : (
-          <AlfredIcon
-            icon={Ic.Send}
-            variant="dark"
-            size="small"
-            label={t.a11y.send}
+          <Pressable
+            style={[
+              styles.sendCircle,
+              !composer.trim() && styles.sendDisabled,
+            ]}
             onPress={composer.trim() ? submitComposer : undefined}
-            style={!composer.trim() ? styles.sendDisabled : undefined}
-          />
+            accessibilityLabel={t.a11y.send}
+          >
+            <Ic.Send size={15} color="#FFFFFF" stroke={2} />
+          </Pressable>
         )}
       </View>
     </KeyboardAvoidingView>
@@ -1075,13 +1075,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
     paddingBottom: spacing.xl + 24,
+    gap: layout.gapSection,
   },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 14,
-    paddingBottom: 18,
   },
   headerText: { flex: 1, minWidth: 0 },
   eyebrowDate: {
@@ -1090,9 +1090,9 @@ const styles = StyleSheet.create({
     color: "#7E7B75",
     marginBottom: 8,
   },
-  greeting: { maxWidth: 260 },
+  greeting: { maxWidth: 235, letterSpacing: -0.8 },
   greetingDesc: {
-    marginTop: 4,
+    marginTop: 0,
     fontFamily: fonts.sans,
     fontSize: 12,
     lineHeight: 19,
@@ -1103,6 +1103,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  bellDot: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
   dailySummary: {
     flexDirection: "row",
@@ -1358,14 +1367,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginHorizontal: layout.padX,
-    // Clear edge-to-edge tab bar (76) + elevated center avatar.
     marginBottom: layout.tabBarInset,
     paddingVertical: 7,
     paddingLeft: 7,
     paddingRight: 7,
-    height: 50,
+    minHeight: 50,
     ...surfaces.glassCard,
     borderRadius: 18,
+  },
+  sparkleDot: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1EFFF",
+  },
+  composerMic: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
   },
   composerInput: {
     flex: 1,

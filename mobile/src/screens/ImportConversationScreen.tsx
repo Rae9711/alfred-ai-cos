@@ -24,7 +24,6 @@ import * as Clipboard from "expo-clipboard";
 
 import { api } from "@/api/client";
 import { AlfredIcon } from "@/components/AlfredIcon";
-import { IconLabel } from "@/components/IconLabel";
 import { Ic } from "@/components/icons";
 import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Disclose, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
@@ -485,21 +484,25 @@ function PastePhase({
 
   return (
     <View style={styles.block}>
-      <Serif size={26} style={styles.heading}>
-        {flow.titlePlain} <SerifEm>{flow.titleEm}</SerifEm>
-      </Serif>
-      <Text style={styles.sub}>{flow.sub}</Text>
+      <Text style={styles.sub}>
+        {flow.titlePlain} <Text style={styles.subEm}>{flow.titleEm}</Text>
+        {". "}
+        {flow.sub}
+      </Text>
 
-      <View style={styles.pasteCard}>
-        <IconLabel
-          icon={Ic.Forward}
-          tone="purple"
-          title={busy ? flow.reading : flow.pasteCta}
-          description={chats.explainWechat}
-          onPress={busy ? undefined : onReadClipboard}
-          active
-        />
-      </View>
+      <Pressable
+        style={styles.pasteCard}
+        onPress={busy ? undefined : onReadClipboard}
+        disabled={busy}
+      >
+        <AlfredIcon icon={Ic.ClipboardPaste} tone="purple" size="medium" />
+        <View style={styles.pasteCopy}>
+          <Text style={styles.pasteTitle}>
+            {busy ? flow.reading : flow.pasteCta}
+          </Text>
+          <Text style={styles.pasteDesc}>{chats.explainWechat}</Text>
+        </View>
+      </Pressable>
 
       <Text style={styles.or}>{flow.orPaste}</Text>
       <TextInput
@@ -518,7 +521,7 @@ function PastePhase({
           (busy || !rawText.trim()) && styles.primaryCtaDisabled,
         ]}
       >
-        <AlfredIcon icon={Ic.Sparkles} tone="blue" size="small" />
+        <Ic.Sparkles size={16} color="#26446F" stroke={2} />
         <Text style={styles.primaryCtaText}>
           {busy ? flow.parsing : flow.parseCta}
         </Text>
@@ -537,7 +540,9 @@ function PastePhase({
         </View>
       </Disclose>
 
-      {busy ? <ActivityIndicator color={colors.accent} style={{ marginTop: 12 }} /> : null}
+      {busy ? (
+        <ActivityIndicator color={colors.accent} style={{ marginTop: 12 }} />
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -886,21 +891,39 @@ const styles = StyleSheet.create({
     paddingBottom: layout.tabBarInset,
     gap: spacing.sm,
   },
-  block: { gap: 4 },
+  block: { gap: 14 },
   heading: { marginTop: 4, maxWidth: 320, lineHeight: 34 },
   sub: {
     fontFamily: fonts.sans,
-    color: colors.ink3,
+    color: "#74736F",
     fontSize: 13,
     lineHeight: 20,
-    marginVertical: 12,
     maxWidth: 320,
+  },
+  subEm: {
+    fontFamily: fonts.brandItalic,
+    fontStyle: "italic",
+    color: "#17376D",
   },
   pasteCard: {
     ...surfaces.glassCard,
     borderRadius: 20,
-    overflow: "hidden",
-    marginBottom: 4,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  pasteCopy: { flex: 1, minWidth: 0, gap: 4 },
+  pasteTitle: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  pasteDesc: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#77756F",
   },
   primaryCta: {
     ...surfaces.primaryButton,
@@ -948,25 +971,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginVertical: 14,
+    marginVertical: 4,
   },
   textArea: {
-    minHeight: 160,
+    minHeight: 150,
     borderWidth: 1,
     borderColor: colors.hair,
-    borderRadius: radius.card,
-    padding: 16,
+    borderRadius: 18,
+    padding: 14,
     backgroundColor: colors.glass,
     color: colors.ink,
     fontFamily: fonts.sans,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     textAlignVertical: "top",
-    marginBottom: 10,
-    shadowColor: "#2D3D5A",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
   },
   error: { color: colors.warn, fontSize: 13, marginTop: 10 },
   timeline: { marginTop: 16, gap: 0 },
