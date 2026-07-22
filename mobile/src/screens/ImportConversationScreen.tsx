@@ -23,11 +23,15 @@ import type {
 import * as Clipboard from "expo-clipboard";
 
 import { api } from "@/api/client";
+import { AlfredIcon } from "@/components/AlfredIcon";
+import { IconLabel } from "@/components/IconLabel";
 import { Ic } from "@/components/icons";
-import { Btn, Disclose, Eyebrow, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
+import { ScreenWash } from "@/components/ScreenWash";
+import { Btn, Disclose, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
 import { scheduleLocalTaskReminder } from "@/lib/taskReminders";
 import { useLocale } from "@/context/LocaleContext";
-import { colors, fonts, layout } from "@/theme/theme";
+import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
 
 type Phase = "paste" | "context" | "results";
 
@@ -182,6 +186,7 @@ export function ImportConversationScreen({
   onClose?: () => void;
   deepLinkConversationId?: string;
 }) {
+  const { t } = useLocale();
   const [phase, setPhase] = useState<Phase>("paste");
   const [rawText, setRawText] = useState("");
   const [conversation, setConversation] = useState<ParsedConversation | null>(null);
@@ -369,25 +374,38 @@ export function ImportConversationScreen({
 
   const visibleActions =
     analysis?.actions.filter((a) => !ignoredActionIds.has(a.id)) ?? [];
+  const phaseTitle =
+    phase === "paste"
+      ? t.chats.title
+      : phase === "context"
+        ? "回复上下文"
+        : "工作台";
+  const phaseKicker =
+    phase === "paste"
+      ? t.chats.eyebrow
+      : phase === "context"
+        ? t.importFlow.titlePlain
+        : t.chats.eyebrow;
 
   return (
     <View style={styles.screen}>
+      <ScreenWash />
       <View style={styles.top}>
+        <View style={styles.topCopy}>
+          <Text style={styles.kicker}>{phaseKicker}</Text>
+          <Serif size={28} display style={styles.topTitle}>
+            {phaseTitle}
+          </Serif>
+        </View>
         {onClose ? (
           <IconBtn onPress={onClose}>
             <Ic.Close size={18} color={colors.ink2} />
           </IconBtn>
         ) : (
-          <View style={styles.topSpacer} />
+          <View style={styles.roundTool}>
+            <AlfredIcon icon={Ic.Chat} tone="purple" size="small" />
+          </View>
         )}
-        <Eyebrow>
-          {phase === "paste"
-            ? "导入对话"
-            : phase === "context"
-              ? "回复上下文"
-              : "工作台"}
-        </Eyebrow>
-        <View style={styles.topSpacer} />
       </View>
 
       <ScrollView
@@ -463,22 +481,25 @@ function PastePhase({
 }) {
   const { t } = useLocale();
   const flow = t.importFlow;
+  const chats = t.chats;
 
   return (
     <View style={styles.block}>
-      <Serif size={30} style={styles.heading}>
+      <Serif size={26} style={styles.heading}>
         {flow.titlePlain} <SerifEm>{flow.titleEm}</SerifEm>
       </Serif>
       <Text style={styles.sub}>{flow.sub}</Text>
 
-      <Btn
-        label={busy ? flow.reading : flow.pasteCta}
-        kind="accent"
-        full
-        disabled={busy}
-        onPress={onReadClipboard}
-        leading={<Ic.Forward size={14} color="#fff" />}
-      />
+      <View style={styles.pasteCard}>
+        <IconLabel
+          icon={Ic.Forward}
+          tone="purple"
+          title={busy ? flow.reading : flow.pasteCta}
+          description={chats.explainWechat}
+          onPress={busy ? undefined : onReadClipboard}
+          active
+        />
+      </View>
 
       <Text style={styles.or}>{flow.orPaste}</Text>
       <TextInput
@@ -489,18 +510,26 @@ function PastePhase({
         placeholderTextColor={colors.ink4}
         style={styles.textArea}
       />
-      <Btn
-        label={busy ? flow.parsing : flow.parseCta}
-        kind="ghost"
-        full
-        disabled={busy || !rawText.trim()}
+      <Pressable
         onPress={onParse}
-      />
+        disabled={busy || !rawText.trim()}
+        style={[
+          styles.primaryCta,
+          (busy || !rawText.trim()) && styles.primaryCtaDisabled,
+        ]}
+      >
+        <AlfredIcon icon={Ic.Sparkles} tone="blue" size="small" />
+        <Text style={styles.primaryCtaText}>
+          {busy ? flow.parsing : flow.parseCta}
+        </Text>
+      </Pressable>
+
+      <Text style={styles.keyboardHint}>{chats.keyboardHint}</Text>
 
       <Disclose
         label={flow.showTips}
         labelExpanded={flow.hideTips}
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 4 }}
       >
         <View style={styles.tipBox}>
           <Text style={styles.tipTitle}>{flow.tipTitle}</Text>
@@ -581,9 +610,17 @@ function ContextPhase({
           <Pressable
             key={g.id}
             onPress={() => setGoal(g.id)}
-            style={[styles.goalChip, goal === g.id && styles.goalChipOn]}
+            style={[
+              surfaces.filterChip,
+              goal === g.id && surfaces.filterChipActive,
+            ]}
           >
-            <Text style={[styles.goalText, goal === g.id && styles.goalTextOn]}>
+            <Text
+              style={[
+                surfaces.filterChipText,
+                goal === g.id && surfaces.filterChipTextActive,
+              ]}
+            >
               {g.label}
             </Text>
           </Pressable>
@@ -649,10 +686,16 @@ function ResultsPhase({
     <View style={styles.block}>
       {/* Section 1 — Alfred 理解 + replies */}
       <View style={styles.workSection}>
-        <Text style={styles.sectionLabel}>Alfred 理解</Text>
-        <Text style={styles.insight}>{insight}</Text>
+        <Serif size={20} style={styles.sectionHeading}>
+          Alfred 理解
+        </Serif>
+        <View style={styles.insightCard}>
+          <Text style={styles.insight}>{insight}</Text>
+        </View>
 
-        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>建议回复</Text>
+        <Serif size={20} style={[styles.sectionHeading, { marginTop: 16 }]}>
+          建议回复
+        </Serif>
         <View style={styles.replyList}>
           {replies.map((r) => {
             const on = selectedReply?.body === r.body;
@@ -674,9 +717,9 @@ function ResultsPhase({
 
       {/* Section 2 — Actions / evidence */}
       <View style={styles.workSection}>
-        <Text style={styles.sectionLabel}>
+        <Serif size={20} style={styles.sectionHeading}>
           行动 · 📅 {calendarCount} · ✓ {followCount}
-        </Text>
+        </Serif>
         {actions.length > 0 ? (
           <View style={styles.actionList}>
             {actions.map((a) => {
@@ -775,9 +818,9 @@ function ResultsPhase({
 
       {/* Section 3 — Timeline context */}
       <View style={styles.workSection}>
-        <Text style={styles.sectionLabel}>
+        <Serif size={20} style={styles.sectionHeading}>
           上下文 · 选用 {selected.length} · 忽略 {ignored.length}
-        </Text>
+        </Serif>
         <View style={styles.timeline}>
           {conversation.messages.map((m, idx) => (
             <View
@@ -817,48 +860,80 @@ function ResultsPhase({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: surfaces.screen,
   top: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
-    paddingBottom: 8,
+    paddingBottom: spacing.sm,
+    gap: 12,
   },
-  topSpacer: { width: 36 },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: layout.padX, paddingBottom: 40 },
+  topCopy: { flex: 1, minWidth: 0, gap: 4 },
+  kicker: {
+    ...surfaces.sectionKicker,
+  },
+  topTitle: {
+    letterSpacing: -0.6,
+  },
+  roundTool: {
+    marginTop: 4,
+  },
+  scroll: { flex: 1, backgroundColor: "transparent" },
+  content: {
+    paddingHorizontal: layout.padX,
+    paddingBottom: layout.tabBarInset,
+    gap: spacing.sm,
+  },
   block: { gap: 4 },
-  heading: { marginTop: 8, maxWidth: 320, lineHeight: 36 },
+  heading: { marginTop: 4, maxWidth: 320, lineHeight: 34 },
   sub: {
     fontFamily: fonts.sans,
     color: colors.ink3,
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 20,
     marginVertical: 12,
+    maxWidth: 320,
+  },
+  pasteCard: {
+    ...surfaces.glassCard,
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  primaryCta: {
+    ...surfaces.primaryButton,
+    marginTop: 4,
+    paddingHorizontal: 14,
+  },
+  primaryCtaDisabled: {
+    opacity: 0.45,
+  },
+  primaryCtaText: {
+    ...surfaces.primaryButtonText,
+  },
+  keyboardHint: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.ink4,
+    marginTop: 10,
+    marginBottom: 4,
   },
   handoffNote: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
     color: colors.accent,
-    marginBottom: 10,
-    letterSpacing: 0.4,
+    marginBottom: 6,
   },
   tipBox: {
-    backgroundColor: colors.paper2,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    padding: 12,
+    ...surfaces.glassCard,
+    padding: 14,
     gap: 6,
   },
   tipTitle: {
-    fontFamily: fonts.mono,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    color: colors.ink3,
+    ...surfaces.sectionLabel,
   },
   tipBody: {
     fontFamily: fonts.sans,
@@ -869,7 +944,7 @@ const styles = StyleSheet.create({
   or: {
     textAlign: "center",
     color: colors.ink4,
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansSemibold,
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: "uppercase",
@@ -877,21 +952,21 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 160,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    borderRadius: 16,
-    padding: 14,
-    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    borderRadius: radius.card,
+    padding: 16,
+    backgroundColor: colors.glass,
     color: colors.ink,
     fontFamily: fonts.sans,
     fontSize: 15,
     lineHeight: 22,
     textAlignVertical: "top",
     marginBottom: 10,
-    shadowColor: "#141316",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
   },
   error: { color: colors.warn, fontSize: 13, marginTop: 10 },
   timeline: { marginTop: 16, gap: 0 },
@@ -936,17 +1011,23 @@ const styles = StyleSheet.create({
   sectionLabel: {
     marginTop: 18,
     marginBottom: 8,
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
+    ...surfaces.sectionLabel,
+    letterSpacing: 0.4,
+    textTransform: "none",
+    fontSize: 12,
+  },
+  sectionHeading: {
+    marginBottom: 10,
+    letterSpacing: -0.3,
   },
   workSection: {
     marginTop: 8,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.hair,
+    paddingBottom: 12,
+  },
+  insightCard: {
+    ...surfaces.glassCard,
+    borderRadius: 20,
+    padding: 14,
   },
   insight: {
     fontSize: 16,
@@ -955,34 +1036,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   goalRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  goalChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.paper2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-  },
-  goalChipOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  goalText: { fontSize: 13, color: colors.ink2 },
-  goalTextOn: { color: colors.accentInk, fontWeight: "600" },
   customGoal: {
     marginTop: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: colors.card,
+    backgroundColor: colors.glass,
     color: colors.ink,
     fontSize: 14,
   },
   actionList: { gap: 10 },
   actionCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    ...surfaces.glassCard,
+    borderRadius: 20,
     padding: 14,
     gap: 6,
   },
@@ -993,18 +1061,18 @@ const styles = StyleSheet.create({
   saved: { color: colors.accent, fontSize: 13, marginTop: 6 },
   replyList: { gap: 8 },
   replyCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    ...surfaces.glassCard,
+    borderRadius: 20,
     padding: 14,
   },
-  replyCardOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  replyCardOn: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
   replyTone: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansSemibold,
     fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
+    letterSpacing: 0.4,
     color: colors.ink3,
     marginBottom: 6,
   },

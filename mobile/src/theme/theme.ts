@@ -1,65 +1,103 @@
-// Albert design tokens — calm editorial butler (elevated paper, not AI-brochure).
-// Display: Newsreader. Body: DM Sans. Meta: IBM Plex Mono.
-// Screen backdrop: quiet near-neutral stone wash (no teal / purple / mesh).
-// Terracotta reserved for warn only.
+// Alfred UI System tokens — warm cream paper (alfred-ui-system/src/styles.css).
+// Display: Noto Serif SC. Brand italic: Georgia. Body: DM Sans.
 
+import { Platform } from "react-native";
 import type { Priority } from "@albert/shared-types";
 
 export const colors = {
-  // Surfaces — cool-leaning near-neutral stone (supports glass cards)
-  paper: "#F4F3F0",
-  paper2: "#EBE9E5",
-  paper3: "#E0DDD8",
-  card: "#FBFBF9",
-  // Full-screen wash stops (barely-there two-stop + mid bridge)
-  washTop: "#E8E6E2",
-  washMid: "#F0EFEC",
-  washBottom: "#F6F5F2",
-  // Soft edge vignette (ink @ ~4%)
-  washVignette: "rgba(28,26,24,0.04)",
-  // Legacy hero band — keep in sync with wash mid so it doesn't flash teal
-  heroWash: "#EEECE8",
+  // CSS :root
+  navy950: "#07142C",
+  navy900: "#0B1D3F",
+  navy800: "#17335E",
+  blue700: "#2F66C8",
+  blue600: "#3F74D8",
+  blue500: "#5A8DF4",
+  blue100: "#EAF1FF",
+  blue50: "#F4F7FF",
+  textPrimary: "#0D1D3B",
+  textSecondary: "#7B7B77",
+  textTertiary: "#8A867F",
+  background: "#F8F5EF",
+  surface: "#FFFDF9",
+  border: "rgba(157,147,127,0.13)",
 
-  // Ink hierarchy — stronger contrast for focal weight
-  ink: "#141316",
-  ink2: "#35343A",
-  ink3: "#6A686F",
-  ink4: "#9C9994",
+  // Surfaces — warm cream paper
+  paper: "#F8F5EF",
+  paper2: "#F5F2EC",
+  paper3: "#ECE8DF",
+  card: "#FFFDF9",
+  glass: "rgba(255,253,249,0.94)",
+  glassSoft: "rgba(255,250,244,0.88)",
 
-  // Hairlines
-  hair: "rgba(20,19,22,0.08)",
-  hair2: "rgba(20,19,22,0.16)",
+  // Full-screen wash (body gradient)
+  washTop: "#F5F2EC",
+  washMid: "#F2EFE8",
+  washBottom: "#ECE8DF",
+  washVignette: "rgba(50,47,40,0.04)",
+  heroWash: "#F8F5EF",
 
-  // Accent (ink-blue) + soft tints — primary attention color
-  accent: "#2F4F8C",
-  accentSoft: "#D9DFEB",
-  accentInk: "#13233F",
+  // Soft orbs
+  orbOne: "rgba(255,255,255,0.55)",
+  orbTwo: "rgba(47,102,200,0.06)",
 
-  // Warn only (not a brand accent)
+  // Ink hierarchy
+  ink: "#0D1D3B",
+  ink2: "#0B1D3F",
+  ink3: "#77756F",
+  ink4: "#8A867F",
+
+  // Hairlines — warm taupe
+  hair: "rgba(157,147,127,0.13)",
+  hair2: "rgba(130,120,100,0.14)",
+  hairLight: "rgba(255,255,255,0.95)",
+  line: "#E8E2D8",
+
+  // Accent blue
+  accent: "#2F66C8",
+  accentBright: "#3F74D8",
+  accentDeep: "#245ACB",
+  accentSoft: "#EAF1FF",
+  accentInk: "#17376D",
+  accentWell: "#E8F0FF",
+
+  // Icon tile tones
+  toneBlue: "#2F66C8",
+  tonePurple: "#625AE6",
+  toneGreen: "#36A565",
+  toneYellow: "#D49B1C",
+  toneNeutral: "#5D6471",
+
+  // Primary CTA (cream gradient button in design system)
+  primaryFrom: "#F6F2EC",
+  primaryTo: "#E8E1D8",
+  primaryInk: "#26446F",
+  successFrom: "#299675",
+  successTo: "#167458",
+
   warn: "#A84A36",
   warnSoft: "#F0DDD2",
-
-  // Success (integration "synced" dot)
-  success: "#3F6B43",
+  success: "#3B9A61",
+  successSoft: "#E8F7EE",
 } as const;
 
-// Named layout constants from the prototype's density-regular. Screens use these
-// so the spacing reads like the spec (padX, gapCard, gapSection, cardPad).
 export const layout = {
-  padX: 18, // screen horizontal padding (--pad-x)
-  gapCard: 12, // gap between stacked cards (--gap-card)
-  gapSection: 22, // space above a section title (--gap-section)
-  cardPad: 16, // card interior padding (--card-pad)
-  topPad: 58, // space above the screen header (status bar + breathing room)
-  tabBarInset: 82, // custom bottom tab bar — for KeyboardAvoidingView offset
+  padX: 18,
+  gapCard: 14,
+  gapSection: 20,
+  cardPad: 14,
+  topPad: 12,
+  // Edge-to-edge bottom nav (76) + elevated center avatar clearance.
+  tabBarInset: 96,
 } as const;
 
-// Font family keys must match the names registered in app/_layout.tsx useFonts().
-// Display serif is heavier so hero greetings read as inked type, not flat Medium.
+// Font family keys must match names registered in app/_layout.tsx useFonts().
 export const fonts = {
-  serif: "Newsreader_500Medium",
-  serifDisplay: "Newsreader_600SemiBold",
-  serifItalic: "Newsreader_400Regular_Italic",
+  serif: "NotoSerifSC_500Medium",
+  serifDisplay: "NotoSerifSC_600SemiBold",
+  /** @deprecated Prefer brandItalic for name emphasis. */
+  serifItalic: "NotoSerifSC_500Medium",
+  brand: Platform.select({ ios: "Georgia", android: "serif", default: "Georgia" })!,
+  brandItalic: Platform.select({ ios: "Georgia", android: "serif", default: "Georgia" })!,
   mono: "IBMPlexMono_400Regular",
   monoMedium: "IBMPlexMono_500Medium",
   sans: "DMSans_400Regular",
@@ -76,17 +114,18 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  card: 16,
+  card: 20,
+  focus: 22,
   pill: 100,
   full: 9999,
   sm: 12,
+  nav: 0,
 } as const;
 
-// Priority dot/pill colors. critical/high lean on warn (urgent), the rest on ink/accent.
 export const priorityColor: Record<Priority, string> = {
   critical: "#A84A36",
   high: "#C06A3A",
-  medium: "#2F4F8C",
-  low: "#9C9994",
-  noise: "#9C9994",
+  medium: "#2F66C8",
+  low: "#8A867F",
+  noise: "#8A867F",
 };

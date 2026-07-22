@@ -1,613 +1,481 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alfred UI polish — type + tab images</title>
+  <title>Alfred — full UI preview (wechat-reply mascot)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --paper: #F4F3F0;
-      --paper2: #EBE9E5;
-      --card: rgba(255,255,255,0.62);
-      --cardSolid: #FBFBF9;
-      --washTop: #E8E6E2;
-      --washMid: #F0EFEC;
-      --washBottom: #F6F5F2;
-      --ink: #141316;
-      --ink2: #35343A;
-      --ink3: #6A686F;
-      --ink4: #9C9994;
-      --hair: rgba(255,255,255,0.55);
-      --hairDark: rgba(20,19,22,0.08);
-      --accent: #2F4F8C;
-      --accentSoft: #D9DFEB;
-      --accentInk: #13233F;
-      --serif: "Newsreader", Georgia, serif;
-      --sans: "DM Sans", system-ui, sans-serif;
-      --mono: "IBM Plex Mono", ui-monospace, monospace;
+      --bg: #f8f5ef;
+      --surface: #fffdf9;
+      --navy: #0b1d3f;
+      --blue: #2f66c8;
+      --muted: #7b7b77;
+      --line: #e8e2d8;
+      --shadow: 0 16px 38px rgba(45,61,90,.11), 0 3px 8px rgba(45,61,90,.06);
+      font-family: "DM Sans", "PingFang SC", -apple-system, sans-serif;
+      color: #0d1d3b;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: var(--sans);
-      background: #1a191c;
-      color: var(--ink);
-      padding: 28px 20px 60px;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.85), transparent 35%),
+        linear-gradient(180deg, #f5f2ec, #ece8df);
+      padding: 36px 24px 64px;
     }
-    h1 {
-      font-family: var(--serif);
-      font-weight: 600;
-      color: #f5f3ee;
+    .page-title {
+      max-width: 1280px;
+      margin: 0 auto 28px;
+    }
+    .page-title h1 {
+      margin: 0 0 8px;
+      font-family: "Noto Serif SC", Georgia, serif;
       font-size: 28px;
       letter-spacing: -0.03em;
-      margin: 0 0 8px;
     }
-    .lede {
-      color: #b8b4ae;
-      max-width: 760px;
-      line-height: 1.5;
-      margin-bottom: 28px;
+    .page-title p {
+      margin: 0;
+      color: var(--muted);
       font-size: 14px;
+      line-height: 1.5;
+      max-width: 640px;
     }
-    .lede strong { color: #e8e4dc; font-weight: 500; }
-    .row {
+    .page-title code {
+      font-size: 12px;
+      background: rgba(255,253,249,.9);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .gallery {
       display: flex;
       flex-wrap: wrap;
-      gap: 24px;
-      align-items: flex-start;
-    }
-    .label {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #8a8680;
-      margin-bottom: 10px;
+      gap: 28px;
+      justify-content: center;
+      max-width: 1480px;
+      margin: 0 auto;
     }
     .phone {
       width: 320px;
       height: 680px;
-      border-radius: 28px;
+      position: relative;
       overflow: hidden;
-      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
-      border: 1px solid #2c2a2e;
+      border-radius: 34px;
+      background: var(--bg);
+      border: 1px solid rgba(130,120,100,.12);
+      box-shadow: 0 30px 80px rgba(50,47,40,.18), inset 0 1px 0 rgba(255,255,255,.85);
       display: flex;
       flex-direction: column;
-      position: relative;
-      background:
-        radial-gradient(ellipse 78% 72% at 50% 38%, transparent 0%, rgba(28,26,24,0.045) 100%),
-        linear-gradient(180deg, var(--washTop) 0%, var(--washMid) 42%, var(--washBottom) 100%);
+    }
+    .phone-label {
+      position: absolute;
+      top: -26px;
+      left: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #5e5a53;
+      letter-spacing: 0.02em;
     }
     .status {
       height: 44px;
-      padding: 14px 18px 0;
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--ink3);
-      position: relative;
-      z-index: 1;
-    }
-    .scroll {
-      flex: 1;
-      overflow: hidden;
-      padding: 0 16px 12px;
-      position: relative;
-      z-index: 1;
-    }
-    .hero {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .greeting {
-      font-family: var(--serif);
-      font-weight: 600;
-      font-size: 34px;
-      line-height: 1.06;
-      letter-spacing: -0.03em;
-      margin: 0;
-      color: var(--ink);
-    }
-    .greeting em {
-      font-style: italic;
-      font-weight: 400;
-      color: var(--accentInk);
-    }
-    .sub {
-      color: var(--ink3);
+      padding: 0 20px;
       font-size: 12px;
-      margin-top: 6px;
-      line-height: 1.35;
-      font-weight: 400;
-    }
-    .avatar {
-      width: 88px;
-      height: 94px;
-      flex-shrink: 0;
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      border-radius: 0;
-    }
-    .avatar svg { width: 100%; height: 100%; display: block; }
-    .avatar.lg { width: 104px; height: 111px; margin: 8px auto 14px; }
-    .search {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255,255,255,0.48);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      border: 1px solid var(--hair);
-      border-radius: 999px;
-      padding: 10px 12px 10px 16px;
-      color: var(--ink4);
-      font-size: 13px;
-      margin-bottom: 12px;
-      box-shadow: 0 6px 18px rgba(20,19,22,0.06);
-    }
-    .search .send {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: var(--ink); margin-left: auto;
-    }
-    .glass {
-      background: var(--card);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--hair);
-      border-radius: 22px;
-      padding: 14px;
-      box-shadow:
-        0 1px 0 rgba(255,255,255,0.65) inset,
-        0 10px 28px rgba(20,19,22,0.07);
-      margin-bottom: 10px;
-    }
-    .glass-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: var(--sans);
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--ink);
-      margin-bottom: 6px;
-    }
-    .well {
-      width: 28px; height: 28px; border-radius: 50%;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--paper2);
-      box-shadow: 0 2px 6px rgba(20,19,22,0.08);
-      border: 1px solid rgba(255,255,255,0.7);
       flex-shrink: 0;
     }
-    .well.accent { background: var(--accentSoft); }
-    .well svg { display: block; }
-    .glass-body {
-      font-size: 13px;
-      font-weight: 400;
-      color: var(--ink2);
-      line-height: 1.4;
-    }
-    .meta {
-      font-size: 12px;
-      color: var(--ink4);
-      margin-top: 6px;
-    }
-    .time-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      background: rgba(255,255,255,0.85);
-      border-radius: 14px;
-      padding: 8px;
-    }
-    .time-row .adj {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--ink3);
-      background: var(--paper2);
-      border-radius: 10px;
-      padding: 6px 8px;
-    }
-    .time-row .range {
+    .screen {
       flex: 1;
-      text-align: center;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .btn-ink {
-      display: block;
-      text-align: center;
-      margin-top: 10px;
-      background: var(--ink);
-      color: #fff;
-      border-radius: 999px;
-      padding: 11px;
-      font-size: 13px;
-      font-weight: 500;
-    }
-    .ignore {
-      text-align: center;
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--ink4);
-    }
-    .cal-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin: 14px 2px 8px;
-    }
-    .cal-head .today {
-      font-family: var(--serif);
-      font-weight: 600;
-      font-size: 22px;
-      letter-spacing: -0.025em;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .seg {
-      display: flex;
-      background: rgba(255,255,255,0.45);
-      border: 1px solid var(--hair);
-      border-radius: 999px;
-      padding: 2px;
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-    .seg span {
-      padding: 5px 9px;
-      border-radius: 999px;
-      color: var(--ink4);
-    }
-    .seg .on {
-      background: rgba(255,255,255,0.9);
-      color: var(--ink);
-      box-shadow: 0 1px 4px rgba(20,19,22,0.08);
-    }
-    .days {
-      display: flex;
-      gap: 6px;
       overflow: hidden;
+      padding: 0 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    .day {
-      flex: 1;
-      text-align: center;
-      padding: 8px 0;
-      border-radius: 14px;
-      font-size: 11px;
-      color: var(--ink3);
-      background: rgba(255,255,255,0.28);
-    }
-    .day b { display: block; font-size: 14px; color: var(--ink); margin-top: 2px; font-weight: 600; }
-    .day.on {
-      background: rgba(255,255,255,0.78);
-      box-shadow: 0 4px 12px rgba(20,19,22,0.08);
-    }
-    .tabbar {
-      margin: 0 14px 16px;
+    .nav {
+      height: 68px;
+      flex-shrink: 0;
       display: grid;
-      grid-template-columns: 1fr 1fr 58px 1fr 1fr;
-      align-items: end;
-      background: rgba(255,255,255,0.55);
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      border: 1px solid var(--hair);
-      border-radius: 28px;
-      padding: 8px 6px 10px;
-      text-align: center;
-      font-family: var(--mono);
-      font-size: 8px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--ink4);
-      box-shadow: 0 12px 30px rgba(20,19,22,0.1);
-      position: relative;
-      z-index: 2;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      padding: 4px 12px 8px;
+      background: rgba(250,247,241,.96);
+      border-top: 1px solid rgba(150,140,120,.14);
     }
-    .tab {
+    .nav button {
+      border: 0;
+      background: transparent;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
+      color: #8d8b85;
+      font-size: 8px;
+      font-family: inherit;
     }
-    .tab img {
-      width: 24px;
-      height: 24px;
+    .nav button.active { color: var(--blue); }
+    .nav .center {
+      transform: translateY(-14px);
+    }
+    .nav svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .mascot {
+      width: var(--s, 70px);
+      height: var(--s, 70px);
       object-fit: contain;
-      opacity: 0.72;
-      border-radius: 6px;
+      filter: drop-shadow(0 8px 10px rgba(45,61,90,.16));
+      display: block;
     }
-    .tab.on { color: var(--accent); }
-    .tab.on .glyph {
-      background: var(--accentSoft);
-      box-shadow: 0 2px 6px rgba(20,19,22,0.1);
-      transform: scale(1.06);
+    .eyebrow { font-size: 10px; color: #7e7b75; }
+    h2 {
+      margin: 4px 0 0;
+      font-family: "Noto Serif SC", Georgia, serif;
+      font-size: 22px;
+      letter-spacing: -0.04em;
+      font-weight: 600;
     }
-    .tab.on img { opacity: 1; width: 26px; height: 26px; }
-    .glyph {
-      width: 30px; height: 30px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
+    h2 em { font-family: Georgia, serif; color: #17376d; font-style: normal; }
+    .lead { margin: 0; font-size: 11px; color: #74736f; line-height: 1.5; }
+    .surface {
+      background: rgba(255,253,249,.94);
+      border: 1px solid rgba(157,147,127,.13);
+      box-shadow: var(--shadow);
+      border-radius: 18px;
     }
-    .tabbar .mid {
-      width: 52px; height: 56px;
-      margin: -18px auto 0;
-      display: flex; align-items: center; justify-content: center;
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      overflow: visible;
-      border-radius: 0;
+    .tile {
+      width: 42px; height: 42px; border-radius: 14px;
+      display: grid; place-items: center;
+      border: 1px solid rgba(74,88,117,.09);
+      box-shadow: 0 6px 14px rgba(45,61,90,.1);
+      flex-shrink: 0;
     }
-    .tabbar .mid svg { width: 52px; height: 56px; }
-    .hub-center { text-align: center; padding-top: 12px; }
-    .hub-center .avatar { margin: 8px auto 14px; width: 104px; height: 104px; }
-    .hub-center .greeting { font-size: 32px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 18px 0; }
+    .tile.blue { background: linear-gradient(145deg,#fff,#e8f0ff); color: #2f66c8; }
+    .tile.purple { background: linear-gradient(145deg,#fff,#eeeaff); color: #625ae6; }
+    .tile.green { background: linear-gradient(145deg,#fff,#e5f7ec); color: #36a565; }
+    .tile.yellow { background: linear-gradient(145deg,#fff,#fff3d5); color: #d49b1c; }
+    .tile svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.1; }
+    .row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px;
+    }
+    .row strong { display: block; font-size: 12px; }
+    .row span { font-size: 10px; color: var(--muted); }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
     .chip {
-      border: 1px solid rgba(255,255,255,0.6);
-      background: rgba(255,255,255,0.4);
+      border: 1px solid rgba(130,120,100,.14);
+      background: #fffaf4;
       border-radius: 999px;
-      padding: 8px 12px;
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--ink3);
+      padding: 6px 10px;
+      font-size: 9px;
+      color: #5e5a53;
     }
-    .chip.primary {
-      background: var(--accentSoft);
-      border-color: var(--accent);
-      color: var(--accentInk);
-      font-weight: 500;
+    .chip.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .card { padding: 12px; }
+    .card h3 { margin: 0 0 4px; font-size: 12px; }
+    .card p { margin: 0; font-size: 10px; color: var(--muted); line-height: 1.45; }
+    .cta {
+      width: 100%;
+      height: 36px;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg,#f6f2ec,#e8e1d8);
+      color: #26446f;
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+    .hub-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 8px;
+      padding-top: 8px;
+    }
+    .hub-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      text-align: center;
+      font-size: 9px;
+      color: #465574;
+    }
+    .hub-actions .tile { margin: 0 auto 4px; width: 36px; height: 36px; border-radius: 12px; }
+    .paste-area {
+      min-height: 110px;
+      padding: 12px;
+      font-size: 12px;
+      color: #8a867f;
+      line-height: 1.45;
+      white-space: pre-wrap;
     }
     .composer {
-      margin: 0 16px 10px;
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr 32px;
       gap: 8px;
-      background: rgba(255,255,255,0.55);
-      backdrop-filter: blur(16px);
-      border: 1px solid var(--hair);
-      border-radius: 22px;
-      padding: 8px 8px 8px 14px;
-      color: var(--ink4);
-      font-size: 14px;
       align-items: center;
+      padding: 8px;
+      margin-top: auto;
     }
-    .composer .send {
+    .composer input {
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .send {
       width: 32px; height: 32px; border-radius: 50%;
-      background: var(--accent); margin-left: auto;
+      background: var(--blue); color: #fff; border: 0;
+      display: grid; place-items: center;
     }
-    .note {
-      margin-top: 32px;
-      max-width: 980px;
-      color: #a8a49c;
-      font-size: 13px;
-      line-height: 1.55;
-    }
-    .note code { color: #ddd8ce; }
-    .swatch-row {
-      display: flex;
-      gap: 10px;
-      margin: 0 0 22px;
-      flex-wrap: wrap;
-    }
-    .swatch {
-      width: 140px;
-      height: 56px;
+    .send svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .live-link {
+      display: inline-flex;
+      margin-top: 14px;
+      height: 38px;
+      padding: 0 16px;
+      align-items: center;
       border-radius: 12px;
-      border: 1px solid #333;
-      overflow: hidden;
-      position: relative;
+      background: linear-gradient(180deg,#f6f2ec,#e8e1d8);
+      color: #26446f;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 13px;
     }
-    .swatch span {
-      position: absolute;
-      left: 8px; bottom: 6px;
-      font-family: var(--mono);
-      font-size: 9px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: rgba(20,19,22,0.7);
+    .settings-list button {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      padding: 12px 0;
+      font-size: 11px;
+      color: #465574;
+      font-family: inherit;
     }
-    .swatch.old {
-      background: linear-gradient(180deg, #6A8E9B 0%, #D1D5DB 100%);
+    .settings-list button:last-child { border-bottom: 0; }
+    .profile-hero {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
-    .swatch.new {
-      background:
-        radial-gradient(ellipse 78% 72% at 50% 38%, transparent 0%, rgba(28,26,24,0.045) 100%),
-        linear-gradient(180deg, var(--washTop) 0%, var(--washMid) 42%, var(--washBottom) 100%);
-    }
+    .profile-hero h3 { margin: 0; font-size: 18px; font-family: "Noto Serif SC", serif; }
+    .profile-hero p { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
   </style>
 </head>
 <body>
-  <h1>Alfred UI polish — type + AlfredAvatar</h1>
-  <p class="lede">
-    Stone paper wash + glass cards kept.
-    <strong>Typography:</strong> Newsreader SemiBold display greetings (tighter tracking), lighter body contrast.
-    <strong>Icons:</strong> filled glyphs in soft circular wells on schedule / suggestions.
-    <strong>Tabs:</strong> illustrated PNGs under <code>mobile/assets/tabs/</code>; center is <code>AlfredAvatar</code> (design-sheet butler SVG).
-    OTA <strong>not</strong> published.
-  </p>
-
-  <div class="swatch-row">
-    <div>
-      <div class="label">Rejected</div>
-      <div class="swatch old"><span>Teal → grey</span></div>
-    </div>
-    <div>
-      <div class="label">Chosen</div>
-      <div class="swatch new"><span>Stone paper wash</span></div>
-    </div>
+  <div class="page-title">
+    <h1>Alfred · 全屏预览</h1>
+    <p>
+      Avatar: tuxedo robot from <code>cursor/wechat-reply-workflow-0b69</code>
+      → <code>mobile/assets/alfred-mascot.png</code>.
+      IA: center mascot = Alfred hub · 对话 = WeChat paste.
+    </p>
+    <a class="live-link" href="./alfred-ui-system/">Open interactive Vite preview</a>
   </div>
 
-  <div class="row">
-    <div>
-      <div class="label">Home · richer type + tab images</div>
-      <div class="phone">
-        <div class="status">9:41</div>
-        <div class="scroll">
-          <div class="hero">
+  <div class="gallery">
+    <!-- HOME -->
+    <div style="position:relative">
+      <div class="phone-label">首页 · Home</div>
+      <div class="phone" data-screen="home">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div>
-              <p class="greeting">Good evening, Ray</p>
-              <p class="sub">✦ Your smart assistant butler</p>
+              <div class="eyebrow">管家</div>
+              <h2>下午好，<em>管家</em></h2>
+              <p class="lead">安排日程、发短信、设提醒，或速记。</p>
             </div>
-            <div class="avatar" aria-hidden="true">
-              <svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <radialGradient id="eye-h" cx="0.38" cy="0.32" r="0.85">
-                    <stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/>
-                  </radialGradient>
-                </defs>
-                <ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/>
-                <path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/>
-                <path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/>
-                <ellipse cx="105" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <ellipse cx="135" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/>
-                <path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#FFFFFF"/>
-                <path d="M104 144 L120 162 L111 170 L101 150 Z" fill="#08102D" opacity="0.92"/>
-                <path d="M136 144 L120 162 L129 170 L139 150 Z" fill="#08102D" opacity="0.92"/>
-                <circle cx="120" cy="176" r="2.6" fill="#08102D"/><circle cx="120" cy="190" r="2.6" fill="#08102D"/>
-                <ellipse cx="73" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <ellipse cx="167" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/>
-                <ellipse cx="95" cy="103" rx="20" ry="20" fill="#47BFF7" opacity="0.25"/>
-                <circle cx="95" cy="103" r="13" fill="url(#eye-h)"/><circle cx="91" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
-                <ellipse cx="145" cy="103" rx="20" ry="20" fill="#47BFF7" opacity="0.25"/>
-                <circle cx="145" cy="103" r="13" fill="url(#eye-h)"/><circle cx="141" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
-                <path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/>
-                <path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/>
-                <rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/>
-              </svg>
-            </div>
+            <img class="mascot" style="--s:72px;width:72px;height:72px" src="./alfred-mascot.png" alt="Alfred" />
           </div>
-          <div class="search">Any plans for today?<div class="send"></div></div>
-          <div class="glass">
-            <div class="glass-title">
-              <span class="well" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#35343A"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.2A2.8 2.8 0 0 1 22 7.8v11.4A2.8 2.8 0 0 1 19.2 22H4.8A2.8 2.8 0 0 1 2 19.2V7.8A2.8 2.8 0 0 1 4.8 5H6V3a1 1 0 0 1 1-1Zm13 8H4v9.2c0 .44.36.8.8.8h14.4c.44 0 .8-.36.8-.8V10Z"/></svg>
-              </span>
-              Schedule
-            </div>
-            <div class="glass-body">No schedule for today.</div>
+          <div class="surface row">
+            <div class="tile blue"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+            <div><strong>今天暂无日程安排</strong><span>你有一段完整的专注时间块。</span></div>
+            <span>›</span>
           </div>
-          <div class="glass">
-            <div class="glass-title">
-              <span class="well accent" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#2F4F8C"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.2c0 .3.14.58.38.77l3.2 2.4a1 1 0 1 0 1.24-1.57L13 11.55V7Z"/></svg>
-              </span>
-              Time-block suggestion
-            </div>
-            <div class="glass-body">Provide formal replies to the Interim Document, as Angel's analysis deadline is at stake.</div>
-            <div class="meta">Free 192 min · 8:47 PM–11:59 PM</div>
-            <div class="time-row">
-              <span class="adj">−15 min</span>
-              <span class="range">8:47PM–11:59PM</span>
-              <span class="adj">+15 min</span>
-            </div>
-            <div class="btn-ink">Add to calendar</div>
-            <div class="ignore">Ignore this suggestion</div>
+          <div class="surface card">
+            <div class="eyebrow">Alfred 建议</div>
+            <h3 style="font-family:Noto Serif SC,serif;font-size:16px;margin:6px 0">安排一个时间块</h3>
+            <p>Provide responses to the Inter-Document RFI.</p>
+            <button class="cta" style="margin-top:10px">加入日历</button>
           </div>
-          <div class="cal-head">
-            <span class="today">
-              <span class="well" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#35343A"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.2A2.8 2.8 0 0 1 22 7.8v11.4A2.8 2.8 0 0 1 19.2 22H4.8A2.8 2.8 0 0 1 2 19.2V7.8A2.8 2.8 0 0 1 4.8 5H6V3a1 1 0 0 1 1-1Zm13 8H4v9.2c0 .44.36.8.8.8h14.4c.44 0 .8-.36.8-.8V10Z"/></svg>
-              </span>
-              Today
-            </span>
-            <div class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></div>
-          </div>
-          <div class="days">
-            <div class="day">Wed<b>24</b></div>
-            <div class="day">Thu<b>25</b></div>
-            <div class="day">Fri<b>26</b></div>
-            <div class="day on">Sat<b>27</b></div>
-            <div class="day">Sun<b>28</b></div>
-            <div class="day">Mon<b>29</b></div>
-            <div class="day">Tue<b>30</b></div>
+          <div class="surface composer">
+            <input placeholder="问管家…" readonly />
+            <button class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
           </div>
         </div>
-        <div class="tabbar">
-          <div class="tab on"><span class="glyph"><img src="../assets/tabs/home.png" alt="" /></span>Home</div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/inbox.png" alt="" /></span>Inbox</div>
-          <div><div class="mid" aria-label="Alfred"><svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="eye-t1" cx="0.38" cy="0.32" r="0.85"><stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/></radialGradient></defs><ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/><path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/><path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/><rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/><path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#fff"/><path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/><circle cx="95" cy="103" r="13" fill="url(#eye-t1)"/><circle cx="145" cy="103" r="13" fill="url(#eye-t1)"/><path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/><path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/><rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/></svg></div></div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/chats.png" alt="" /></span>Chats</div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/you.png" alt="" /></span>You</div>
-        </div>
+        <nav class="nav" aria-label="tabs">
+          <button class="active"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
       </div>
     </div>
 
-    <div>
-      <div class="label">Alfred hub · same wash</div>
+    <!-- INBOX -->
+    <div style="position:relative">
+      <div class="phone-label">收件箱 · Inbox</div>
       <div class="phone">
-        <div class="status">9:41</div>
-        <div class="scroll hub-center">
-          <div class="avatar lg" aria-hidden="true">
-              <svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <radialGradient id="eye-hub" cx="0.38" cy="0.32" r="0.85">
-                    <stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/>
-                  </radialGradient>
-                </defs>
-                <ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/>
-                <path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/>
-                <path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/>
-                <ellipse cx="105" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <ellipse cx="135" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/>
-                <path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#FFFFFF"/>
-                <ellipse cx="73" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <ellipse cx="167" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
-                <path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
-                <path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/>
-                <circle cx="95" cy="103" r="13" fill="url(#eye-hub)"/><circle cx="91" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
-                <circle cx="145" cy="103" r="13" fill="url(#eye-hub)"/><circle cx="141" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
-                <path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/>
-                <path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/>
-                <rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/>
-              </svg>
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div>
+            <div class="eyebrow">需要你处理</div>
+            <h2>收件箱</h2>
+          </div>
+          <div class="chip-row">
+            <span class="chip on">待处理 8</span>
+            <span class="chip">未读</span>
+            <span class="chip">全部</span>
+            <span class="chip">短信</span>
+          </div>
+          <div class="surface card" style="display:grid;grid-template-columns:42px 1fr;gap:10px">
+            <div class="tile blue"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/></svg></div>
+            <div>
+              <h3>Leo · 明天一起吃饭？</h3>
+              <p>确认时间后我帮你回一封短信。</p>
             </div>
-          <p class="greeting">Good evening, <em>Alfred</em></p>
-          <p class="sub">Schedule, text, remind, or capture — I'll handle the rest.</p>
-          <div class="chips">
-            <span class="chip primary">Schedule</span>
-            <span class="chip">Text</span>
-            <span class="chip">Remind</span>
-            <span class="chip">Capture</span>
+          </div>
+          <div class="surface card" style="display:grid;grid-template-columns:42px 1fr;gap:10px">
+            <div class="tile green"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <div>
+              <h3>Mom · 短信</h3>
+              <p>明天见 — 点开即可起草回复。</p>
+            </div>
           </div>
         </div>
-        <div class="composer">Ask Alfred…<div class="send"></div></div>
-        <div class="tabbar">
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/home.png" alt="" /></span>Home</div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/inbox.png" alt="" /></span>Inbox</div>
-          <div><div class="mid" aria-label="Alfred"><svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="eye-t2" cx="0.38" cy="0.32" r="0.85"><stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/></radialGradient></defs><ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/><path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/><path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/><rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/><path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#fff"/><path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/><circle cx="95" cy="103" r="13" fill="url(#eye-t2)"/><circle cx="145" cy="103" r="13" fill="url(#eye-t2)"/><path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/><path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/><rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/></svg></div></div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/chats.png" alt="" /></span>Chats</div>
-          <div class="tab"><span class="glyph"><img src="../assets/tabs/you.png" alt="" /></span>You</div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ALFRED HUB -->
+    <div style="position:relative">
+      <div class="phone-label">中间 Avatar · Alfred hub</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div class="hub-hero">
+            <div class="eyebrow">管家</div>
+            <img class="mascot" style="--s:108px;width:108px;height:108px" src="./alfred-mascot.png" alt="Alfred" />
+            <h2>下午好，<em>管家</em></h2>
+            <p class="lead">查/订日历、按姓名起草短信、设置提醒。</p>
+          </div>
+          <div class="hub-actions">
+            <div><div class="tile blue"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>日程</div>
+            <div><div class="tile green"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>短信</div>
+            <div><div class="tile yellow"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>提醒</div>
+            <div><div class="tile purple"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div>速记</div>
+          </div>
+          <div class="surface card">
+            <p style="font-family:Noto Serif SC,serif;font-size:13px;color:#0d1d3b;line-height:1.5;margin:0">
+              我可以帮你查看或预订日历、按名字起草短信或邮件、设置提醒 — 发送前都会先请你确认。
+            </p>
+          </div>
+          <div class="surface composer">
+            <input placeholder="问管家…" readonly />
+            <button class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
         </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- CHATS / WECHAT PASTE -->
+    <div style="position:relative">
+      <div class="phone-label">对话 · WeChat paste</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eyebrow">对话</div>
+              <h2>对话</h2>
+            </div>
+            <div class="tile purple"><svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8H4l4.9 3.6L7 18l5-3.6L17 18l-1.9-5.6L20 8.8h-6.1z"/></svg></div>
+          </div>
+          <p class="lead">把对话变成 <em style="font-family:Georgia,serif;color:#17376d;font-style:normal">可执行行动</em>。粘贴微信多选复制内容。</p>
+          <div class="surface row">
+            <div class="tile purple"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
+            <div><strong>从剪贴板导入</strong><span>粘贴微信多选聊天，起草回复并提取跟进。</span></div>
+          </div>
+          <div style="text-align:center;font-size:9px;font-weight:600;letter-spacing:1px;color:#8a867f;text-transform:uppercase">或粘贴到下方</div>
+          <div class="surface paste-area">6330
+我需要审一下
+
+Rui
+一吃一堆</div>
+          <button class="cta">解析对话</button>
+          <p class="lead">也可以用 Alfred 键盘的「展开」把对话交到 App 里。</p>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div style="position:relative">
+      <div class="phone-label">我的 · Settings</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <h2>我的</h2>
+          <div class="profile-hero">
+            <img class="mascot" style="--s:96px;width:96px;height:96px" src="./alfred-mascot.png" alt="Alfred" />
+            <div>
+              <h3>Ray</h3>
+              <p>Pro · 管家在线</p>
+            </div>
+          </div>
+          <div class="surface card settings-list" style="padding:0 14px">
+            <button>我的计划 <span>›</span></button>
+            <button>快捷指令 <span>›</span></button>
+            <button>集成应用 <span>›</span></button>
+            <button>数据与隐私 <span>›</span></button>
+            <button>关于 Alfred <span>›</span></button>
+          </div>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
       </div>
     </div>
   </div>
-
-  <p class="note">
-    <code>AlfredAvatar</code> lives at <code>mobile/src/components/AlfredAvatar.tsx</code> (design-sheet butler SVG; API <code>size</code> + <code>state</code>).
-    Wired on Home header, Alfred hub hero, and center tab. CompanionAvatar now wraps the same art.
-    Tokens: <code>mobile/src/theme/theme.ts</code>. Tab PNGs: <code>mobile/assets/tabs/</code>.
-    Preview: <code>mobile/preview/ui-polish.html</code> · screenshot <code>mobile/preview/ui-polish.png</code>.
-  </p>
 </body>
 </html>

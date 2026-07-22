@@ -30,7 +30,15 @@ export const translations = {
         month: "Month",
       },
       scheduleWeekEmpty: "Nothing on the calendar this week.",
-      composerPlaceholder: "Any plans for today?",
+      composerPlaceholder: "Tell Alfred what you need…",
+      greetingReady: "Alfred is ready to handle your schedule and messages.",
+      focusTimeAvailable: "You have a stretch of uninterrupted focus time.",
+      inboxNeedsYou: "Needs your attention",
+      inboxTitle: "Inbox",
+      viewAll: "View all",
+      statusNeedsAction: "Needs action",
+      statusDone: "Done",
+      addedToCalendar: "Added to calendar",
       nextScheduleReminder: (time: string, title: string) =>
         `Up next at ${time} — ${title}`,
       scheduleDoneForDay: "You're done with today's schedule.",
@@ -92,6 +100,13 @@ export const translations = {
     },
     planning: {
       sectionLabel: "Planning",
+      alfredSuggests: "Alfred suggests",
+      scheduleBlock: "Schedule a time block",
+      aiRecommended: "AI pick",
+      importantTask: "Priority task",
+      minutesAvailable: (n: number) =>
+        n === 1 ? "1 minute free" : `${n} minutes free`,
+      addedToCalendar: "Added to calendar",
       timeBlock: (freeMin: number, start: string, end: string, taskMin: number) =>
         `${freeMin} min free (${start}–${end}) — ~${taskMin} min`,
       quickWinsLabel: (n: number) =>
@@ -513,7 +528,7 @@ export const translations = {
       today: "首页",
       inbox: "收件箱",
       alfred: "管家",
-      ask: "会话",
+      ask: "对话",
       you: "我的",
     },
     greeting: {
@@ -533,7 +548,15 @@ export const translations = {
         month: "月",
       },
       scheduleWeekEmpty: "本周日历上没有安排。",
-      composerPlaceholder: "今天有什么计划吗",
+      composerPlaceholder: "告诉 Alfred 你想做什么...",
+      greetingReady: "Alfred 已准备好处理你的日程与消息。",
+      focusTimeAvailable: "你有一段完整的专注时间。",
+      inboxNeedsYou: "需要你处理",
+      inboxTitle: "收件箱",
+      viewAll: "查看全部",
+      statusNeedsAction: "需处理",
+      statusDone: "已处理",
+      addedToCalendar: "已加入日历",
       nextScheduleReminder: (time: string, title: string) =>
         `接下来 ${time} · ${title}`,
       scheduleDoneForDay: "今天的日程已全部结束。",
@@ -593,6 +616,12 @@ export const translations = {
     },
     planning: {
       sectionLabel: "时间块建议",
+      alfredSuggests: "Alfred 建议",
+      scheduleBlock: "安排一个时间块",
+      aiRecommended: "AI 推荐",
+      importantTask: "重要任务",
+      minutesAvailable: (n: number) => `${n} 分钟可用`,
+      addedToCalendar: "已加入日历",
       timeBlock: (freeMin: number, start: string, end: string, taskMin: number) =>
         `空闲 ${freeMin} 分钟（${start}–${end}）— 约 ${taskMin} 分钟`,
       quickWinsLabel: (n: number) => `${n} 个速赢事项`,
@@ -945,7 +974,7 @@ export const translations = {
     },
     chats: {
       eyebrow: "对话",
-      title: "会话",
+      title: "对话",
       sub: "微信、短信、WhatsApp — 粘贴、导入或回复。",
       channelWechat: "微信",
       channelSms: "短信",

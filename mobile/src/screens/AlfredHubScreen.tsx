@@ -13,11 +13,11 @@ import {
   View,
 } from "react-native";
 
-import AlfredAvatar from "@/components/AlfredAvatar";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
+import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
 import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
-import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useShell } from "@/components/Shell";
 import {
@@ -44,7 +44,6 @@ export function AlfredHubScreen({
   startInCapture?: boolean;
 } = {}) {
   const { t, locale } = useLocale();
-  const { meta, state } = useCompanionAvatar();
   const { showToast } = useShell();
   const scrollRef = useRef<ScrollView>(null);
   const chat = useAlfredFreeChat(scrollRef);
@@ -177,7 +176,7 @@ export function AlfredHubScreen({
       >
         <Eyebrow>{hub.eyebrow}</Eyebrow>
         <View style={styles.hero}>
-          <AlfredAvatar size={112} color={meta.color} state={state} />
+          <AlfredMiniAvatar size={112} accessibilityLabel="Alfred" />
           <Serif size={36} display style={styles.greeting}>
             {greeting} <SerifEm>{hub.butlerName}</SerifEm>
           </Serif>
@@ -270,31 +269,32 @@ export function AlfredHubScreen({
             keyboardType={chat.keyboardType}
             onSubmitEditing={() => chat.sendFree(chat.input)}
           />
-          <Pressable
-            style={styles.sendBtn}
+          <AlfredIcon
+            icon={Ic.ArrowUp}
+            variant="dark"
+            size="small"
+            label={t.a11y.send}
             onPress={() => chat.sendFree(chat.input)}
-            accessibilityLabel={t.a11y.send}
-          >
-            <Ic.ArrowUp size={16} color="#fff" stroke={2} />
-          </Pressable>
+          />
           {Platform.OS === "android" ? (
-            <Pressable
-              style={styles.micBtn}
-              onPress={() =>
-                void (
-                  chat.voice.state === "recording"
-                    ? chat.voice.stop()
-                    : chat.voice.start()
-                )
-              }
-              accessibilityLabel="Voice input"
-            >
-              {chat.voice.state !== "idle" ? (
-                <ActivityIndicator size="small" color={colors.accent} />
-              ) : (
-                <Ic.Mic size={16} color={colors.accent} stroke={2} />
-              )}
-            </Pressable>
+            chat.voice.state !== "idle" ? (
+              <AlfredIcon
+                variant="assistant"
+                size="small"
+                label="Voice input"
+                onPress={() => void chat.voice.stop()}
+              >
+                <ActivityIndicator size="small" color="#fff" />
+              </AlfredIcon>
+            ) : (
+              <AlfredIcon
+                icon={Ic.Mic}
+                variant="assistant"
+                size="small"
+                label="Voice input"
+                onPress={() => void chat.voice.start()}
+              />
+            )
           ) : null}
         </View>
       </View>
@@ -403,37 +403,35 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   actionChip: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
+    borderWidth: 1,
+    borderColor: colors.hair,
     borderRadius: radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "transparent",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: colors.glassSoft,
   },
   actionChipPrimary: {
     backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
+    borderColor: "rgba(47,102,200,0.28)",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   actionChipActive: {
-    borderColor: colors.ink,
-    backgroundColor: colors.ink,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentWell,
   },
   actionLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    letterSpacing: 0.2,
     color: colors.ink3,
   },
   actionLabelPrimary: {
-    fontFamily: fonts.monoMedium,
+    fontFamily: fonts.sansSemibold,
     color: colors.accentInk,
-    fontSize: 11,
-    letterSpacing: 0.6,
+    fontSize: 12,
   },
-  actionLabelActive: { color: colors.paper },
+  actionLabelActive: { color: colors.accentDeep },
   modeHint: {
     fontFamily: fonts.sans,
     fontSize: 13,
@@ -453,7 +451,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
-    shadowColor: "#141316",
+    shadowColor: "#2D3D5A",
     shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -511,24 +509,27 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   composerWrap: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.hair,
+    borderTopWidth: 0,
     paddingHorizontal: layout.padX,
     paddingTop: 8,
     paddingBottom: 12,
-    backgroundColor: colors.paper,
+    backgroundColor: "transparent",
   },
   composerInner: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
-    backgroundColor: colors.card,
-    borderRadius: 22,
+    backgroundColor: colors.glass,
+    borderRadius: 24,
     paddingVertical: 6,
     paddingLeft: 14,
     paddingRight: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
   },
   composer: {
     flex: 1,
@@ -539,20 +540,5 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.ink,
     paddingVertical: 6,
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  micBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

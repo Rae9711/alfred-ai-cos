@@ -1,4 +1,4 @@
-// Root layout. Loads brand fonts (Newsreader + DM Sans + IBM Plex Mono), provides auth
+// Root layout. Loads brand fonts (Noto Serif SC + DM Sans + IBM Plex Mono), provides auth
 // state, and captures the albert://auth?token=... deep link from the OAuth callback.
 // Holds the splash until fonts are ready so there's no flash of system type.
 
@@ -10,10 +10,10 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Updates from "expo-updates";
 import {
   useFonts,
-  Newsreader_400Regular_Italic,
-  Newsreader_500Medium,
-  Newsreader_600SemiBold,
-} from "@expo-google-fonts/newsreader";
+  NotoSerifSC_500Medium,
+  NotoSerifSC_600SemiBold,
+  NotoSerifSC_700Bold,
+} from "@expo-google-fonts/noto-serif-sc";
 import {
   DMSans_400Regular,
   DMSans_500Medium,
@@ -122,9 +122,9 @@ function DeepLinkHandler() {
 
 function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
-    Newsreader_400Regular_Italic,
+    NotoSerifSC_500Medium,
+    NotoSerifSC_600SemiBold,
+    NotoSerifSC_700Bold,
     DMSans_400Regular,
     DMSans_500Medium,
     DMSans_600SemiBold,

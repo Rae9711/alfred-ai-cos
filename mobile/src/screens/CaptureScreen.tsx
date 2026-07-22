@@ -499,7 +499,7 @@ function ParsedState({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: { flex: 1, backgroundColor: colors.washBottom },
   screenDark: { backgroundColor: colors.ink },
   top: {
     flexDirection: "row",

@@ -14,10 +14,20 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { type Me, type Task, TaskStatus, CommitmentStatus, type TodayDashboard, type UpcomingMeeting, type ConversationInboxItem } from "@albert/shared-types";
+import {
+  type Me,
+  type Task,
+  TaskStatus,
+  CommitmentStatus,
+  type TodayDashboard,
+  type UpcomingMeeting,
+  type ConversationInboxItem,
+  type InboxMessage,
+} from "@albert/shared-types";
 
 import { api } from "@/api/client";
-import AlfredAvatar from "@/components/AlfredAvatar";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
+import { AlfredIcon } from "@/components/AlfredIcon";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -27,12 +37,13 @@ import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { ScreenWash } from "@/components/ScreenWash";
-import { Btn, Disclose, IconWell, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, Disclose, Pill, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
 import { WeekScheduleView } from "@/components/schedule/WeekScheduleView";
 import { firstNameOf, greetingFor } from "@/lib/today";
+import { parseSenderDisplay } from "@/lib/inbox";
 import {
   type ScheduleView,
   buildDayTimelineItems,
@@ -44,7 +55,52 @@ import {
   scheduleFromAssistantResponse,
   syncLocalRemindersForTasks,
 } from "@/lib/taskReminders";
+import { surfaces } from "@/theme/surfaces";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+
+function formatInboxTime(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** Dimensional calendar well with today's date badge (design sheet). */
+function CalendarDateIcon({ day }: { day: number }) {
+  return (
+    <View style={calDateStyles.wrap}>
+      <AlfredIcon icon={Ic.CalendarFill} variant="dimensional" size="medium" />
+      <View style={calDateStyles.badge}>
+        <Text style={calDateStyles.day}>{day}</Text>
+      </View>
+    </View>
+  );
+}
+
+const calDateStyles = StyleSheet.create({
+  wrap: { position: "relative" },
+  badge: {
+    position: "absolute",
+    right: -4,
+    bottom: -2,
+    minWidth: 20,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#fff",
+    backgroundColor: colors.blue700,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  day: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 10,
+    lineHeight: 12,
+    color: "#FFFFFF",
+  },
+});
 
 function formatReminderWhen(task: Task): string {
   if (task.remind_at) {
@@ -80,10 +136,10 @@ function isPast(iso: string | null): boolean {
 export function HomeScreen() {
   const router = useRouter();
   const { openSheet, showToast } = useShell();
-  const { meta, state, setThinking, flashState } = useCompanionAvatar();
+  const { setThinking, flashState } = useCompanionAvatar();
   const { locale, t } = useLocale();
   const { syncAndRefresh } = useMailbox();
-  const { openAlfred, openConfirmReply } = useWorkflow();
+  const { openAlfred, openConfirmReply, setTab } = useWorkflow();
 
   const [me, setMe] = useState<Me | null>(null);
   const [meetings, setMeetings] = useState<UpcomingMeeting[]>([]);
@@ -91,6 +147,7 @@ export function HomeScreen() {
   const [reminders, setReminders] = useState<Task[]>([]);
   const [conversationItems, setConversationItems] = useState<ConversationInboxItem[]>([]);
   const [conversationCounts, setConversationCounts] = useState<Record<string, number>>({});
+  const [homeInbox, setHomeInbox] = useState<InboxMessage[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -109,7 +166,7 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming, today, upcomingReminders, conversationInbox] =
+      const [profile, pending, upcoming, today, upcomingReminders, conversationInbox, inboxView] =
         await Promise.all([
           api.getMe().catch(() => null),
           api.listPendingActions(),
@@ -125,12 +182,16 @@ export function HomeScreen() {
             ? api.listTasks({ upcoming: true }).catch(() => [] as Task[])
             : Promise.resolve([] as Task[]),
           api.getConversationInbox().catch(() => ({ items: [], counts: {} })),
+          api
+            .getInbox({ scope: "needs_action" })
+            .catch(() => ({ messages: [], filtered_count: 0, mailboxes: [] })),
         ]);
       setMe(profile);
       setPendingCount(pending.length);
       setMeetings(upcoming);
       setTodayData(today);
       setReminders(upcomingReminders);
+      setHomeInbox(Array.isArray(inboxView?.messages) ? inboxView.messages.slice(0, 3) : []);
       setConversationItems(
         Array.isArray(conversationInbox?.items) ? conversationInbox.items : [],
       );
@@ -534,6 +595,32 @@ export function HomeScreen() {
   const displayName =
     firstNameOf(me?.name) ?? me?.email.split("@")[0] ?? "there";
 
+  const summaryTitle =
+    meetings.length === 0
+      ? t.home.noScheduleToday.replace(/\.$/, "")
+      : nextMeeting
+        ? t.home.nextScheduleReminder(
+            formatMeetingTime(nextMeeting.start_time),
+            nextMeeting.title ?? t.home.untitledMeeting,
+          )
+        : t.home.scheduleDoneForDay.replace(/\.$/, "");
+
+  const summarySubtitle =
+    todayData?.day_overview?.trim() ||
+    (meetings.length === 0
+      ? t.home.focusTimeAvailable
+      : butlerPrompt);
+
+  // Design sheet micro-label: THURSDAY · JULY 22 (English uppercase tracking).
+  const eyebrowDate = today
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    })
+    .toUpperCase()
+    .replace(",", " ·");
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -564,49 +651,28 @@ export function HomeScreen() {
           />
         }
       >
-        <View style={styles.hero}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={styles.eyebrowDate}>
-                {today.toLocaleDateString(locale === "zh" ? "zh-CN" : undefined, {
-                  weekday: "long",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </Text>
-              <Serif size={38} display style={styles.greeting}>
-                {greeting} <SerifEm>{displayName}</SerifEm>
+        <View style={styles.topBar}>
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrowDate}>{eyebrowDate}</Text>
+              <Serif size={36} display style={styles.greeting}>
+                {greeting}
+                {" "}
+                <SerifEm>{displayName}</SerifEm>
               </Serif>
-              {todayData?.day_overview ? (
-                <Text style={styles.dayOverview} numberOfLines={2}>
-                  {todayData.day_overview}
-                </Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={() => router.push("/search")}
-              hitSlop={10}
-              style={styles.searchBtn}
-              accessibilityLabel="Search"
-            >
-              <IconWell size={34}>
-                <Ic.Search size={16} color={colors.ink2} stroke={1.8} />
-              </IconWell>
-            </Pressable>
-            <View style={styles.avatarWrap}>
-              {t.home.speechHi ? (
-                <View style={styles.speechBubble}>
-                  <Text style={styles.speechText}>{t.home.speechHi}</Text>
-                  <View style={styles.speechTail} />
-                </View>
-              ) : null}
-              <AlfredAvatar
-                size={64}
-                color={meta.color}
-                state={state}
-                accessibilityLabel="Alfred"
-              />
-            </View>
+            <Text style={styles.greetingDesc} numberOfLines={2}>
+              {todayData?.day_overview?.trim() || t.home.greetingReady}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <AlfredIcon
+              icon={Ic.Bell}
+              variant="minimal"
+              size="small"
+              notification={pendingCount > 0 ? pendingCount : undefined}
+              label="Notifications"
+              onPress={() => router.push("/approvals")}
+            />
+            <AlfredMiniAvatar size={76} accessibilityLabel="Alfred" />
           </View>
         </View>
 
@@ -622,109 +688,142 @@ export function HomeScreen() {
           </Pressable>
         ) : null}
 
-        <View style={styles.butlerBlock}>
-          <View style={styles.sectionTitleRow}>
-            <IconWell size={28} tone="accent">
-              <Ic.MailFill size={14} color={colors.accent} />
-            </IconWell>
-            <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
+        <Pressable
+          style={styles.dailySummary}
+          onPress={() => {
+            if (nextMeeting) onButlerPress();
+            else setTab("today");
+          }}
+        >
+          <CalendarDateIcon day={today.getDate()} />
+          <View style={styles.summaryCopy}>
+            <Text style={styles.summaryTitle} numberOfLines={2}>
+              {summaryTitle}
+            </Text>
+            <Text style={styles.summarySub} numberOfLines={2}>
+              {summarySubtitle}
+            </Text>
           </View>
-          <View style={styles.proactiveCard}>
-            <Serif size={18} style={styles.proactiveText}>
-              {butlerPrompt}
-            </Serif>
-            {topHabitSuggestion && !topScheduleProposal ? (
-              <Text style={styles.habitPattern}>{topHabitSuggestion.pattern_summary}</Text>
-            ) : null}
-            {topHabitSuggestion && !topScheduleProposal ? (
-              <View style={styles.habitActions}>
+          <Ic.Arrow size={18} color={colors.ink4} />
+        </Pressable>
+
+        {(topScheduleProposal || topHabitSuggestion) &&
+        !(todayData?.suggestions?.length) ? (
+          <View style={styles.butlerBlock}>
+            <View style={styles.proactiveCard}>
+              <Serif size={18} style={styles.proactiveText}>
+                {butlerPrompt}
+              </Serif>
+              {topHabitSuggestion && !topScheduleProposal ? (
+                <Text style={styles.habitPattern}>
+                  {topHabitSuggestion.pattern_summary}
+                </Text>
+              ) : null}
+              {topHabitSuggestion && !topScheduleProposal ? (
+                <View style={styles.habitActions}>
+                  <Btn
+                    label={butlerCta ?? t.home.habitBlockCta}
+                    onPress={onButlerPress}
+                    style={styles.proactiveBtn}
+                    disabled={habitAction}
+                  />
+                  <Pressable
+                    onPress={dismissHabitSuggestion}
+                    disabled={habitAction}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.dismissProposal}>
+                      {t.home.dismissProposal}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : butlerCta ? (
                 <Btn
-                  label={butlerCta ?? t.home.habitBlockCta}
+                  label={butlerCta}
                   onPress={onButlerPress}
                   style={styles.proactiveBtn}
                   disabled={habitAction}
                 />
-                <Pressable
-                  onPress={dismissHabitSuggestion}
-                  disabled={habitAction}
-                  hitSlop={8}
-                >
-                  <Text style={styles.dismissProposal}>{t.home.dismissProposal}</Text>
-                </Pressable>
-              </View>
-            ) : butlerCta ? (
-              <Btn
-                label={butlerCta}
-                onPress={onButlerPress}
-                style={styles.proactiveBtn}
-                disabled={habitAction}
-              />
-            ) : null}
-            {topScheduleProposal ? (
-              <View style={styles.scheduleProposalActions}>
-                <Btn
-                  label={t.home.addToCalendar}
-                  onPress={acceptScheduleProposal}
-                  style={styles.proactiveBtn}
-                  disabled={scheduleAction}
-                />
-                <Btn
-                  label={t.home.replyConfirm(
-                    topScheduleProposal.counterparty ?? t.home.untitledMeeting,
-                  )}
-                  onPress={confirmScheduleReply}
-                  style={styles.proactiveBtn}
-                  kind="ghost"
-                  disabled={scheduleAction}
-                />
-                <Pressable
-                  onPress={dismissScheduleProposal}
-                  disabled={scheduleAction}
-                  hitSlop={8}
-                >
-                  <Text style={styles.dismissProposal}>{t.home.dismissProposal}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-            {weekAhead ? (
-              <Disclose
-                label={t.home.showWeekAhead}
-                labelExpanded={t.home.hideWeekAhead}
-                defaultOpen={Boolean(weekAhead.show_prominently)}
-              >
-                <Text style={styles.weekAheadText}>{weekAhead.summary}</Text>
-              </Disclose>
-            ) : null}
-            {reminders.length > 0 ? (
-              <Disclose
-                label={t.home.showReminders(reminders.length)}
-                labelExpanded={t.home.hideReminders}
-              >
-                {reminders.slice(0, 5).map((task) => (
+              ) : null}
+              {topScheduleProposal ? (
+                <View style={styles.scheduleProposalActions}>
+                  <Btn
+                    label={t.home.addToCalendar}
+                    onPress={acceptScheduleProposal}
+                    style={styles.proactiveBtn}
+                    disabled={scheduleAction}
+                  />
+                  <Btn
+                    label={t.home.replyConfirm(
+                      topScheduleProposal.counterparty ?? t.home.untitledMeeting,
+                    )}
+                    onPress={confirmScheduleReply}
+                    style={styles.proactiveBtn}
+                    kind="ghost"
+                    disabled={scheduleAction}
+                  />
                   <Pressable
-                    key={task.id}
-                    style={styles.reminderRow}
-                    onPress={() => completeReminder(task)}
-                    accessibilityLabel={`${task.title}, tap to mark done`}
+                    onPress={dismissScheduleProposal}
+                    disabled={scheduleAction}
+                    hitSlop={8}
                   >
-                    <Text style={styles.reminderTitle} numberOfLines={1}>
-                      {task.title}
-                    </Text>
-                    <Text style={styles.reminderWhen}>
-                      {task.remind_at
-                        ? t.home.reminderAt(formatReminderWhen(task))
-                        : t.home.reminderDue(formatReminderWhen(task))}
+                    <Text style={styles.dismissProposal}>
+                      {t.home.dismissProposal}
                     </Text>
                   </Pressable>
-                ))}
-              </Disclose>
-            ) : null}
+                </View>
+              ) : null}
+            </View>
           </View>
-        </View>
+        ) : null}
+
+        {scheduleView === "day" ? (
+          <PlanningSuggestionsCard
+            data={todayData}
+            onChanged={() => void load(scheduleView)}
+          />
+        ) : null}
+
+        {weekAhead ? (
+          <Disclose
+            style={styles.discloseBlock}
+            label={t.home.showWeekAhead}
+            labelExpanded={t.home.hideWeekAhead}
+            defaultOpen={Boolean(weekAhead.show_prominently)}
+          >
+            <Text style={styles.weekAheadText}>{weekAhead.summary}</Text>
+          </Disclose>
+        ) : null}
+
+        {reminders.length > 0 ? (
+          <Disclose
+            style={styles.discloseBlock}
+            label={t.home.showReminders(reminders.length)}
+            labelExpanded={t.home.hideReminders}
+          >
+            {reminders.slice(0, 5).map((task) => (
+              <Pressable
+                key={task.id}
+                style={styles.reminderRow}
+                onPress={() => completeReminder(task)}
+                accessibilityLabel={`${task.title}, tap to mark done`}
+              >
+                <Text style={styles.reminderTitle} numberOfLines={1}>
+                  {task.title}
+                </Text>
+                <Text style={styles.reminderWhen}>
+                  {task.remind_at
+                    ? t.home.reminderAt(formatReminderWhen(task))
+                    : t.home.reminderDue(formatReminderWhen(task))}
+                </Text>
+              </Pressable>
+            ))}
+          </Disclose>
+        ) : null}
 
         {conversationItems.length > 0 ? (
           <Disclose
-            style={styles.conversationBlock}
+            style={styles.discloseBlock}
             label={t.home.showFollowUps(conversationItems.length)}
             labelExpanded={t.home.hideFollowUps}
           >
@@ -787,22 +886,90 @@ export function HomeScreen() {
           </Disclose>
         ) : null}
 
-        {scheduleView === "day" ? (
-          <PlanningSuggestionsCard
-            data={todayData}
-            onChanged={() => void load(scheduleView)}
-          />
-        ) : null}
-
-        <View style={styles.scheduleHeader}>
-          <View style={styles.sectionTitleRow}>
-            <IconWell size={28}>
-              <Ic.CalendarFill size={14} color={colors.ink2} />
-            </IconWell>
-            <Serif size={22} display style={styles.scheduleTitle}>
-              {scheduleSectionLabel}
-            </Serif>
+        {/* Design sheet first viewport: inbox on Home (not day/week/month). */}
+        <View style={styles.inboxSection}>
+          <View style={styles.inboxHeader}>
+            <View>
+              <Text style={styles.sectionLabel}>{t.home.inboxNeedsYou}</Text>
+              <Text style={styles.inboxTitle}>{t.home.inboxTitle}</Text>
+            </View>
+            <Pressable
+              style={styles.viewAllBtn}
+              onPress={() => setTab("inbox")}
+              hitSlop={8}
+            >
+              <Text style={styles.viewAllText}>{t.home.viewAll}</Text>
+              <Ic.Arrow size={16} color={colors.ink3} />
+            </Pressable>
           </View>
+
+          <View style={styles.emailCard}>
+            {homeInbox.length === 0 ? (
+              <Text style={styles.inboxEmpty}>{t.inbox.inboxZero}</Text>
+            ) : (
+              homeInbox.map((msg, index) => {
+                const sender = parseSenderDisplay(msg.sender);
+                const done = Boolean(msg.user_decided || msg.user_replied);
+                return (
+                  <Pressable
+                    key={msg.id}
+                    style={styles.emailRow}
+                    onPress={() => setTab("inbox")}
+                  >
+                    <View style={styles.senderAvatar}>
+                      <Text style={styles.senderInitial}>
+                        {(sender.charAt(0) || "?").toUpperCase()}
+                      </Text>
+                      {!done ? <View style={styles.senderStatus} /> : null}
+                    </View>
+                    <View style={styles.emailContent}>
+                      <View style={styles.emailMeta}>
+                        <Text style={styles.emailSender} numberOfLines={1}>
+                          {sender}
+                        </Text>
+                        <Text style={styles.emailTime}>
+                          {formatInboxTime(msg.sent_at)}
+                        </Text>
+                      </View>
+                      <Text style={styles.emailSubject} numberOfLines={1}>
+                        {msg.subject?.trim() || "(No subject)"}
+                      </Text>
+                      <Text style={styles.emailPreview} numberOfLines={2}>
+                        {msg.snippet?.trim() || msg.take?.trim() || ""}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        surfaces.statusPill,
+                        done && styles.statusDonePill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          surfaces.statusPillText,
+                          done && styles.statusDoneText,
+                        ]}
+                      >
+                        {done ? t.home.statusDone : t.home.statusNeedsAction}
+                      </Text>
+                    </View>
+                    {index < homeInbox.length - 1 ? (
+                      <View style={styles.emailDivider} />
+                    ) : null}
+                  </Pressable>
+                );
+              })
+            )}
+          </View>
+        </View>
+
+        {/* Day / week / month — below fold so first viewport matches sheet. */}
+        <Disclose
+          style={styles.discloseBlock}
+          label={scheduleSectionLabel}
+          labelExpanded={t.home.showLess}
+          defaultOpen={false}
+        >
           <View style={styles.scheduleToggle}>
             {(["day", "week", "month"] as const).map((view) => (
               <Pill
@@ -815,67 +982,81 @@ export function HomeScreen() {
               />
             ))}
           </View>
-        </View>
 
-        {scheduleView === "day" ? (
-          dayTimelineItems.length > 0 ? (
-            <DayScheduleView
-              day={today}
-              items={dayTimelineItems}
+          {scheduleView === "day" ? (
+            dayTimelineItems.length > 0 ? (
+              <DayScheduleView
+                day={today}
+                items={dayTimelineItems}
+                onEventPress={openMeeting}
+                onTaskPress={onTimelineTaskPress}
+                emptyText={t.home.scheduleEmpty}
+              />
+            ) : (
+              <Text style={styles.scheduleEmpty}>{t.home.scheduleEmpty}</Text>
+            )
+          ) : null}
+
+          {scheduleView === "week" ? (
+            <WeekScheduleView
+              meetings={meetings}
               onEventPress={openMeeting}
-              onTaskPress={onTimelineTaskPress}
-              emptyText={t.home.scheduleEmpty}
+              emptyText={t.home.scheduleWeekEmpty}
             />
-          ) : (
-            <Text style={styles.scheduleEmpty}>{t.home.scheduleEmpty}</Text>
-          )
-        ) : null}
+          ) : null}
 
-        {scheduleView === "week" ? (
-          <WeekScheduleView
-            meetings={meetings}
-            onEventPress={openMeeting}
-            emptyText={t.home.scheduleWeekEmpty}
-          />
-        ) : null}
-
-        {scheduleView === "month" ? (
-          <MonthScheduleView
-            meetings={meetings}
-            selectedDay={selectedMonthDay}
-            onSelectDay={setSelectedMonthDay}
-            onEventPress={openMeeting}
-          />
-        ) : null}
+          {scheduleView === "month" ? (
+            <MonthScheduleView
+              meetings={meetings}
+              selectedDay={selectedMonthDay}
+              onSelectDay={setSelectedMonthDay}
+              onEventPress={openMeeting}
+            />
+          ) : null}
+        </Disclose>
       </ScrollView>
 
-      <View style={styles.composerBar}>
-        <View style={styles.composerInner}>
-          <TextInput
-            value={composer}
-            onChangeText={setComposer}
-            placeholder={t.home.composerPlaceholder}
-            placeholderTextColor={colors.ink4}
-            style={styles.composerInput}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            blurOnSubmit
-            onSubmitEditing={submitComposer}
-            editable={!asking}
+      <View style={styles.commandBox}>
+        <AlfredIcon
+          icon={Ic.Sparkles}
+          variant="assistant"
+          size="small"
+          label="Alfred"
+        />
+        <TextInput
+          value={composer}
+          onChangeText={setComposer}
+          placeholder={t.home.composerPlaceholder}
+          placeholderTextColor="#9AA4B5"
+          style={styles.composerInput}
+          multiline
+          maxLength={500}
+          returnKeyType="send"
+          blurOnSubmit
+          onSubmitEditing={submitComposer}
+          editable={!asking}
+        />
+        <AlfredIcon
+          icon={Ic.Mic}
+          variant="minimal"
+          size="small"
+          label="Voice input"
+          onPress={() => openAlfred()}
+        />
+        {asking ? (
+          <AlfredIcon variant="dark" size="small" style={styles.sendDisabled}>
+            <ActivityIndicator size="small" color="#fff" />
+          </AlfredIcon>
+        ) : (
+          <AlfredIcon
+            icon={Ic.Send}
+            variant="dark"
+            size="small"
+            label={t.a11y.send}
+            onPress={composer.trim() ? submitComposer : undefined}
+            style={!composer.trim() ? styles.sendDisabled : undefined}
           />
-          <Pressable
-            style={styles.micBtn}
-            onPress={submitComposer}
-            accessibilityLabel={t.a11y.send}
-          >
-            {asking ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : (
-              <Ic.ArrowUp size={16} color={colors.accent} stroke={2} />
-            )}
-          </Pressable>
-        </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -893,88 +1074,204 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl + 24,
   },
-  hero: {
-    marginHorizontal: -layout.padX,
-    paddingHorizontal: layout.padX,
-    paddingBottom: spacing.md,
-    backgroundColor: "transparent",
-  },
-  headerRow: {
+  topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 12,
+    gap: 14,
+    paddingBottom: 18,
   },
-  headerText: { flex: 1, gap: 6 },
+  headerText: { flex: 1, minWidth: 0 },
   eyebrowDate: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sans,
     fontSize: 11,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
+    color: "#7E7B75",
+    marginBottom: 8,
   },
-  greeting: { maxWidth: 280 },
-  searchBtn: { paddingTop: 4 },
-  avatarWrap: {
-    position: "relative",
-    alignItems: "center",
+  greeting: { maxWidth: 260 },
+  greetingDesc: {
+    marginTop: 4,
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    lineHeight: 19,
+    color: "#74736F",
+    maxWidth: 235,
   },
-  speechBubble: {
-    position: "absolute",
-    right: "100%",
-    top: 6,
-    marginRight: 6,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    zIndex: 2,
-    shadowColor: "#19171A",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  speechText: {
-    fontFamily: fonts.serif,
-    fontSize: 15,
-    fontStyle: "italic",
-    color: colors.accentInk,
-  },
-  speechTail: {
-    position: "absolute",
-    right: -5,
-    top: 12,
-    width: 10,
-    height: 10,
-    backgroundColor: colors.card,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    transform: [{ rotate: "45deg" }],
-  },
-  butlerBlock: { marginTop: spacing.lg, gap: 8 },
-  sectionTitleRow: {
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  scheduleTitle: { color: colors.ink },
-  conversationBlock: { marginTop: spacing.md },
+  dailySummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 78,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    ...surfaces.glassCard,
+  },
+  summaryCopy: { flex: 1, gap: 4, minWidth: 0 },
+  summaryTitle: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 14,
+    color: colors.ink2,
+  },
+  summarySub: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.ink3,
+  },
+  butlerBlock: { marginTop: spacing.lg },
+  proactiveCard: {
+    ...surfaces.glassCard,
+    padding: spacing.md,
+    gap: 12,
+  },
+  proactiveText: { color: colors.ink, lineHeight: 26 },
+  habitPattern: { fontSize: 13, color: colors.ink4, fontStyle: "italic" },
+  proactiveBtn: { alignSelf: "flex-start" },
+  habitActions: { gap: 10 },
+  scheduleProposalActions: { gap: 10 },
+  dismissProposal: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink4 },
+  sectionLabel: {
+    ...surfaces.sectionKicker,
+    marginBottom: 6,
+  },
+  inboxSection: {
+    marginTop: layout.gapSection,
+  },
+  inboxHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    marginHorizontal: 4,
+    marginBottom: 14,
+  },
+  inboxTitle: {
+    fontFamily: fonts.serifDisplay,
+    fontSize: 20,
+    letterSpacing: -0.4,
+    color: colors.ink,
+  },
+  viewAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingBottom: 2,
+  },
+  viewAllText: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: "#64708A",
+  },
+  emailCard: {
+    ...surfaces.glassCard,
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  inboxEmpty: {
+    padding: 18,
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    color: colors.ink3,
+    fontStyle: "italic",
+  },
+  emailRow: {
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  senderAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0EEE9",
+  },
+  senderInitial: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    color: "#2A3D62",
+  },
+  senderStatus: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  emailContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+    paddingRight: 4,
+  },
+  emailMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  emailSender: {
+    flex: 1,
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: colors.ink3,
+  },
+  emailTime: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: colors.ink3,
+  },
+  emailSubject: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 11,
+    color: colors.ink,
+  },
+  emailPreview: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    lineHeight: 14,
+    color: colors.ink3,
+  },
+  statusDonePill: {
+    ...surfaces.statusPillDone,
+  },
+  statusDoneText: {
+    ...surfaces.statusPillDoneText,
+  },
+  emailDivider: {
+    position: "absolute",
+    left: 56,
+    right: 12,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.line,
+  },
+  discloseBlock: { marginTop: spacing.md },
+  weekAheadText: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.ink3,
+  },
   conversationCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.glass,
     borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
+    borderWidth: 1,
+    borderColor: colors.hair,
     padding: spacing.md,
     gap: 10,
-    shadowColor: "#141316",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
   conversationSummary: {
     fontFamily: fonts.sans,
@@ -1008,44 +1305,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.ink3,
   },
-  butlerLabel: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-    color: colors.ink3,
-  },
-  dayOverview: {
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.ink3,
-    marginTop: 2,
-  },
-  proactiveCard: {
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    padding: spacing.md,
-    gap: 12,
-    shadowColor: "#141316",
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  proactiveText: { color: colors.ink, lineHeight: 26 },
-  habitPattern: { fontSize: 13, color: colors.ink4, fontStyle: "italic" },
-  weekAheadText: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.ink3,
-  },
-  proactiveBtn: { alignSelf: "flex-start" },
-  habitActions: { gap: 10 },
-  scheduleProposalActions: { gap: 10 },
-  dismissProposal: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink4 },
   reminderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1068,7 +1327,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   approvalsText: {
     flex: 1,
@@ -1076,15 +1335,8 @@ const styles = StyleSheet.create({
     color: colors.warn,
     fontSize: 13,
   },
-  sectionLabel: {
-    fontFamily: fonts.monoMedium,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-    color: colors.ink3,
-  },
   scheduleHeader: {
-    marginTop: spacing.lg,
+    marginTop: layout.gapSection,
     marginBottom: 10,
     gap: 10,
   },
@@ -1092,6 +1344,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    marginBottom: 12,
   },
   scheduleTogglePill: { marginRight: 0 },
   scheduleEmpty: {
@@ -1100,41 +1353,30 @@ const styles = StyleSheet.create({
     color: colors.ink3,
     fontStyle: "italic",
   },
-  composerBar: {
-    paddingHorizontal: layout.padX,
-    paddingTop: 8,
-    paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.hair,
-    backgroundColor: colors.paper,
-  },
-  composerInner: {
+  commandBox: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: 8,
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    paddingVertical: 8,
-    paddingLeft: 14,
-    paddingRight: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    minHeight: 44,
+    marginHorizontal: layout.padX,
+    // Clear edge-to-edge tab bar (76) + elevated center avatar.
+    marginBottom: layout.tabBarInset,
+    paddingVertical: 7,
+    paddingLeft: 7,
+    paddingRight: 7,
+    height: 50,
+    ...surfaces.glassCard,
+    borderRadius: 18,
   },
   composerInput: {
     flex: 1,
     fontFamily: fonts.sans,
-    fontSize: 15,
+    fontSize: 11,
     color: colors.ink,
     minHeight: 28,
-    maxHeight: 100,
+    maxHeight: 88,
     paddingVertical: 4,
   },
-  micBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+  sendDisabled: {
+    opacity: 0.38,
   },
 });

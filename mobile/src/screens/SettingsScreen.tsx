@@ -26,20 +26,23 @@ import { useRouter } from "expo-router";
 import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
+import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import {
   Btn,
-  Eyebrow,
   Meta,
   Pill,
   SectionTitle,
   Serif,
   SerifEm,
 } from "@/components/ui";
-import { colors, fonts, layout, spacing } from "@/theme/theme";
+import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
+import { ScreenWash } from "@/components/ScreenWash";
 import { translations } from "@/i18n/locales";
 import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 import {
@@ -461,18 +464,42 @@ export function SettingsScreen() {
         : null;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.screen}>
+      <ScreenWash />
+      <ScrollView
+        style={styles.scrollTransparent}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.header}>
-        <Eyebrow>{s.you}</Eyebrow>
-        <Serif size={32} style={styles.name}>
-          <SerifEm>{firstName}</SerifEm>
-          {rest}
-        </Serif>
-        <Meta>{me?.email ?? "Connected account"}</Meta>
+        <View style={styles.headerTitleRow}>
+          <Serif size={28} display>
+            {s.you}
+          </Serif>
+          <AlfredIcon
+            icon={Ic.Sliders}
+            variant="minimal"
+            size="small"
+            label={s.you}
+          />
+        </View>
+        <View style={styles.profileHero}>
+          <AlfredMiniAvatar size={96} accessibilityLabel="Alfred" />
+          <View style={styles.profileCopy}>
+            <View style={styles.profileNameRow}>
+              <Serif size={22} display>
+                <SerifEm>{firstName}</SerifEm>
+                {rest}
+              </Serif>
+              {isSubscribed ? (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeText}>Pro</Text>
+                </View>
+              ) : null}
+            </View>
+            <Meta>{me?.email ?? "Connected account"}</Meta>
+          </View>
+        </View>
       </View>
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
@@ -809,7 +836,8 @@ export function SettingsScreen() {
       </View>
 
       <Meta style={styles.version}>Alfred · 阿福 · made calmly</Meta>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -940,22 +968,48 @@ function ApprovalRow({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: surfaces.screen,
+  scrollTransparent: { flex: 1, backgroundColor: "transparent" },
   content: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
-    paddingBottom: spacing.xl,
+    paddingBottom: layout.tabBarInset,
   },
-  header: { gap: 4, paddingBottom: 8 },
+  header: { gap: 14, paddingBottom: 8 },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  profileHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+  },
+  profileCopy: { flex: 1, minWidth: 0, gap: 6 },
+  profileNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  proBadge: {
+    borderWidth: 1,
+    borderColor: "#E0D7C8",
+    borderRadius: radius.pill,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  proBadgeText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    color: "#9B7A43",
+  },
   name: { marginTop: 2 },
   note: { color: colors.accentInk, fontSize: 13, marginTop: spacing.sm },
 
   group: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    overflow: "hidden",
+    ...surfaces.glassRowGroup,
   },
   row: {
     flexDirection: "row",
@@ -969,7 +1023,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hair,
   },
   rowBody: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: "500", color: colors.ink },
+  rowLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: colors.ink,
+  },
   rowLabelFlex: { flex: 1 },
   rowDetail: { marginRight: 6 },
   warnText: { color: colors.warn },
@@ -977,8 +1035,8 @@ const styles = StyleSheet.create({
   intIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.paper2,
+    borderRadius: 12,
+    backgroundColor: colors.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -998,19 +1056,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   approvalLevel: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansSemibold,
     fontSize: 11,
-    color: colors.ink3,
-    letterSpacing: 0.4,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.ink4,
   },
   approvalDesc: { fontSize: 13, color: colors.ink2, marginTop: 4 },
 
   langHint: { marginTop: 8, marginBottom: 4 },
   smsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    ...surfaces.glassCard,
     padding: 14,
     gap: 10,
     marginBottom: 8,

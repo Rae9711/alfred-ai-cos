@@ -15,7 +15,11 @@ import {
 } from "react-native";
 
 import { api } from "@/api/client";
+import { AlfredIcon } from "@/components/AlfredIcon";
+import { IconLabel } from "@/components/IconLabel";
+import { Ic } from "@/components/icons";
 import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
+import { ScreenWash } from "@/components/ScreenWash";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -25,6 +29,7 @@ import type { AppInboxItem } from "@/lib/inbox";
 import { MessageLinks } from "@/components/MessageLinks";
 import { MessageDetailSheet } from "@/screens/sheets/MessageDetailSheet";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
 
 if (
   Platform.OS === "android" &&
@@ -210,38 +215,58 @@ export function InboxScreen() {
 
   if (loading && items.length === 0) {
     return (
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.scrollFill}
-        alwaysBounceVertical
-        refreshControl={refreshControl}
-      >
-        <View style={styles.centeredFill}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
-        </View>
-      </ScrollView>
+      <View style={styles.screen}>
+        <ScreenWash />
+        <ScrollView
+          style={styles.scrollTransparent}
+          contentContainerStyle={styles.scrollFill}
+          alwaysBounceVertical
+          refreshControl={refreshControl}
+        >
+          <View style={styles.centeredFill}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      alwaysBounceVertical
-      refreshControl={refreshControl}
-    >
+    <View style={styles.screen}>
+      <ScreenWash />
+      <ScrollView
+        style={styles.scrollTransparent}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={refreshControl}
+      >
       <View style={styles.header}>
-        <Serif size={28}>
-          {t.inbox.titlePlain} <SerifEm>{t.inbox.titleEm}</SerifEm>
-        </Serif>
-        {unreadCount > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{t.inbox.unread(unreadCount)}</Text>
-          </View>
-        ) : null}
+        <View style={styles.headerCopy}>
+          <Serif size={32} display>
+            {t.inbox.titlePlain} <SerifEm>{t.inbox.titleEm}</SerifEm>
+          </Serif>
+        </View>
+        <AlfredIcon
+          icon={Ic.InboxFill}
+          variant="dimensional"
+          size="medium"
+          notification={unreadCount > 0 ? unreadCount : undefined}
+          label={t.tabs.inbox}
+        />
       </View>
+
+      {replyItems.length > 0 || decisionItems.length > 0 ? (
+        <IconLabel
+          icon={Ic.InboxFill}
+          title={t.inbox.sectionReply}
+          description={
+            unreadCount > 0 ? t.inbox.unread(unreadCount) : undefined
+          }
+          style={styles.inboxLead}
+        />
+      ) : null}
 
       {error ? (
         <Pressable style={styles.errorBanner} onPress={() => void onPullRefresh()}>
@@ -391,7 +416,8 @@ export function InboxScreen() {
       ) : null}
 
       <FooterStamp text={syncFooter} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -690,8 +716,9 @@ function FyiCard({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
-  content: { flexGrow: 1, paddingBottom: 32 },
+  screen: surfaces.screen,
+  scrollTransparent: { flex: 1, backgroundColor: "transparent" },
+  content: { flexGrow: 1, paddingBottom: layout.tabBarInset },
   scrollFill: { flexGrow: 1 },
   centeredFill: {
     flexGrow: 1,
@@ -711,8 +738,14 @@ const styles = StyleSheet.create({
     paddingTop: layout.topPad,
     paddingBottom: 8,
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
+  },
+  headerCopy: { flex: 1, minWidth: 0 },
+  inboxLead: {
+    marginHorizontal: layout.padX,
+    marginBottom: 4,
   },
   badge: {
     backgroundColor: colors.accentSoft,
@@ -721,11 +754,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   badgeText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 0.6,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 11,
+    letterSpacing: 0.4,
     color: colors.accent,
-    textTransform: "uppercase",
   },
   errorBanner: {
     marginHorizontal: layout.padX,
@@ -748,30 +780,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
+    ...surfaces.sectionLabel,
     marginBottom: 2,
   },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
+    ...surfaces.glassCard,
     padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
     gap: 8,
   },
   cardBody: { gap: 8 },
   cardUnread: {
-    borderColor: colors.accentSoft,
-    backgroundColor: colors.card,
+    borderColor: "rgba(47,102,200,0.22)",
   },
   cardRead: {
-    opacity: 0.88,
-    backgroundColor: colors.paper2,
-    borderColor: colors.hair,
+    opacity: 0.9,
+    backgroundColor: colors.glassSoft,
   },
   cardTop: {
     flexDirection: "row",
@@ -780,49 +803,38 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   sourceChip: {
-    backgroundColor: colors.paper2,
+    backgroundColor: colors.accentSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.full,
   },
   sourceChipText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
     color: colors.ink3,
   },
   statusChip: {
-    backgroundColor: colors.paper,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    ...surfaces.statusPill,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
   },
   statusUnread: {
     backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
   },
   statusReplied: {
     backgroundColor: colors.paper2,
-    borderColor: colors.hair2,
   },
   statusProcessed: {
-    backgroundColor: colors.paper2,
-    borderColor: colors.hair2,
+    backgroundColor: colors.successSoft,
   },
   statusChipText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
+    ...surfaces.statusPillText,
     color: colors.ink4,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
   },
   statusUnreadText: { color: colors.accent },
   statusRepliedText: { color: colors.ink3 },
-  statusProcessedText: { color: colors.ink3 },
+  statusProcessedText: { color: colors.success },
   unreadDot: {
     width: 6,
     height: 6,

@@ -1,11 +1,12 @@
-// Alfred's companion avatar — wraps AlfredAvatar (design-sheet butler SVG).
+// Alfred's companion avatar — 3D robot mascot from bundled reference art.
 //
+// Raster base (mobile/assets/alfred-mascot.png) + SVG mood overlays.
 // Placements (controlled by parent screens):
 //   • today  — top-right greeting chip ("Hi!")
 //   • ask    — bottom-right while chatting
-//   • home   — center tab slot (Alfred hub entry)
+//   • home   — robot bust in the center tab slot (Capture entry)
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -17,7 +18,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import AlfredAvatar from "@/components/AlfredAvatar";
+import { ButlerSvg, CloudHomeSvg } from "@/components/butlerAvatarArt";
 import { getFormByLevel, getLevelFx, type AvatarState } from "@/lib/agentMeta";
 import { colors, fonts } from "@/theme/theme";
 
@@ -26,7 +27,7 @@ export type CompanionAvatarProps = {
   size?: number;
   /** Agent level — selects evolution halo styling. */
   level?: number;
-  /** Theme tint for bow tie; defaults to accent blue. */
+  /** Theme tint for bow tie / flag; defaults to accent blue. */
   color?: string;
   /** Current mood — affects face and subtle motion. */
   state?: AvatarState;
@@ -42,8 +43,8 @@ export type CompanionAvatarProps = {
 };
 
 /**
- * Floating companion: AlfredAvatar + optional speech bubble.
- * Prefer importing AlfredAvatar directly for new surfaces.
+ * Floating companion avatar: robot mascot + optional speech bubble.
+ * Wrap in a positioned parent (absolute top-right, bottom-right, etc.).
  */
 export function CompanionAvatar({
   size = 56,
@@ -58,7 +59,30 @@ export function CompanionAvatar({
 }: CompanionAvatarProps) {
   const levelFx = getLevelFx(level);
   const form = getFormByLevel(level);
-  void compact;
+
+  // Breathing scale — stronger while thinking (matches the design sim).
+  const breath = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const toValue = state === "thinking" ? 1.06 : 1.03;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, {
+          toValue,
+          duration: state === "thinking" ? 1100 : 1400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(breath, {
+          toValue: 1,
+          duration: state === "thinking" ? 1100 : 1400,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breath, state]);
 
   const scaledSize = size * levelFx.scale;
 
@@ -71,21 +95,22 @@ export function CompanionAvatar({
         </View>
       ) : null}
 
-      <View
+      <Animated.View
         style={{
+          transform: [{ scale: breath }],
           shadowColor: color,
           shadowOpacity: levelFx.glowAlpha,
           shadowRadius: levelFx.glowBlur * 0.35,
           shadowOffset: { width: 0, height: 4 },
         }}
       >
-        <AlfredAvatar
+        <ButlerSvg
           size={scaledSize}
           color={color}
+          level={level}
           state={state}
-          accessibilityLabel={accessibilityLabel}
         />
-      </View>
+      </Animated.View>
 
       <Text style={styles.srOnly}>{form.name}</Text>
     </View>
@@ -110,7 +135,12 @@ export function CompanionAvatar({
 /** Brief thinking mood on center-tab tap before navigation (T-AV1). */
 export const COMPANION_HOME_TAP_THINKING_MS = 320;
 
-/** Center-tab Alfred — AlfredAvatar with tap flash + occupied dimming. */
+/** Robot bust for the tab bar — active face when occupied (Inbox / You).
+ *
+ * Tap flashes the thinking mood (~320ms) so Alfred visibly "listens" before
+ * Capture opens (design: docs/designs/2026-07-02-avatar-interaction-space.md,
+ * T-AV1). Local tap state only — not the shared provider mood, which stays
+ * reserved for real backend status (Ask in flight, approval outcomes). */
 export function CompanionAvatarHome({
   size = 54,
   color = colors.accent,
@@ -123,6 +153,8 @@ export function CompanionAvatarHome({
 }: Pick<CompanionAvatarProps, "size" | "color" | "state"> & {
   occupied?: boolean;
   onPress?: () => void;
+  /** Pass the caller's localized string (e.g. t.a11y.captureHome) — this default
+   * is English-only and exists so callers that don't localize still get a label. */
   accessibilityLabel?: string;
 }) {
   const [tapFlash, setTapFlash] = useState(false);
@@ -161,12 +193,11 @@ export function CompanionAvatarHome({
     <Animated.View
       style={[styles.homeSlot, { transform: [{ scale: bounce }] }]}
     >
-      <AlfredAvatar
+      <CloudHomeSvg
         size={size}
         color={color}
-        state={displayState}
         occupied={displayOccupied}
-        accessibilityLabel={accessibilityLabel}
+        state={displayState}
       />
     </Animated.View>
   );
@@ -174,13 +205,7 @@ export function CompanionAvatarHome({
   if (!onPress) {
     return (
       <View style={styles.homeSlot} accessibilityLabel={accessibilityLabel}>
-        <AlfredAvatar
-          size={size}
-          color={color}
-          occupied={occupied}
-          state={state}
-          accessibilityLabel={accessibilityLabel}
-        />
+        <CloudHomeSvg size={size} color={color} occupied={occupied} state={state} />
       </View>
     );
   }

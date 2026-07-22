@@ -1,28 +1,20 @@
 // The tab container, built from plain primitives. No native navigator.
 //
-// Custom bottom bar: Today · Inbox · (center avatar → Alfred hub) · Chats · You.
-// Tab glyphs are small illustrated PNGs (not flat line icons).
-// MailboxProvider + WorkflowProvider wire Inbox → Chat with live Gmail data.
+// Edge-to-edge bottom nav (alfred-ui-system `.bottom-nav`):
+// Home · Inbox · (elevated tuxedo mascot → Alfred hub) · Chats (WeChat paste) · You.
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  Image,
-  type ImageSourcePropType,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as Notifications from "expo-notifications";
 
-import AlfredAvatar from "@/components/AlfredAvatar";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
+import { Ic } from "@/components/icons";
 import { ShellProvider } from "@/components/Shell";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
 import { MailboxProvider } from "@/context/MailboxContext";
 import {
   WorkflowProvider,
-  useWorkflow,
   type TabKey,
 } from "@/context/WorkflowContext";
 import {
@@ -34,17 +26,8 @@ import { ChatsScreen } from "@/screens/ChatsScreen";
 import { HomeScreen } from "@/screens/HomeScreen";
 import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
-import { colors, fonts, layout } from "@/theme/theme";
+import { colors, fonts } from "@/theme/theme";
 
-const TAB_IMAGES = {
-  today: require("../../assets/tabs/home.png") as ImageSourcePropType,
-  inbox: require("../../assets/tabs/inbox.png") as ImageSourcePropType,
-  ask: require("../../assets/tabs/chats.png") as ImageSourcePropType,
-  settings: require("../../assets/tabs/you.png") as ImageSourcePropType,
-} as const;
-
-// CompanionAvatarProvider now lives in the root layout (app/_layout.tsx), not
-// here — see T4 in docs/designs/2026-07-02-avatar-interaction-space.md.
 export default function TabsHome() {
   return (
     <LocaleProvider>
@@ -73,16 +56,14 @@ function TabsChrome({
   tab: TabKey;
   setTab: (t: TabKey) => void;
 }) {
-  const { meta, state, setPlacement } = useCompanionAvatar();
+  const { setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
-  const { openFreeChat } = useWorkflow();
-  // Alfred hub + Inbox/You: companion is "at home" on the center button.
   const atHome = tab === "inbox" || tab === "settings" || tab === "alfred";
 
   useEffect(() => {
     if (tab === "today") setPlacement("today");
     else if (tab === "ask") setPlacement("ask");
-    else setPlacement("home"); // alfred, inbox, settings
+    else setPlacement("home");
   }, [tab, setPlacement]);
 
   useEffect(() => {
@@ -124,24 +105,23 @@ function TabsChrome({
           {tab === "settings" ? <SettingsScreen /> : null}
         </View>
 
-        <View style={styles.bar}>
+        <View style={styles.bar} pointerEvents="box-none">
           <Tab
             label={t.tabs.today}
             active={tab === "today"}
             onPress={() => setTab("today")}
-            source={TAB_IMAGES.today}
+            icon={Ic.Calendar}
           />
           <Tab
             label={t.tabs.inbox}
             active={tab === "inbox"}
             onPress={() => setTab("inbox")}
-            source={TAB_IMAGES.inbox}
+            icon={Ic.Inbox}
           />
           <View style={styles.capture}>
-            <AlfredAvatar
-              size={52}
-              color={meta.color}
-              state={state}
+            <AlfredMiniAvatar
+              size={70}
+              compact
               occupied={atHome}
               onPress={() => setTab("alfred")}
               accessibilityLabel={
@@ -152,14 +132,14 @@ function TabsChrome({
           <Tab
             label={t.tabs.ask}
             active={tab === "ask"}
-            onPress={() => openFreeChat()}
-            source={TAB_IMAGES.ask}
+            onPress={() => setTab("ask")}
+            icon={Ic.Chat}
           />
           <Tab
             label={t.tabs.you}
             active={tab === "settings"}
             onPress={() => setTab("settings")}
-            source={TAB_IMAGES.settings}
+            icon={Ic.User}
           />
         </View>
       </View>
@@ -171,30 +151,20 @@ function Tab({
   label,
   active,
   onPress,
-  source,
+  icon: Icon,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
-  source: ImageSourcePropType;
+  icon: ComponentType<{ size?: number; color?: string; stroke?: number }>;
 }) {
-  const color = active ? colors.accent : colors.ink4;
+  const color = active ? colors.accent : "#8D8B85";
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.tab,
-        active && styles.tabActive,
-        pressed && styles.tabPressed,
-      ]}
+      style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
       onPress={onPress}
     >
-      <View style={[styles.glyphWell, active && styles.glyphWellActive]}>
-        <Image
-          source={source}
-          style={[styles.glyph, active && styles.glyphActive]}
-          resizeMode="contain"
-        />
-      </View>
+      <Icon size={21} color={color} stroke={2} />
       <Text style={[styles.label, { color }]}>{label}</Text>
     </Pressable>
   );
@@ -204,65 +174,42 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.washBottom },
   content: { flex: 1 },
   bar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 76,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.hair,
-    backgroundColor: colors.washBottom,
-    paddingBottom: layout.padX + 4,
-    paddingTop: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 18,
+    paddingBottom: 8,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(150,140,120,0.14)",
+    backgroundColor: "rgba(250,247,241,0.96)",
   },
   tab: {
+    flex: 1,
     alignItems: "center",
-    gap: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  tabActive: {
-    transform: [{ translateY: -1 }],
+    justifyContent: "center",
+    gap: 4,
+    height: 56,
   },
   tabPressed: {
-    opacity: 0.88,
+    opacity: 0.9,
     transform: [{ scale: 0.96 }],
   },
-  glyphWell: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  glyphWellActive: {
-    backgroundColor: colors.accentSoft,
-    shadowColor: "#141316",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  glyph: {
-    width: 24,
-    height: 24,
-    opacity: 0.72,
-  },
-  glyphActive: {
-    width: 26,
-    height: 26,
-    opacity: 1,
-  },
   label: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansMedium,
     fontSize: 9,
-    letterSpacing: 0.9,
-    textTransform: "uppercase",
+    letterSpacing: 0.1,
   },
   capture: {
-    width: 58,
-    height: 54,
-    marginTop: -10,
+    width: 70,
+    height: 70,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: -34,
   },
 });

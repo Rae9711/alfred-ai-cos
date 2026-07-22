@@ -185,6 +185,13 @@ export const Ic = {
       <Polyline points="22 2 15 22 11 13 2 9 22 2" />
     </Line24>
   ),
+  Sparkles: (p: IconProps) => (
+    <Line24 {...p}>
+      <Path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+      <Path d="m6.5 6.5 2 2M15.5 15.5l2 2M17.5 6.5l-2 2M8.5 15.5l-2 2" />
+      <Path d="M12 8.2 13.2 11 16 12.2 13.2 13.4 12 16.2 10.8 13.4 8 12.2 10.8 11Z" />
+    </Line24>
+  ),
   Lock: (p: IconProps) => (
     <Line24 {...p}>
       <Rect x={5} y={11} width={14} height={10} rx={2} />
@@ -224,6 +231,22 @@ export const Ic = {
       <Polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <Path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </Line24>
+  ),
+  /** Lucide MessageCircle — chats tab. */
+  Chat: (p: IconProps) => (
+    <Line24 {...p}>
+      <Path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    </Line24>
+  ),
+  ChatFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    </Fill24>
+  ),
+  InboxFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M2 12h6l2 3h4l2-3h6v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6Zm3.45-6.89L2 12h6l2 3h4l2-3h6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+    </Fill24>
   ),
   /** Filled calendar — soft mass for schedule / suggestion wells. */
   CalendarFill: (p: IconProps) => (

@@ -1,6 +1,7 @@
 // Cross-tab workflow: Inbox → Chats (task thread) with real drafts + send.
-// Alfred hub is the assistant tab; Chats empty path is paste-import.
-// Task threads still load LLM drafts from the API.
+// Center Alfred hub = free chat / schedule / SMS / reminder / capture.
+// Chats tab ("ask") = WeChat paste-import (ImportConversationScreen) when idle;
+// Inbox reply/delegate still mounts AskScreen while `thread` is set.
 
 import {
   createContext,
@@ -69,13 +70,14 @@ type WorkflowApi = {
   openConfirmReply: (messageId: string, draftBody: string) => void;
   openChatFromHome: () => void;
   /**
-   * Opens the Chats tab (formerly Ask free chat).
-   * Optional message is consumed once Chats/Ask thread UI mounts.
-   * SMS compose from Home should use `openAlfred` instead (redirects-i18n).
+   * Opens the Chats tab as the WeChat paste workstation (clears any inbox thread).
+   * Tab-bar taps should use `setTab("ask")` instead so an open Inbox reply is preserved.
+   * If `initialMessage` is set, routes to Alfred hub free chat (not paste import).
    */
   openFreeChat: (initialMessage?: string) => void;
-  /** Opens the Alfred hub tab (schedule / SMS / reminder / capture). */
+  /** Opens the Alfred hub tab (free chat / schedule / SMS / reminder / capture). */
   openAlfred: (opts?: AlfredLaunchOpts) => void;
+  /** @deprecated Prefer Alfred launch opts; free-chat seeds now go through `openAlfred`. */
   consumePendingFreeChatMessage: () => string | null;
   completeChat: () => void;
   cancelChat: () => void;
@@ -307,17 +309,6 @@ export function WorkflowProvider({
     setTab("ask");
   }, [setTab, locale]);
 
-  const openFreeChat = useCallback(
-    (initialMessage?: string) => {
-      setThread(null);
-      if (initialMessage?.trim()) {
-        setPendingFreeChatMessage(initialMessage.trim());
-      }
-      setTab("ask");
-    },
-    [setTab],
-  );
-
   const openAlfred = useCallback(
     (opts?: AlfredLaunchOpts) => {
       if (opts && (opts.capture || opts.text || opts.mode || opts.seed)) {
@@ -326,6 +317,20 @@ export function WorkflowProvider({
       setTab("alfred");
     },
     [setTab],
+  );
+
+  const openFreeChat = useCallback(
+    (initialMessage?: string) => {
+      // Named historically; free chat lives on Alfred. Plain call → paste Chats.
+      if (initialMessage?.trim()) {
+        openAlfred({ text: initialMessage.trim() });
+        return;
+      }
+      setThread(null);
+      setPendingFreeChatMessage(null);
+      setTab("ask");
+    },
+    [setTab, openAlfred],
   );
 
   const consumePendingFreeChatMessage = useCallback(() => {

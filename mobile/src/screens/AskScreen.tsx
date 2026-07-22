@@ -23,6 +23,7 @@ import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
 import { type ChatMessage } from "@/data/demo";
 import { Ic } from "@/components/icons";
+import { ScreenWash } from "@/components/ScreenWash";
 import { useShell } from "@/components/Shell";
 import { ApprovalSheet } from "@/screens/sheets/ApprovalSheet";
 import { EmailComposeSheet } from "@/screens/sheets/EmailComposeSheet";
@@ -790,6 +791,7 @@ export function AskScreen() {
         style={styles.screen}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <ScreenWash />
         <View style={styles.taskHeader}>
           <Pressable
             onPress={handleCancel}
@@ -918,6 +920,7 @@ export function AskScreen() {
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <ScreenWash />
       <View style={styles.header}>
         <Serif size={30} style={styles.title}>
           {t.ask.freeTitlePlain} <SerifEm>{t.ask.freeTitleEm}</SerifEm>
@@ -1123,7 +1126,7 @@ function FreeBubble({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: { flex: 1, backgroundColor: colors.washBottom },
   header: { paddingHorizontal: layout.padX, paddingTop: layout.topPad, gap: 6 },
   title: { marginTop: 2 },
   taskHeader: {

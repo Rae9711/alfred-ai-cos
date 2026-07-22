@@ -40,14 +40,13 @@ export function Serif({
   style?: StyleProp<TextStyle>;
 }) {
   const family = italic
-    ? fonts.serifItalic
+    ? fonts.brandItalic
     : display
       ? fonts.serifDisplay
       : fonts.serif;
-  // Display: slightly tighter tracking + denser leading for "inked" feel.
-  // Body serif: milder negative tracking so it stays readable at smaller sizes.
-  const tracking = display ? -0.028 * size : -0.012 * size;
-  const leading = display ? size * 1.08 : size * 1.2;
+  // Display: Songti tracking + denser leading. Body serif: milder.
+  const tracking = display ? -0.045 * size : -0.012 * size;
+  const leading = display ? size * 1.15 : size * 1.2;
   return (
     <Text
       style={[
@@ -56,6 +55,7 @@ export function Serif({
           fontSize: size,
           lineHeight: leading,
           letterSpacing: tracking,
+          fontStyle: italic ? "italic" : "normal",
           color,
         },
         style,
@@ -66,12 +66,15 @@ export function Serif({
   );
 }
 
-// Inline italic accent span inside a serif title ("Good morning, <em>Maya</em>.").
+// Brand italic name span ("晚上好，<em>Rae</em>") — Georgia + blue-700.
 export function SerifEm({ children }: { children: ReactNode }) {
   return (
     <Text
       style={{
-        fontFamily: fonts.serifItalic,
+        fontFamily: fonts.brandItalic,
+        fontStyle: "italic",
+        fontWeight: "500",
+        letterSpacing: -0.4,
         color: colors.accentInk,
       }}
     >
@@ -359,7 +362,7 @@ export function IconBtn({
   );
 }
 
-/** Soft circular well for content glyphs — tonal depth without neon glow. */
+/** Soft embossed well for glyphs — highlight rim + cool shadow (立体, not flat). */
 export function IconWell({
   children,
   size = 32,
@@ -378,7 +381,7 @@ export function IconWell({
         {
           width: size,
           height: size,
-          borderRadius: size / 2,
+          borderRadius: Math.max(10, size * 0.32),
         },
         tone === "accent" && styles.iconWellAccent,
         tone === "warn" && styles.iconWellWarn,
@@ -659,21 +662,27 @@ const styles = StyleSheet.create({
   iconWell: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.paper2,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.7)",
-    shadowColor: "#141316",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    backgroundColor: colors.accentWell,
+    borderWidth: 1,
+    borderTopColor: colors.hairLight,
+    borderLeftColor: "rgba(255,255,255,0.92)",
+    borderRightColor: "rgba(74,88,117,0.09)",
+    borderBottomColor: "rgba(130,120,100,0.14)",
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   iconWellAccent: {
-    backgroundColor: colors.accentSoft,
-    borderColor: "rgba(255,255,255,0.55)",
+    backgroundColor: colors.accentWell,
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 3 },
   },
   iconWellWarn: {
     backgroundColor: colors.warnSoft,
-    borderColor: "rgba(255,255,255,0.55)",
+    shadowColor: "#6B3A2A",
   },
 
   check: {
