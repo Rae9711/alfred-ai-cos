@@ -1,8 +1,6 @@
-// Settings (You) — pixel-matched to the prototype's ScreenSettings. Eyebrow "You",
-// serif name, this-week stats, Integrations, Preferences, the L0–L4 approval ladder,
-// Memory, Account. Real wiring: name/email from getMe, quiet hours, push, disconnect
-// Google, sign out, delete account. Stats/memory are display-only until the backend
-// exposes them (shown from getMe.preferences where available, else sensible defaults).
+// Settings (You) — cream alfred-ui-system chrome. Sections: Personal info,
+// Subscription, Preferences, Integrations. Real wiring: name/email from getMe,
+// quiet hours, push, disconnect Google, sign out, delete account.
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -525,10 +523,10 @@ export function SettingsScreen() {
       <View style={styles.shortcutGrid}>
         {(
           [
-            { icon: Ic.User, label: s.you },
-            { icon: Ic.Sliders, label: s.language },
-            { icon: Ic.Bell, label: s.notificationsTitle ?? "Notifications" },
-            { icon: Ic.Shield, label: "安全中心" },
+            { icon: Ic.User, label: s.personalInfo },
+            { icon: Ic.Sliders, label: s.preferences },
+            { icon: Ic.Bell, label: s.integrations },
+            { icon: Ic.Shield, label: s.securityCenter },
           ] as const
         ).map((item) => (
           <View key={item.label} style={styles.shortcutCard}>
@@ -567,22 +565,52 @@ export function SettingsScreen() {
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
 
-      <SectionTitle label={s.language} />
+      {/* 1. Personal info — account + approvals */}
+      <SectionTitle label={s.personalInfo} />
+      <Meta style={styles.langHint}>{s.account}</Meta>
       <View style={styles.group}>
-        <LanguageRow
-          label={s.english}
-          selected={locale === "en"}
-          onPress={() => setLocale("en")}
+        <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
+        <Row label="Sign out" detail="" onPress={() => void signOut()} />
+        <Row
+          label="Delete account"
+          detail=""
+          warn
+          isLast
+          onPress={deleteAccount}
         />
-        <LanguageRow
-          label={s.chinese}
-          selected={locale === "zh"}
-          onPress={() => setLocale("zh")}
+      </View>
+
+      <SectionTitle label={s.approvalsTitle} />
+      <View style={styles.group}>
+        <ApprovalRow
+          level="L0 — Read"
+          desc="Summarize, classify, extract"
+          req="auto"
+        />
+        <ApprovalRow
+          level="L1 — Internal drafts"
+          desc="Create drafts, propose tasks"
+          req="auto"
+        />
+        <ApprovalRow
+          level="L2 — Internal writes"
+          desc="Create task, add calendar event"
+          req="optional"
+        />
+        <ApprovalRow
+          level="L3 — Send & invite"
+          desc="Email someone, message, schedule"
+          req="required"
+        />
+        <ApprovalRow
+          level="L4 — Money & legal"
+          desc="Purchase, payment, signed doc"
+          req="strong"
           isLast
         />
       </View>
-      <Meta style={styles.langHint}>{s.languageDetail}</Meta>
 
+      {/* 2. Subscription */}
       <SectionTitle label={s.subscriptionTitle} />
       <View style={styles.smsCard}>
         <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
@@ -647,137 +675,50 @@ export function SettingsScreen() {
         </View>
       </View>
 
-      <SectionTitle label={s.smsTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{smsHint}</Text>
-        <View style={styles.smsActions}>
-          {Platform.OS === "ios" ? (
-            <Btn
-              label={s.smsInstallShortcut}
-              kind="accent"
-              tiny
-              onPress={() => void installSmsShortcut()}
-            />
-          ) : null}
-          {smsToken ? (
-            <Btn
-              label={s.smsCopyToken}
-              kind={Platform.OS === "ios" ? "ghost" : "accent"}
-              tiny
-              onPress={() => void copySmsToken()}
-            />
-          ) : null}
-          <Btn
-            label={s.smsSetupGuide}
-            kind="ghost"
-            tiny
-            onPress={openSmsSetupGuide}
-          />
-        </View>
-        {smsToken ? (
-          <>
-            <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
-            <Text selectable style={styles.smsMono}>
-              {smsToken}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
-        )}
-      </View>
-
-      <SectionTitle label={s.contactsTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{s.contactsHint}</Text>
-        {contactsNativeReady ? (
-          <>
-            <View style={styles.contactsStatusRow}>
-              <View
-                style={[
-                  styles.contactsDot,
-                  contactsStatus === "granted" && styles.contactsDotGranted,
-                  contactsStatus === "denied" && styles.contactsDotDenied,
-                ]}
-              />
-              <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
-            </View>
-            {contactsStatus !== "granted" ? (
-              <View style={styles.smsActions}>
-                <Btn
-                  label={contactsActionLabel}
-                  kind="accent"
-                  tiny
-                  onPress={() => void handleContactsPermission()}
-                />
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
-        )}
-      </View>
-
-      {/* Integrations */}
-      <SectionTitle label="Integrations" />
-      <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
+      {/* 3. Preferences — language, chat history, notification prefs */}
+      <SectionTitle label={s.preferences} />
+      <Meta style={styles.langHint}>{s.language}</Meta>
       <View style={styles.group}>
-        {connectedMailboxes.map((mailbox) => (
-          <Row
-            key={mailbox.id}
-            label={mailbox.email}
-            detail={
-              mailbox.gmail_modify
-                ? "Gmail · synced"
-                : s.reconnectForRead
-            }
-            onPress={() =>
-              mailbox.gmail_modify
-                ? disconnectMailbox(mailbox.id, mailbox.email)
-                : void linkGmail()
-            }
-          />
-        ))}
-        <Integration
-          name={s.addGmail}
-          detail="Link another inbox"
-          onConnect={() => void linkGmail()}
+        <LanguageRow
+          label={s.english}
+          selected={locale === "en"}
+          onPress={() => setLocale("en")}
         />
-        <Integration
-          name="Google Calendar"
-          detail="Primary calendar"
-          connected={connectedMailboxes.length > 0}
-        />
-        <Integration
-          name="Notion"
-          detail="Connect for class notes & projects"
-          onConnect={() => connectIntegration("Notion")}
-        />
-        <Integration
-          name="Todoist"
-          detail="Sync existing tasks"
+        <LanguageRow
+          label={s.chinese}
+          selected={locale === "zh"}
+          onPress={() => setLocale("zh")}
           isLast
-          onConnect={() => connectIntegration("Todoist")}
         />
       </View>
+      <Meta style={styles.langHint}>{s.languageDetail}</Meta>
 
-      <SectionTitle label="键盘" />
-      <Meta style={styles.langHint}>
-        App Group 状态、登录同步、Full Access 说明
-      </Meta>
+      <Meta style={styles.langHint}>{s.askHistoryTitle}</Meta>
       <View style={styles.group}>
         <Row
-          label="键盘诊断"
-          detail="查看共享容器与 token"
+          label={s.askHistoryClear}
+          detail={s.askHistoryDetail}
           isLast
-          onPress={() => router.push("/keyboard-diagnostics" as never)}
+          onPress={() => {
+            Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: s.askHistoryClear,
+                style: "destructive",
+                onPress: () => {
+                  void clearFreeChatHistory().then(() =>
+                    setNote(s.askHistoryCleared),
+                  );
+                },
+              },
+            ]);
+          }}
         />
       </View>
 
-      {/* Notifications */}
-      <SectionTitle label={s.notificationsTitle ?? "Notifications"} />
+      <Meta style={styles.langHint}>{s.notificationsTitle ?? "Notifications"}</Meta>
       <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
       <View style={styles.group}>
-        <Row label={s.enablePush ?? "Enable push"} detail="" onPress={() => void enablePush()} />
         <Row
           label={s.quietHours ?? "Quiet hours"}
           detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
@@ -829,72 +770,138 @@ export function SettingsScreen() {
         </View>
       ) : null}
 
-      {/* Approvals & safety */}
-      <SectionTitle label="Approvals & safety" />
+      {/* 4. Integrations — contacts, SMS, apps, keyboard, push */}
+      <SectionTitle label={s.integrations} />
+
+      <Meta style={styles.langHint}>{s.contactsTitle}</Meta>
+      <View style={styles.smsCard}>
+        <Text style={styles.smsHint}>{s.contactsHint}</Text>
+        {contactsNativeReady ? (
+          <>
+            <View style={styles.contactsStatusRow}>
+              <View
+                style={[
+                  styles.contactsDot,
+                  contactsStatus === "granted" && styles.contactsDotGranted,
+                  contactsStatus === "denied" && styles.contactsDotDenied,
+                ]}
+              />
+              <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
+            </View>
+            {contactsStatus !== "granted" ? (
+              <View style={styles.smsActions}>
+                <Btn
+                  label={contactsActionLabel}
+                  kind="accent"
+                  tiny
+                  onPress={() => void handleContactsPermission()}
+                />
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
+        )}
+      </View>
+
+      <Meta style={styles.langHint}>{s.smsTitle}</Meta>
+      <View style={styles.smsCard}>
+        <Text style={styles.smsHint}>{smsHint}</Text>
+        <View style={styles.smsActions}>
+          {Platform.OS === "ios" ? (
+            <Btn
+              label={s.smsInstallShortcut}
+              kind="accent"
+              tiny
+              onPress={() => void installSmsShortcut()}
+            />
+          ) : null}
+          {smsToken ? (
+            <Btn
+              label={s.smsCopyToken}
+              kind={Platform.OS === "ios" ? "ghost" : "accent"}
+              tiny
+              onPress={() => void copySmsToken()}
+            />
+          ) : null}
+          <Btn
+            label={s.smsSetupGuide}
+            kind="ghost"
+            tiny
+            onPress={openSmsSetupGuide}
+          />
+        </View>
+        {smsToken ? (
+          <>
+            <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
+            <Text selectable style={styles.smsMono}>
+              {smsToken}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
+        )}
+      </View>
+
+      <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
       <View style={styles.group}>
-        <ApprovalRow
-          level="L0 — Read"
-          desc="Summarize, classify, extract"
-          req="auto"
+        {connectedMailboxes.map((mailbox) => (
+          <Row
+            key={mailbox.id}
+            label={mailbox.email}
+            detail={
+              mailbox.gmail_modify
+                ? "Gmail · synced"
+                : s.reconnectForRead
+            }
+            onPress={() =>
+              mailbox.gmail_modify
+                ? disconnectMailbox(mailbox.id, mailbox.email)
+                : void linkGmail()
+            }
+          />
+        ))}
+        <Integration
+          name={s.addGmail}
+          detail="Link another inbox"
+          onConnect={() => void linkGmail()}
         />
-        <ApprovalRow
-          level="L1 — Internal drafts"
-          desc="Create drafts, propose tasks"
-          req="auto"
+        <Integration
+          name="Google Calendar"
+          detail="Primary calendar"
+          connected={connectedMailboxes.length > 0}
         />
-        <ApprovalRow
-          level="L2 — Internal writes"
-          desc="Create task, add calendar event"
-          req="optional"
+        <Integration
+          name="Notion"
+          detail="Connect for class notes & projects"
+          onConnect={() => connectIntegration("Notion")}
         />
-        <ApprovalRow
-          level="L3 — Send & invite"
-          desc="Email someone, message, schedule"
-          req="required"
-        />
-        <ApprovalRow
-          level="L4 — Money & legal"
-          desc="Purchase, payment, signed doc"
-          req="strong"
+        <Integration
+          name="Todoist"
+          detail="Sync existing tasks"
           isLast
+          onConnect={() => connectIntegration("Todoist")}
         />
       </View>
 
-      {/* Alfred free-chat history (device-local) */}
-      <SectionTitle label={s.askHistoryTitle} />
+      <Meta style={styles.langHint}>{s.keyboardTitle}</Meta>
+      <Meta style={styles.langHint}>{s.keyboardDetail}</Meta>
       <View style={styles.group}>
         <Row
-          label={s.askHistoryClear}
-          detail={s.askHistoryDetail}
+          label={s.keyboardDiagnostics}
+          detail={s.keyboardDiagnosticsDetail}
           isLast
-          onPress={() => {
-            Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: s.askHistoryClear,
-                style: "destructive",
-                onPress: () => {
-                  void clearFreeChatHistory().then(() =>
-                    setNote(s.askHistoryCleared),
-                  );
-                },
-              },
-            ]);
-          }}
+          onPress={() => router.push("/keyboard-diagnostics" as never)}
         />
       </View>
 
-      {/* Account */}
-      <SectionTitle label="Account" />
+      <Meta style={styles.langHint}>{s.notificationsTitle ?? "Notifications"}</Meta>
       <View style={styles.group}>
-        <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
-        <Row label="Sign out" detail="" onPress={() => void signOut()} />
         <Row
-          label="Delete account"
+          label={s.enablePush ?? "Enable push"}
           detail=""
-          warn
           isLast
-          onPress={deleteAccount}
+          onPress={() => void enablePush()}
         />
       </View>
 
