@@ -10,20 +10,28 @@ public class AlfredSharedStorageModule: Module {
   private let keyboardLastSeenKey = "alfred.keyboard_last_seen"
   private let pendingHandoffKey = "alfred.pending_conversation_handoff"
 
-  /// `nil` when App Group suite cannot be opened — never fall back to `.standard`.
+  /// Real App Group probe — `UserDefaults(suiteName:)` is almost never nil even
+  /// without the entitlement (it creates a process-local store), so diagnostics
+  /// must use the shared container URL.
+  private var containerURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+  }
+
   private var sharedDefaults: UserDefaults? {
-    UserDefaults(suiteName: suiteName)
+    guard containerURL != nil else { return nil }
+    return UserDefaults(suiteName: suiteName)
   }
 
   public func definition() -> ModuleDefinition {
     Name("AlfredSharedStorage")
 
     AsyncFunction("isAppGroupAvailable") { () -> Bool in
-      self.sharedDefaults != nil
+      self.containerURL != nil
     }
 
-    AsyncFunction("setAuthToken") { (token: String?) in
-      guard let defaults = self.sharedDefaults else { return }
+    /// Returns true when the write landed in the real shared container.
+    AsyncFunction("setAuthToken") { (token: String?) -> Bool in
+      guard let defaults = self.sharedDefaults else { return false }
       if let token, !token.isEmpty {
         defaults.set(token, forKey: self.authTokenKey)
         defaults.set(
@@ -34,6 +42,8 @@ public class AlfredSharedStorageModule: Module {
         defaults.removeObject(forKey: self.authTokenKey)
         defaults.removeObject(forKey: self.authTokenUpdatedAtKey)
       }
+      defaults.synchronize()
+      return true
     }
 
     AsyncFunction("getAuthToken") { () -> String? in
@@ -48,14 +58,18 @@ public class AlfredSharedStorageModule: Module {
       self.sharedDefaults?.string(forKey: self.keyboardLastSeenKey)
     }
 
-    AsyncFunction("setApiBaseUrl") { (url: String) in
-      self.sharedDefaults?.set(url, forKey: self.apiBaseURLKey)
+    AsyncFunction("setApiBaseUrl") { (url: String) -> Bool in
+      guard let defaults = self.sharedDefaults else { return false }
+      defaults.set(url, forKey: self.apiBaseURLKey)
+      defaults.synchronize()
+      return true
     }
 
     AsyncFunction("drainConfirmedActions") { () -> [[String: Any]] in
       guard let defaults = self.sharedDefaults else { return [] }
       let list = defaults.array(forKey: self.pendingActionsKey) as? [[String: Any]] ?? []
       defaults.removeObject(forKey: self.pendingActionsKey)
+      defaults.synchronize()
       return list
     }
 
@@ -63,6 +77,7 @@ public class AlfredSharedStorageModule: Module {
       guard let defaults = self.sharedDefaults else { return nil }
       let value = defaults.dictionary(forKey: self.pendingHandoffKey)
       defaults.removeObject(forKey: self.pendingHandoffKey)
+      defaults.synchronize()
       return value
     }
 

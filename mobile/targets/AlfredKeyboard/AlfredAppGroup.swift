@@ -1,7 +1,11 @@
 import Foundation
 
-/// Shared App Group helpers used by the main app and the Alfred Keyboard extension.
+/// Shared App Group helpers used by the Alfred Keyboard extension.
 /// Never silently fall back to `.standard` — suite failure must be detectable.
+///
+/// Important: `UserDefaults(suiteName:)` is almost never `nil` even without the
+/// App Group entitlement (it creates a process-local store). Availability must
+/// be checked via `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)`.
 enum AlfredAppGroup {
     static let suiteName = "group.com.haoruiwang.alfred"
     static let authTokenKey = "alfred.session_token"
@@ -12,17 +16,24 @@ enum AlfredAppGroup {
     static let pendingHandoffKey = "alfred.pending_conversation_handoff"
     static let defaultAPIBaseURL = "https://alfredaitech.com"
 
-    /// `nil` when the App Group suite cannot be opened (entitlements / provisioning).
+    static var containerURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName)
+    }
+
+    /// `nil` when the App Group container cannot be opened (entitlements / provisioning).
     static var sharedDefaults: UserDefaults? {
-        UserDefaults(suiteName: suiteName)
+        guard containerURL != nil else { return nil }
+        return UserDefaults(suiteName: suiteName)
     }
 
     static var isAvailable: Bool {
-        sharedDefaults != nil
+        containerURL != nil
     }
 
     static func markKeyboardSeen() {
-        sharedDefaults?.set(ISO8601DateFormatter().string(from: Date()), forKey: keyboardLastSeenKey)
+        guard let defaults = sharedDefaults else { return }
+        defaults.set(ISO8601DateFormatter().string(from: Date()), forKey: keyboardLastSeenKey)
+        defaults.synchronize()
     }
 
     static func setAuthToken(_ token: String?) {
@@ -34,6 +45,7 @@ enum AlfredAppGroup {
             defaults.removeObject(forKey: authTokenKey)
             defaults.removeObject(forKey: authTokenUpdatedAtKey)
         }
+        defaults.synchronize()
     }
 
     static func authToken() -> String? {
@@ -45,7 +57,9 @@ enum AlfredAppGroup {
     }
 
     static func setAPIBaseURL(_ url: String) {
-        sharedDefaults?.set(url, forKey: apiBaseURLKey)
+        guard let defaults = sharedDefaults else { return }
+        defaults.set(url, forKey: apiBaseURLKey)
+        defaults.synchronize()
     }
 
     static func apiBaseURL() -> String {
@@ -58,12 +72,14 @@ enum AlfredAppGroup {
         var list = defaults.array(forKey: pendingActionsKey) as? [[String: Any]] ?? []
         list.append(json)
         defaults.set(list, forKey: pendingActionsKey)
+        defaults.synchronize()
     }
 
     static func drainConfirmedActions() -> [[String: Any]] {
         guard let defaults = sharedDefaults else { return [] }
         let list = defaults.array(forKey: pendingActionsKey) as? [[String: Any]] ?? []
         defaults.removeObject(forKey: pendingActionsKey)
+        defaults.synchronize()
         return list
     }
 
@@ -75,12 +91,14 @@ enum AlfredAppGroup {
         } else {
             defaults.removeObject(forKey: pendingHandoffKey)
         }
+        defaults.synchronize()
     }
 
     static func takePendingHandoff() -> [String: Any]? {
         guard let defaults = sharedDefaults else { return nil }
         let value = defaults.dictionary(forKey: pendingHandoffKey)
         defaults.removeObject(forKey: pendingHandoffKey)
+        defaults.synchronize()
         return value
     }
 }

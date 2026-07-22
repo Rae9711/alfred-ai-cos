@@ -5,6 +5,7 @@ import { AppState, type AppStateStatus, Platform } from "react-native";
 import Constants from "expo-constants";
 
 import {
+  AppGroupSyncError,
   drainKeyboardConfirmedActions,
   setSharedApiBaseUrl,
   setSharedAuthToken,
@@ -12,17 +13,32 @@ import {
 } from "alfred-shared-storage";
 import { scheduleLocalTaskReminder } from "./taskReminders";
 
+export type SyncAuthResult = { ok: boolean; error?: string };
+
 /**
  * Sync the session token + API base URL into the App Group so the keyboard
  * extension can call Alfred's backend (requires Full Access).
+ * Soft-fails with `{ ok: false }` so login / cold-start never crash when the
+ * native bridge is missing (old IPA) or App Group is mis-provisioned.
  */
-export async function syncAuthToAppGroup(token: string | null): Promise<void> {
-  if (Platform.OS !== "ios") return;
+export async function syncAuthToAppGroup(token: string | null): Promise<SyncAuthResult> {
+  if (Platform.OS !== "ios") return { ok: true };
   const base =
     (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
     "https://alfredaitech.com";
-  await setSharedApiBaseUrl(base);
-  await setSharedAuthToken(token);
+  try {
+    await setSharedApiBaseUrl(base);
+    await setSharedAuthToken(token);
+    return { ok: true };
+  } catch (e) {
+    const message =
+      e instanceof AppGroupSyncError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "同步失败";
+    return { ok: false, error: message };
+  }
 }
 
 /**

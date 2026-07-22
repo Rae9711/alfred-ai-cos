@@ -199,6 +199,9 @@ final class KeyboardViewController: UIInputViewController {
             label.textAlignment = .center
             contentStack.addArrangedSubview(label)
             contentStack.addArrangedSubview(makePrimaryButton("打开 Alfred", action: #selector(openAppHome)))
+            if let banner = statusBanner {
+                contentStack.addArrangedSubview(makeLabel(banner, size: 12, color: .secondaryLabel))
+            }
             return
         }
 
@@ -775,18 +778,49 @@ final class KeyboardViewController: UIInputViewController {
         ]
     }
 
+    /// Open the main Alfred app via custom scheme `albert://…`.
+    ///
+    /// Host apps (especially WeChat) often block `extensionContext.open` and the
+    /// responder-chain `openURL:` from keyboard extensions. Always copy the link
+    /// as a fallback and surface a banner so the user can open Alfred manually.
     private func openContainingApp(urlString: String) {
         guard let url = URL(string: urlString) else { return }
+
+        // Clipboard fallback — works even when the host blocks openURL.
+        if hasFullAccess {
+            UIPasteboard.general.string = urlString
+        }
+
+        var openedViaResponder = false
         var responder: UIResponder? = self
         let selector = sel_registerName("openURL:")
         while let r = responder {
             if r.responds(to: selector) {
                 r.perform(selector, with: url)
-                return
+                openedViaResponder = true
+                break
             }
             responder = r.next
         }
-        extensionContext?.open(url, completionHandler: nil)
+
+        if !openedViaResponder {
+            extensionContext?.open(url) { [weak self] success in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    if success {
+                        self.statusBanner = nil
+                    } else {
+                        self.statusBanner = "已复制链接，请打开 Alfred"
+                        self.render()
+                    }
+                }
+            }
+        } else {
+            // Responder openURL gives no completion — assume host may still block
+            // (WeChat). Show copy hint so the tap is never a silent no-op.
+            statusBanner = "已复制链接，请打开 Alfred"
+            render()
+        }
     }
 
     @MainActor

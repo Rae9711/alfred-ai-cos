@@ -21,11 +21,11 @@ type PendingHandoff = {
 
 type AlfredSharedStorageNative = {
   isAppGroupAvailable(): Promise<boolean>;
-  setAuthToken(token: string | null): Promise<void>;
+  setAuthToken(token: string | null): Promise<boolean | void>;
   getAuthToken(): Promise<string | null>;
   getAuthTokenUpdatedAt(): Promise<string | null>;
   getKeyboardLastSeen(): Promise<string | null>;
-  setApiBaseUrl(url: string): Promise<void>;
+  setApiBaseUrl(url: string): Promise<boolean | void>;
   drainConfirmedActions(): Promise<ConfirmedAction[]>;
   takePendingHandoff(): Promise<PendingHandoff | null>;
   peekPendingHandoff(): Promise<PendingHandoff | null>;
@@ -44,6 +44,13 @@ function getNative(): AlfredSharedStorageNative | null {
   }
 }
 
+export class AppGroupSyncError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AppGroupSyncError";
+  }
+}
+
 export async function isAppGroupAvailable(): Promise<boolean> {
   const mod = getNative();
   if (!mod?.isAppGroupAvailable) return false;
@@ -56,8 +63,18 @@ export async function isAppGroupAvailable(): Promise<boolean> {
 
 export async function setSharedAuthToken(token: string | null): Promise<void> {
   const mod = getNative();
-  if (!mod) return;
-  await mod.setAuthToken(token);
+  if (!mod) {
+    throw new AppGroupSyncError(
+      "Native module 未链接 — 当前 IPA 无法写入 App Group，需重新构建",
+    );
+  }
+  const ok = await mod.setAuthToken(token);
+  // Older builds returned void; treat undefined as success only if we can read back.
+  if (ok === false) {
+    throw new AppGroupSyncError(
+      "App Group 不可访问 — 检查 entitlements / provisioning（group.com.haoruiwang.alfred）",
+    );
+  }
 }
 
 export async function getSharedAuthToken(): Promise<string | null> {
@@ -88,8 +105,17 @@ export async function getKeyboardLastSeen(): Promise<string | null> {
 
 export async function setSharedApiBaseUrl(url: string): Promise<void> {
   const mod = getNative();
-  if (!mod) return;
-  await mod.setApiBaseUrl(url);
+  if (!mod) {
+    throw new AppGroupSyncError(
+      "Native module 未链接 — 当前 IPA 无法写入 App Group，需重新构建",
+    );
+  }
+  const ok = await mod.setApiBaseUrl(url);
+  if (ok === false) {
+    throw new AppGroupSyncError(
+      "App Group 不可访问 — 检查 entitlements / provisioning（group.com.haoruiwang.alfred）",
+    );
+  }
 }
 
 export async function drainKeyboardConfirmedActions(): Promise<ConfirmedAction[]> {

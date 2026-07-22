@@ -93,26 +93,9 @@ function copyKeyboardSources({ projectRoot, iosRoot, appName }) {
     keyboardEntitlementsXml(),
   );
 
-  // Shared-storage Swift helper (RN bridge) into the main app target folder.
-  const sharedSrc = path.join(
-    projectRoot,
-    "modules",
-    "alfred-shared-storage",
-    "ios",
-  );
-  if (appName) {
-    const appDir = path.join(iosRoot, appName);
-    if (fs.existsSync(sharedSrc) && fs.existsSync(appDir)) {
-      for (const file of fs.readdirSync(sharedSrc)) {
-        if (file.endsWith(".swift") || file.endsWith(".m")) {
-          fs.copyFileSync(
-            path.join(sharedSrc, file),
-            path.join(appDir, file),
-          );
-        }
-      }
-    }
-  }
+  // AlfredSharedStorage is linked via its podspec + expo autolinking — do NOT
+  // copy the Swift sources into the app target (that never added them to
+  // Compile Sources and would duplicate symbols once the pod is linked).
 
   return {
     destDir,

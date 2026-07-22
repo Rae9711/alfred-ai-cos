@@ -69,9 +69,15 @@ You → **键盘诊断** (`/keyboard-diagnostics`) shows real status:
 | Token Updated | timestamp or — |
 | Full Access | Guidance only — main app cannot read FA;「请在系统设置中开启」 |
 
-**同步键盘登录状态** calls `syncAuthToAppGroup` and refreshes the panel.
+**同步键盘登录状态** calls `syncAuthToAppGroup` and refreshes the panel. If the
+native `AlfredSharedStorage` module is missing from the IPA, sync now reports an
+explicit error instead of a fake success.
 
-App Group suite must never silently fall back to `UserDefaults.standard` — suite failure surfaces as「未发现共享容器」in the keyboard.
+App Group suite must never silently fall back to `UserDefaults.standard`. Availability
+is probed via `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` — **not**
+`UserDefaults(suiteName:) != nil` (that API almost never returns nil and can create a
+process-local store, which falsely looks like「可访问 / 已写入」while the keyboard sees
+no token). Suite failure surfaces as「未发现共享容器」in the keyboard.
 
 ## Keyboard error copy
 
@@ -106,8 +112,11 @@ Bottom chrome: 🌐 123 空格 ⌫ blue ↵ (minimal bar styled closer to the mo
 Mascot asset: `targets/AlfredKeyboard/alfred-mascot.png` (copied into the extension
 Resources phase by `keyboard-wiring.cjs`).
 
-**展开** (header chevron when session exists) opens `albert://conversation/{conversationId}`
-(scheme from `app.json`), writing parse/analyze session into App Group handoff so Import can hydrate.
+**展开** (header chevron when session exists) and **打开 Alfred** open
+`albert://…` (scheme from `app.json`). Host apps — especially **WeChat** — often
+block `extensionContext.open` / responder `openURL:` from keyboard extensions.
+The keyboard copies the deep link to the pasteboard and shows「已复制链接，请打开 Alfred」
+as a fallback.
 
 Keyboard Swift / assets / entitlements changes **require a new native IPA** — OTA will not update the extension UI.
 

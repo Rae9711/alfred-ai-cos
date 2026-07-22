@@ -140,8 +140,12 @@ export function KeyboardDiagnosticsScreen() {
     setNote(null);
     try {
       const token = await getToken();
-      await syncAuthToAppGroup(token);
-      setNote(token ? "已同步键盘登录状态" : "已清除 App Group token（未登录）");
+      const result = await syncAuthToAppGroup(token);
+      if (!result.ok) {
+        setNote(result.error ?? "同步失败");
+      } else {
+        setNote(token ? "已同步键盘登录状态" : "已清除 App Group token（未登录）");
+      }
       await refresh();
     } catch (e) {
       setNote(e instanceof Error ? e.message : "同步失败");
@@ -260,7 +264,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.ink3,
   },
-  note: { color: colors.accent, fontSize: 13, marginTop: 8, textAlign: "center" },
+  note: { color: colors.warn, fontSize: 13, marginTop: 8, textAlign: "center" },
   help: {
     marginTop: 24,
     fontSize: 13,
