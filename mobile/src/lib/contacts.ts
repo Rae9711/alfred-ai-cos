@@ -59,7 +59,7 @@ function pickPhone(numbers: Contacts.PhoneNumber[]): string | null {
   return raw.replace(/[^\d+]/g, "") || null;
 }
 
-function pickEmail(addresses: Contacts.EmailAddress[]): string | null {
+function pickEmail(addresses: Contacts.Email[]): string | null {
   const work = addresses.find((n) => n.label?.toLowerCase() === "work");
   const home = addresses.find((n) => n.label?.toLowerCase() === "home");
   const raw = (work ?? home ?? addresses[0])?.email?.trim();
