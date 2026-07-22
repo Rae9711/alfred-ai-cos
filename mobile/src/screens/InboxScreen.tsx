@@ -25,6 +25,7 @@ import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
 import { useSmsShareTip } from "@/hooks/useSmsShareTip";
 import type { AppInboxItem } from "@/lib/inbox";
+import { statusPillFor } from "@/lib/inbox";
 import { MessageLinks } from "@/components/MessageLinks";
 import { MessageDetailSheet } from "@/screens/sheets/MessageDetailSheet";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
@@ -231,26 +232,6 @@ export function InboxScreen() {
           <Serif size={28} display>
             {t.tabs.inbox}
           </Serif>
-          <View style={styles.headerTools}>
-            <Pressable
-              style={surfaces.roundButton}
-              onPress={() => void onPullRefresh()}
-              accessibilityLabel={t.inbox.pullToSync}
-            >
-              <Ic.Search size={18} color="#4B5C7C" stroke={2} />
-            </Pressable>
-            <Pressable
-              style={surfaces.roundButton}
-              onPress={() => {
-                const next =
-                  inboxFilter === "needs_action" ? "all" : "needs_action";
-                onSelectFilter(next);
-              }}
-              accessibilityLabel={t.inbox.filters.needsAction}
-            >
-              <Ic.Sliders size={18} color="#4B5C7C" stroke={2} />
-            </Pressable>
-          </View>
         </View>
 
         {error ? (
@@ -263,11 +244,7 @@ export function InboxScreen() {
           </Pressable>
         ) : null}
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filters}
-        >
+        <View style={styles.filters}>
           {mailboxTabs.map((f) => {
             const active = inboxFilter === f.id;
             return (
@@ -294,7 +271,7 @@ export function InboxScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
 
         {tabLoading ? (
           <View style={styles.tabLoading}>
@@ -324,7 +301,8 @@ export function InboxScreen() {
                 openLink: t.inbox.openLink,
                 needsAction: t.home.statusNeedsAction,
                 done: t.home.statusDone,
-                other: t.inbox.filters.sms,
+                fyi: t.inbox.statusFyi,
+                unread: t.inbox.unreadLabel,
               }}
               onOpen={() =>
                 openMessage(
@@ -379,19 +357,6 @@ export function InboxScreen() {
   );
 }
 
-function statusFor(
-  item: AppInboxItem,
-  labels: { needsAction: string; done: string; other: string },
-): { text: string; done: boolean } {
-  if (item.userDecided || item.userReplied) {
-    return { text: labels.done, done: true };
-  }
-  if (item.section === "reply" || item.section === "decision" || item.isUnread) {
-    return { text: labels.needsAction, done: false };
-  }
-  return { text: labels.other, done: false };
-}
-
 function InboxCard({
   item,
   mailboxLabel,
@@ -417,7 +382,8 @@ function InboxCard({
     openLink: string;
     needsAction: string;
     done: string;
-    other: string;
+    fyi: string;
+    unread: string;
   };
   onOpen: () => void;
   onQuickReply: () => void;
@@ -427,7 +393,12 @@ function InboxCard({
   onDismiss: () => void;
   onUnprocess?: () => void;
 }) {
-  const status = statusFor(item, labels);
+  const status = statusPillFor(item, {
+    needsAction: labels.needsAction,
+    done: labels.done,
+    fyi: labels.fyi,
+    unread: labels.unread,
+  });
   const tone =
     item.section === "reply"
       ? ("purple" as const)
@@ -470,6 +441,8 @@ function InboxCard({
           style={[
             surfaces.statusPill,
             status.done && surfaces.statusPillDone,
+            status.kind === "fyi" && styles.statusFyiPill,
+            status.kind === "unread" && styles.statusUnreadPill,
             styles.statusChip,
           ]}
         >
@@ -477,6 +450,8 @@ function InboxCard({
             style={[
               surfaces.statusPillText,
               status.done && surfaces.statusPillDoneText,
+              status.kind === "fyi" && styles.statusFyiText,
+              status.kind === "unread" && styles.statusUnreadText,
             ]}
           >
             {status.text}
@@ -578,11 +553,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTools: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
   errorBanner: {
     padding: 12,
     borderRadius: radius.sm,
@@ -596,8 +566,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   filters: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    alignSelf: "stretch",
     gap: 8,
-    paddingRight: 8,
   },
   list: {
     gap: layout.gapCard,
@@ -642,6 +615,19 @@ const styles = StyleSheet.create({
   },
   statusChip: {
     alignSelf: "center",
+    flexShrink: 0,
+  },
+  statusFyiPill: {
+    backgroundColor: "#F0EEE9",
+  },
+  statusFyiText: {
+    color: "#5F6470",
+  },
+  statusUnreadPill: {
+    backgroundColor: "#F3EFFF",
+  },
+  statusUnreadText: {
+    color: "#5D55D8",
   },
   quickActions: {
     flexDirection: "row",

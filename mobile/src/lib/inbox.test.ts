@@ -1,10 +1,106 @@
 import { describe, expect, it } from "vitest";
 
-import { mapInboxMessage, parseSenderDisplay, scopeToTab, tabToScope } from "./inbox";
+import {
+  mapInboxMessage,
+  parseSenderDisplay,
+  scopeToTab,
+  statusPillFor,
+  tabToScope,
+} from "./inbox";
+
+const statusLabels = {
+  needsAction: "需处理",
+  done: "已处理",
+  fyi: "知晓即可",
+  unread: "未读",
+};
 
 describe("parseSenderDisplay", () => {
   it("extracts name from angle-bracket form", () => {
     expect(parseSenderDisplay('Ray Wang <ruiray@gmail.com>')).toBe("Ray Wang");
+  });
+});
+
+describe("statusPillFor", () => {
+  it("marks decided mail as done", () => {
+    const item = mapInboxMessage({
+      id: "d1",
+      sender: "a@b.com",
+      subject: "Hi",
+      snippet: "snip",
+      take: null,
+      category: "Needs Reply",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: true,
+      user_replied: false,
+      user_decided: true,
+    });
+    expect(statusPillFor(item, statusLabels)).toEqual({
+      text: "已处理",
+      done: true,
+      kind: "done",
+    });
+  });
+
+  it("marks needs-reply as needs action", () => {
+    const item = mapInboxMessage({
+      id: "r1",
+      sender: "a@b.com",
+      subject: "Please reply",
+      snippet: "snip",
+      take: null,
+      category: "Needs Reply",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: true,
+      is_unread: true,
+      user_replied: false,
+    });
+    expect(statusPillFor(item, statusLabels).kind).toBe("needs");
+  });
+
+  it("does not label FYI newsletters as needs action", () => {
+    const item = mapInboxMessage({
+      id: "f1",
+      sender: "Jobright Job Alert",
+      subject: "New jobs for you",
+      snippet: "3 new matches",
+      take: null,
+      category: "FYI",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: false,
+      is_unread: false,
+      user_replied: false,
+    });
+    expect(statusPillFor(item, statusLabels)).toEqual({
+      text: "知晓即可",
+      done: false,
+      kind: "fyi",
+    });
+  });
+
+  it("labels unread non-actionable mail as unread", () => {
+    const item = mapInboxMessage({
+      id: "u1",
+      sender: "American Airlines",
+      subject: "Flash sale",
+      snippet: "Save 20%",
+      take: null,
+      category: "FYI",
+      sent_at: null,
+      mailbox_email: "",
+      action_required: false,
+      is_unread: true,
+      user_replied: false,
+    });
+    expect(statusPillFor(item, statusLabels)).toEqual({
+      text: "未读",
+      done: false,
+      kind: "unread",
+    });
   });
 });
 

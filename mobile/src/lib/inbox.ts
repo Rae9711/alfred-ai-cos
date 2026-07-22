@@ -12,11 +12,57 @@ export type AppInboxItem = {
   tags: { label: string; tone: "warn" | "accent" | "muted" }[];
   section: "reply" | "decision" | "fyi";
   category: InboxMessage["category"];
+  actionRequired: boolean;
   isUnread: boolean;
   userReplied: boolean;
   userDecided: boolean;
   showReplyActions: boolean;
 };
+
+/** Localized labels for the inbox card status pill. */
+export type InboxStatusLabels = {
+  needsAction: string;
+  done: string;
+  fyi: string;
+  unread: string;
+};
+
+/**
+ * Card status pill rules:
+ * decided/replied → Done
+ * needs reply/decision or action_required → Needs action
+ * unread + not actionable → Unread
+ * FYI / Waiting / other informational → FYI
+ */
+export function statusPillFor(
+  item: Pick<
+    AppInboxItem,
+    | "section"
+    | "category"
+    | "actionRequired"
+    | "isUnread"
+    | "userDecided"
+    | "userReplied"
+  >,
+  labels: InboxStatusLabels,
+): { text: string; done: boolean; kind: "needs" | "done" | "fyi" | "unread" } {
+  if (item.userDecided || item.userReplied) {
+    return { text: labels.done, done: true, kind: "done" };
+  }
+  const actionable =
+    item.section === "reply" ||
+    item.section === "decision" ||
+    item.actionRequired ||
+    item.category === "Needs Reply" ||
+    item.category === "Needs Decision";
+  if (actionable) {
+    return { text: labels.needsAction, done: false, kind: "needs" };
+  }
+  if (item.isUnread) {
+    return { text: labels.unread, done: false, kind: "unread" };
+  }
+  return { text: labels.fyi, done: false, kind: "fyi" };
+}
 
 /** Strip `Name <email>` down to a display name. */
 export function parseSenderDisplay(sender: string): string {
@@ -115,6 +161,7 @@ export function mapInboxMessage(message: InboxMessage): AppInboxItem {
     tags,
     section,
     category,
+    actionRequired: Boolean(message.action_required),
     isUnread: message.is_unread ?? true,
     userReplied: message.user_replied ?? false,
     userDecided: message.user_decided ?? false,

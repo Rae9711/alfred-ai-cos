@@ -176,6 +176,7 @@ export const translations = {
       mailboxChip: "Mailbox",
       alfredTake: "Alfred's read",
       openLink: "Open link",
+      statusFyi: "FYI",
     },
     ask: {
       alfred: "Alfred",
@@ -689,6 +690,7 @@ export const translations = {
       mailboxChip: "邮箱",
       alfredTake: "管家摘要",
       openLink: "打开链接",
+      statusFyi: "知晓即可",
     },
     ask: {
       alfred: "管家",

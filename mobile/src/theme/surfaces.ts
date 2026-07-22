@@ -98,6 +98,8 @@ export const surfaces = StyleSheet.create({
     elevation: 3,
   },
   filterChip: {
+    alignSelf: "flex-start",
+    flexGrow: 0,
     borderWidth: 1,
     borderColor: "rgba(130,120,100,0.14)",
     backgroundColor: "#FFFAF4",

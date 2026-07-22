@@ -26,7 +26,7 @@ import { api } from "@/api/client";
 import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
 import { ScreenWash } from "@/components/ScreenWash";
-import { Btn, Disclose, IconBtn, Meta, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, IconBtn, Meta, Pill, Serif } from "@/components/ui";
 import { scheduleLocalTaskReminder } from "@/lib/taskReminders";
 import { useLocale } from "@/context/LocaleContext";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
@@ -528,17 +528,6 @@ function PastePhase({
       </Pressable>
 
       <Text style={styles.keyboardHint}>{chats.keyboardHint}</Text>
-
-      <Disclose
-        label={flow.showTips}
-        labelExpanded={flow.hideTips}
-        style={{ marginTop: 4 }}
-      >
-        <View style={styles.tipBox}>
-          <Text style={styles.tipTitle}>{flow.tipTitle}</Text>
-          <Text style={styles.tipBody}>{flow.tipBody}</Text>
-        </View>
-      </Disclose>
 
       {busy ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 12 }} />
