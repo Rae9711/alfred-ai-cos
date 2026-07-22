@@ -12,7 +12,10 @@
  *   - adds an "Embed App Extensions" (PlugIns/13) copy-files phase to the app
  *     target with Code Sign On Copy, plus a target dependency,
  *   - attaches the keyboard's Info.plist + entitlements (App Group + keychain)
- *     via CODE_SIGN_ENTITLEMENTS / INFOPLIST_FILE.
+ *     via CODE_SIGN_ENTITLEMENTS / INFOPLIST_FILE,
+ *   - declares the extension under
+ *     `extra.eas.build.experimental.ios.appExtensions` so EAS can provision
+ *     AlfredKeyboard signing credentials during CNG/managed prebuild.
  *
  * The heavy xcodeproj logic lives in scripts/keyboard-wiring.cjs so the local
  * CLI path (scripts/wire-alfred-keyboard.cjs) and this plugin stay in sync.
@@ -92,10 +95,53 @@ function withKeyboardTarget(config) {
   });
 }
 
+/**
+ * Declare the keyboard extension for EAS credential setup (CNG/managed prebuild).
+ * EAS only auto-provisions extension signing when the extension appears in
+ * `extra.eas.build.experimental.ios.appExtensions` before the build starts.
+ * Entitlements here must match AlfredKeyboard.entitlements written by
+ * keyboard-wiring.cjs (App Group + keychain access groups).
+ *
+ * @see https://docs.expo.dev/build-reference/app-extensions/
+ */
+function withEasAppExtensionCredentials(config) {
+  const bundleId = config.ios?.bundleIdentifier || "com.haoruiwang.alfred";
+  const keyboardBundleId = `${bundleId}.AlfredKeyboard`;
+  const extension = {
+    targetName: "AlfredKeyboard",
+    bundleIdentifier: keyboardBundleId,
+    entitlements: {
+      "com.apple.security.application-groups": [APP_GROUP],
+      "keychain-access-groups": [...KEYCHAIN_ACCESS_GROUPS],
+    },
+  };
+
+  config.extra = config.extra || {};
+  config.extra.eas = config.extra.eas || {};
+  config.extra.eas.build = config.extra.eas.build || {};
+  config.extra.eas.build.experimental = config.extra.eas.build.experimental || {};
+  config.extra.eas.build.experimental.ios =
+    config.extra.eas.build.experimental.ios || {};
+
+  const existing =
+    config.extra.eas.build.experimental.ios.appExtensions || [];
+  const withoutDup = existing.filter(
+    (ext) =>
+      ext?.targetName !== extension.targetName &&
+      ext?.bundleIdentifier !== extension.bundleIdentifier,
+  );
+  config.extra.eas.build.experimental.ios.appExtensions = [
+    ...withoutDup,
+    extension,
+  ];
+  return config;
+}
+
 function withAlfredKeyboard(config) {
   config = withAppGroupEntitlements(config);
   config = withKeyboardUsageDescription(config);
   config = withKeyboardTarget(config);
+  config = withEasAppExtensionCredentials(config);
 
   // Surface entitlements in the Expo config for EAS credential management.
   config.ios = config.ios || {};
