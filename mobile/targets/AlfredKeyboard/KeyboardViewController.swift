@@ -1354,10 +1354,10 @@ final class KeyboardViewController: UIInputViewController {
         var pairs: [(String, String)] = []
         var i = 0
 
-        let startsTurn: (Int) -> Bool = { idx in
+        func startsTurn(_ idx: Int) -> Bool {
             guard idx + 1 < lines.count else { return false }
-            return isProbableSenderLine(stripSenderTimestamp(lines[idx]))
-                && isFullTimestampLine(lines[idx + 1])
+            return self.isProbableSenderLine(self.stripSenderTimestamp(lines[idx]))
+                && self.isFullTimestampLine(lines[idx + 1])
         }
 
         if i < lines.count, !startsTurn(i),
