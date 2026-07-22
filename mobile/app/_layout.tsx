@@ -12,10 +12,12 @@ import {
   useFonts,
   Newsreader_400Regular_Italic,
   Newsreader_500Medium,
+  Newsreader_600SemiBold,
 } from "@expo-google-fonts/newsreader";
 import {
   DMSans_400Regular,
   DMSans_500Medium,
+  DMSans_600SemiBold,
 } from "@expo-google-fonts/dm-sans";
 import {
   IBMPlexMono_400Regular,
@@ -121,9 +123,11 @@ function DeepLinkHandler() {
 function RootLayout() {
   const [fontsLoaded] = useFonts({
     Newsreader_500Medium,
+    Newsreader_600SemiBold,
     Newsreader_400Regular_Italic,
     DMSans_400Regular,
     DMSans_500Medium,
+    DMSans_600SemiBold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
   });

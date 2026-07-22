@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 
-import { CompanionAvatar } from "@/components/CompanionAvatar";
+import AlfredAvatar from "@/components/AlfredAvatar";
 import { Ic } from "@/components/icons";
 import { ScreenWash } from "@/components/ScreenWash";
 import { Btn, Eyebrow, Serif, SerifEm, inputPlaceholder } from "@/components/ui";
@@ -177,8 +177,8 @@ export function AlfredHubScreen({
       >
         <Eyebrow>{hub.eyebrow}</Eyebrow>
         <View style={styles.hero}>
-          <CompanionAvatar size={104} color={meta.color} state={state} />
-          <Serif size={30} style={styles.greeting}>
+          <AlfredAvatar size={112} color={meta.color} state={state} />
+          <Serif size={36} display style={styles.greeting}>
             {greeting} <SerifEm>{hub.butlerName}</SerifEm>
           </Serif>
           <Text style={styles.sub}>{hub.sub}</Text>
@@ -232,7 +232,9 @@ export function AlfredHubScreen({
                 <Serif size={14} italic color={colors.ink2}>
                   "{q}"
                 </Serif>
-                <Ic.Arrow size={14} color={colors.ink4} />
+                <View style={styles.suggestArrow}>
+                  <Ic.Arrow size={12} color={colors.ink3} />
+                </View>
               </Pressable>
             ))
           : null}
@@ -386,11 +388,12 @@ const styles = StyleSheet.create({
   greeting: { textAlign: "center" },
   sub: {
     fontFamily: fonts.sans,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.ink3,
     textAlign: "center",
     maxWidth: 280,
+    letterSpacing: 0.1,
   },
   actions: {
     flexDirection: "row",
@@ -454,6 +457,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
+  },
+  suggestArrow: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.paper2,
   },
   thinking: {
     fontFamily: fonts.mono,

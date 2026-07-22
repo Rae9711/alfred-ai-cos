@@ -36,6 +36,19 @@ function Line24({
   );
 }
 
+/** Soft filled glyph — tonal mass instead of flat stroke outline. */
+function Fill24({
+  size = 20,
+  color = colors.ink2,
+  children,
+}: IconProps & { children: React.ReactNode }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      {children}
+    </Svg>
+  );
+}
+
 export const Ic = {
   Arrow: (p: IconProps) => (
     <Line24 {...p}>
@@ -211,6 +224,32 @@ export const Ic = {
       <Polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
       <Path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </Line24>
+  ),
+  /** Filled calendar — soft mass for schedule / suggestion wells. */
+  CalendarFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.2A2.8 2.8 0 0 1 22 7.8v11.4A2.8 2.8 0 0 1 19.2 22H4.8A2.8 2.8 0 0 1 2 19.2V7.8A2.8 2.8 0 0 1 4.8 5H6V3a1 1 0 0 1 1-1Zm13 8H4v9.2c0 .44.36.8.8.8h14.4c.44 0 .8-.36.8-.8V10Z" />
+    </Fill24>
+  ),
+  ClockFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.2c0 .3.14.58.38.77l3.2 2.4a1 1 0 1 0 1.24-1.57L13 11.55V7Z" />
+    </Fill24>
+  ),
+  MailFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M3.2 5h17.6A2.2 2.2 0 0 1 23 7.2v9.6A2.2 2.2 0 0 1 20.8 19H3.2A2.2 2.2 0 0 1 1 16.8V7.2A2.2 2.2 0 0 1 3.2 5Zm8.9 7.35L20.4 7.4H3.6l8.3 4.95a.8.8 0 0 0 .8 0Z" />
+    </Fill24>
+  ),
+  StackFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M12 2.2 21 7.4 12 12.6 3 7.4 12 2.2Zm-8.2 8.3 8.2 4.75 8.2-4.75 1.6.93-9.8 5.67L2.2 11.43l1.6-.93Zm0 4.6 8.2 4.75 8.2-4.75 1.6.93-9.8 5.67L2.2 16.03l1.6-.93Z" />
+    </Fill24>
+  ),
+  UserFill: (p: IconProps) => (
+    <Fill24 {...p}>
+      <Path d="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 12c4.4 0 8 2.1 8 5.2V21a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1.8C4 16.1 7.6 14 12 14Z" />
+    </Fill24>
   ),
 };
 

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alfred UI polish — paper wash preview</title>
+  <title>Alfred UI polish — type + tab images</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;1,6..72,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet" />
   <style>
     :root {
       --paper: #F4F3F0;
@@ -39,14 +39,15 @@
     }
     h1 {
       font-family: var(--serif);
-      font-weight: 500;
+      font-weight: 600;
       color: #f5f3ee;
       font-size: 28px;
+      letter-spacing: -0.03em;
       margin: 0 0 8px;
     }
     .lede {
       color: #b8b4ae;
-      max-width: 720px;
+      max-width: 760px;
       line-height: 1.5;
       margin-bottom: 28px;
       font-size: 14px;
@@ -76,7 +77,6 @@
       display: flex;
       flex-direction: column;
       position: relative;
-      /* Quiet near-neutral stone wash — replaces teal→grey */
       background:
         radial-gradient(ellipse 78% 72% at 50% 38%, transparent 0%, rgba(28,26,24,0.045) 100%),
         linear-gradient(180deg, var(--washTop) 0%, var(--washMid) 42%, var(--washBottom) 100%);
@@ -106,28 +106,36 @@
     }
     .greeting {
       font-family: var(--serif);
-      font-size: 30px;
-      line-height: 1.12;
-      letter-spacing: -0.02em;
+      font-weight: 600;
+      font-size: 34px;
+      line-height: 1.06;
+      letter-spacing: -0.03em;
       margin: 0;
       color: var(--ink);
+    }
+    .greeting em {
+      font-style: italic;
+      font-weight: 400;
+      color: var(--accentInk);
     }
     .sub {
       color: var(--ink3);
       font-size: 12px;
       margin-top: 6px;
       line-height: 1.35;
+      font-weight: 400;
     }
     .avatar {
       width: 88px;
-      height: 88px;
-      border-radius: 50%;
+      height: 94px;
       flex-shrink: 0;
-      background:
-        radial-gradient(circle at 35% 30%, #f7f6f3, #c9c5bc 70%, #9a958c);
-      box-shadow: 0 10px 24px rgba(20,19,22,0.14);
-      border: 1px solid rgba(255,255,255,0.5);
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
     }
+    .avatar svg { width: 100%; height: 100%; display: block; }
+    .avatar.lg { width: 104px; height: 111px; margin: 8px auto 14px; }
     .search {
       display: flex;
       align-items: center;
@@ -164,13 +172,24 @@
       align-items: center;
       gap: 8px;
       font-family: var(--sans);
-      font-weight: 500;
+      font-weight: 600;
       font-size: 14px;
       color: var(--ink);
       margin-bottom: 6px;
     }
+    .well {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--paper2);
+      box-shadow: 0 2px 6px rgba(20,19,22,0.08);
+      border: 1px solid rgba(255,255,255,0.7);
+      flex-shrink: 0;
+    }
+    .well.accent { background: var(--accentSoft); }
+    .well svg { display: block; }
     .glass-body {
       font-size: 13px;
+      font-weight: 400;
       color: var(--ink2);
       line-height: 1.4;
     }
@@ -200,7 +219,7 @@
       flex: 1;
       text-align: center;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
     }
     .btn-ink {
       display: block;
@@ -227,7 +246,12 @@
     }
     .cal-head .today {
       font-family: var(--serif);
-      font-size: 20px;
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: -0.025em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .seg {
       display: flex;
@@ -264,7 +288,7 @@
       color: var(--ink3);
       background: rgba(255,255,255,0.28);
     }
-    .day b { display: block; font-size: 14px; color: var(--ink); margin-top: 2px; }
+    .day b { display: block; font-size: 14px; color: var(--ink); margin-top: 2px; font-weight: 600; }
     .day.on {
       background: rgba(255,255,255,0.78);
       box-shadow: 0 4px 12px rgba(20,19,22,0.08);
@@ -272,9 +296,8 @@
     .tabbar {
       margin: 0 14px 16px;
       display: grid;
-      grid-template-columns: repeat(4, 1fr) 54px repeat(0, 0);
       grid-template-columns: 1fr 1fr 58px 1fr 1fr;
-      align-items: center;
+      align-items: end;
       background: rgba(255,255,255,0.55);
       backdrop-filter: blur(22px);
       -webkit-backdrop-filter: blur(22px);
@@ -291,16 +314,45 @@
       position: relative;
       z-index: 2;
     }
-    .tabbar .on { color: var(--accent); }
-    .tabbar .mid {
-      width: 46px; height: 46px; border-radius: 50%;
-      background: var(--ink); color: var(--paper);
-      margin: -18px auto 0; display: flex; align-items: center; justify-content: center;
-      font-size: 15px;
-      box-shadow: 0 8px 18px rgba(20,19,22,0.25);
+    .tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
     }
+    .tab img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      opacity: 0.72;
+      border-radius: 6px;
+    }
+    .tab.on { color: var(--accent); }
+    .tab.on .glyph {
+      background: var(--accentSoft);
+      box-shadow: 0 2px 6px rgba(20,19,22,0.1);
+      transform: scale(1.06);
+    }
+    .tab.on img { opacity: 1; width: 26px; height: 26px; }
+    .glyph {
+      width: 30px; height: 30px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tabbar .mid {
+      width: 52px; height: 56px;
+      margin: -18px auto 0;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      overflow: visible;
+      border-radius: 0;
+    }
+    .tabbar .mid svg { width: 52px; height: 56px; }
     .hub-center { text-align: center; padding-top: 12px; }
     .hub-center .avatar { margin: 8px auto 14px; width: 104px; height: 104px; }
+    .hub-center .greeting { font-size: 32px; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 18px 0; }
     .chip {
       border: 1px solid rgba(255,255,255,0.6);
@@ -317,6 +369,7 @@
       background: var(--accentSoft);
       border-color: var(--accent);
       color: var(--accentInk);
+      font-weight: 500;
     }
     .composer {
       margin: 0 16px 10px;
@@ -377,11 +430,12 @@
   </style>
 </head>
 <body>
-  <h1>Alfred UI polish — paper wash</h1>
+  <h1>Alfred UI polish — type + AlfredAvatar</h1>
   <p class="lede">
-    Kept glass cards / greeting + butler / schedule suggestion / day-week-month / floating tab bar.
-    <strong>Only the backdrop changed:</strong> rejected teal→grey vertical gradient;
-    shipping a quiet near-neutral stone wash (<code>#E8E6E2 → #F6F5F2</code> + soft vignette).
+    Stone paper wash + glass cards kept.
+    <strong>Typography:</strong> Newsreader SemiBold display greetings (tighter tracking), lighter body contrast.
+    <strong>Icons:</strong> filled glyphs in soft circular wells on schedule / suggestions.
+    <strong>Tabs:</strong> illustrated PNGs under <code>mobile/assets/tabs/</code>; center is <code>AlfredAvatar</code> (design-sheet butler SVG).
     OTA <strong>not</strong> published.
   </p>
 
@@ -398,7 +452,7 @@
 
   <div class="row">
     <div>
-      <div class="label">Home · glass on paper wash</div>
+      <div class="label">Home · richer type + tab images</div>
       <div class="phone">
         <div class="status">9:41</div>
         <div class="scroll">
@@ -407,15 +461,56 @@
               <p class="greeting">Good evening, Ray</p>
               <p class="sub">✦ Your smart assistant butler</p>
             </div>
-            <div class="avatar" aria-hidden="true"></div>
+            <div class="avatar" aria-hidden="true">
+              <svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <radialGradient id="eye-h" cx="0.38" cy="0.32" r="0.85">
+                    <stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/>
+                  </radialGradient>
+                </defs>
+                <ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/>
+                <path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/>
+                <path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/>
+                <ellipse cx="105" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <ellipse cx="135" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/>
+                <path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#FFFFFF"/>
+                <path d="M104 144 L120 162 L111 170 L101 150 Z" fill="#08102D" opacity="0.92"/>
+                <path d="M136 144 L120 162 L129 170 L139 150 Z" fill="#08102D" opacity="0.92"/>
+                <circle cx="120" cy="176" r="2.6" fill="#08102D"/><circle cx="120" cy="190" r="2.6" fill="#08102D"/>
+                <ellipse cx="73" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <ellipse cx="167" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/>
+                <ellipse cx="95" cy="103" rx="20" ry="20" fill="#47BFF7" opacity="0.25"/>
+                <circle cx="95" cy="103" r="13" fill="url(#eye-h)"/><circle cx="91" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
+                <ellipse cx="145" cy="103" rx="20" ry="20" fill="#47BFF7" opacity="0.25"/>
+                <circle cx="145" cy="103" r="13" fill="url(#eye-h)"/><circle cx="141" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
+                <path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/>
+                <path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/>
+                <rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/>
+              </svg>
+            </div>
           </div>
           <div class="search">Any plans for today?<div class="send"></div></div>
           <div class="glass">
-            <div class="glass-title">◻ Schedule</div>
+            <div class="glass-title">
+              <span class="well" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#35343A"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.2A2.8 2.8 0 0 1 22 7.8v11.4A2.8 2.8 0 0 1 19.2 22H4.8A2.8 2.8 0 0 1 2 19.2V7.8A2.8 2.8 0 0 1 4.8 5H6V3a1 1 0 0 1 1-1Zm13 8H4v9.2c0 .44.36.8.8.8h14.4c.44 0 .8-.36.8-.8V10Z"/></svg>
+              </span>
+              Schedule
+            </div>
             <div class="glass-body">No schedule for today.</div>
           </div>
           <div class="glass">
-            <div class="glass-title">▦ Time-block suggestion</div>
+            <div class="glass-title">
+              <span class="well accent" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#2F4F8C"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm1 5a1 1 0 1 0-2 0v5.2c0 .3.14.58.38.77l3.2 2.4a1 1 0 1 0 1.24-1.57L13 11.55V7Z"/></svg>
+              </span>
+              Time-block suggestion
+            </div>
             <div class="glass-body">Provide formal replies to the Interim Document, as Angel's analysis deadline is at stake.</div>
             <div class="meta">Free 192 min · 8:47 PM–11:59 PM</div>
             <div class="time-row">
@@ -427,7 +522,12 @@
             <div class="ignore">Ignore this suggestion</div>
           </div>
           <div class="cal-head">
-            <span class="today">Today</span>
+            <span class="today">
+              <span class="well" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#35343A"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.2A2.8 2.8 0 0 1 22 7.8v11.4A2.8 2.8 0 0 1 19.2 22H4.8A2.8 2.8 0 0 1 2 19.2V7.8A2.8 2.8 0 0 1 4.8 5H6V3a1 1 0 0 1 1-1Zm13 8H4v9.2c0 .44.36.8.8.8h14.4c.44 0 .8-.36.8-.8V10Z"/></svg>
+              </span>
+              Today
+            </span>
             <div class="seg"><span class="on">Day</span><span>Week</span><span>Month</span></div>
           </div>
           <div class="days">
@@ -441,11 +541,11 @@
           </div>
         </div>
         <div class="tabbar">
-          <div class="on">Home</div>
-          <div>Inbox</div>
-          <div><div class="mid">A</div></div>
-          <div>Chats</div>
-          <div>You</div>
+          <div class="tab on"><span class="glyph"><img src="../assets/tabs/home.png" alt="" /></span>Home</div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/inbox.png" alt="" /></span>Inbox</div>
+          <div><div class="mid" aria-label="Alfred"><svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="eye-t1" cx="0.38" cy="0.32" r="0.85"><stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/></radialGradient></defs><ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/><path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/><path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/><rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/><path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#fff"/><path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/><circle cx="95" cy="103" r="13" fill="url(#eye-t1)"/><circle cx="145" cy="103" r="13" fill="url(#eye-t1)"/><path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/><path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/><rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/></svg></div></div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/chats.png" alt="" /></span>Chats</div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/you.png" alt="" /></span>You</div>
         </div>
       </div>
     </div>
@@ -455,8 +555,34 @@
       <div class="phone">
         <div class="status">9:41</div>
         <div class="scroll hub-center">
-          <div class="avatar" aria-hidden="true"></div>
-          <p class="greeting">Good evening, <em style="font-style:italic;color:var(--accentInk)">Alfred</em></p>
+          <div class="avatar lg" aria-hidden="true">
+              <svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <radialGradient id="eye-hub" cx="0.38" cy="0.32" r="0.85">
+                    <stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/>
+                  </radialGradient>
+                </defs>
+                <ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/>
+                <path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/>
+                <path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/>
+                <ellipse cx="105" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <ellipse cx="135" cy="216" rx="11" ry="8" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/>
+                <path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#FFFFFF"/>
+                <ellipse cx="73" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <ellipse cx="167" cy="176" rx="11" ry="15" fill="#F1F5FF" stroke="#E2E8F0"/>
+                <path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0" stroke-width="1.5"/>
+                <path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/>
+                <circle cx="95" cy="103" r="13" fill="url(#eye-hub)"/><circle cx="91" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
+                <circle cx="145" cy="103" r="13" fill="url(#eye-hub)"/><circle cx="141" cy="98" r="3.4" fill="#fff" opacity="0.75"/>
+                <path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/>
+                <path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/>
+                <rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/>
+              </svg>
+            </div>
+          <p class="greeting">Good evening, <em>Alfred</em></p>
           <p class="sub">Schedule, text, remind, or capture — I'll handle the rest.</p>
           <div class="chips">
             <span class="chip primary">Schedule</span>
@@ -467,18 +593,20 @@
         </div>
         <div class="composer">Ask Alfred…<div class="send"></div></div>
         <div class="tabbar">
-          <div>Home</div>
-          <div>Inbox</div>
-          <div><div class="mid">A</div></div>
-          <div>Chats</div>
-          <div>You</div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/home.png" alt="" /></span>Home</div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/inbox.png" alt="" /></span>Inbox</div>
+          <div><div class="mid" aria-label="Alfred"><svg viewBox="0 0 240 256" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="eye-t2" cx="0.38" cy="0.32" r="0.85"><stop offset="0" stop-color="#D9F2FF"/><stop offset="0.55" stop-color="#8CC0FB"/><stop offset="1" stop-color="#47BFF7"/></radialGradient></defs><ellipse cx="120" cy="246" rx="44" ry="8" fill="#19171A" opacity="0.10"/><path d="M88 150 Q46 178 58 222 Q70 214 80 220 Q90 212 100 218 L100 158 Z" fill="#93A5DB"/><path d="M152 150 Q194 178 182 222 Q170 214 160 220 Q150 212 140 218 L140 158 Z" fill="#93A5DB"/><rect x="80" y="144" width="80" height="70" rx="26" fill="#08102D"/><path d="M104 144 L136 144 L133 200 Q120 207 107 200 Z" fill="#fff"/><path d="M58 70 Q50 14 96 34 Q106 42 100 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M182 70 Q190 14 144 34 Q134 42 140 62 Z" fill="#F1F5FF" stroke="#E2E8F0"/><rect x="44" y="44" width="152" height="118" rx="56" fill="#F1F5FF" stroke="#E2E8F0"/><path d="M64 104 Q64 74 96 72 L144 72 Q176 74 176 104 Q176 132 142 134 L98 134 Q64 132 64 104 Z" fill="#08102D"/><circle cx="95" cy="103" r="13" fill="url(#eye-t2)"/><circle cx="145" cy="103" r="13" fill="url(#eye-t2)"/><path d="M99 148 Q94 159 99 170 L117 162 Q119 159 117 156 Z" fill="#47BFF7"/><path d="M141 148 Q146 159 141 170 L123 162 Q121 159 123 156 Z" fill="#47BFF7"/><rect x="113" y="152" width="14" height="14" rx="5" fill="#47BFF7"/></svg></div></div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/chats.png" alt="" /></span>Chats</div>
+          <div class="tab"><span class="glyph"><img src="../assets/tabs/you.png" alt="" /></span>You</div>
         </div>
       </div>
     </div>
   </div>
 
   <p class="note">
-    Tokens live in <code>mobile/src/theme/theme.ts</code>; RN uses <code>ScreenWash</code> on Home + Alfred hub.
+    <code>AlfredAvatar</code> lives at <code>mobile/src/components/AlfredAvatar.tsx</code> (design-sheet butler SVG; API <code>size</code> + <code>state</code>).
+    Wired on Home header, Alfred hub hero, and center tab. CompanionAvatar now wraps the same art.
+    Tokens: <code>mobile/src/theme/theme.ts</code>. Tab PNGs: <code>mobile/assets/tabs/</code>.
     Preview: <code>mobile/preview/ui-polish.html</code> · screenshot <code>mobile/preview/ui-polish.png</code>.
   </p>
 </body>

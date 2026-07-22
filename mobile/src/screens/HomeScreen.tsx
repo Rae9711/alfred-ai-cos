@@ -17,7 +17,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { type Me, type Task, TaskStatus, CommitmentStatus, type TodayDashboard, type UpcomingMeeting, type ConversationInboxItem } from "@albert/shared-types";
 
 import { api } from "@/api/client";
-import { CompanionAvatar } from "@/components/CompanionAvatar";
+import AlfredAvatar from "@/components/AlfredAvatar";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
@@ -27,7 +27,7 @@ import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { MeetingDetailSheet } from "@/screens/sheets/MeetingDetailSheet";
 import { ScreenWash } from "@/components/ScreenWash";
-import { Btn, Disclose, Pill, Serif, SerifEm } from "@/components/ui";
+import { Btn, Disclose, IconWell, Pill, Serif, SerifEm } from "@/components/ui";
 import { DayScheduleView } from "@/components/schedule/DayScheduleView";
 import { PlanningSuggestionsCard } from "@/components/PlanningSuggestionsCard";
 import { MonthScheduleView } from "@/components/schedule/MonthScheduleView";
@@ -574,7 +574,7 @@ export function HomeScreen() {
                   day: "numeric",
                 })}
               </Text>
-              <Serif size={34} style={styles.greeting}>
+              <Serif size={38} display style={styles.greeting}>
                 {greeting} <SerifEm>{displayName}</SerifEm>
               </Serif>
               {todayData?.day_overview ? (
@@ -589,15 +589,24 @@ export function HomeScreen() {
               style={styles.searchBtn}
               accessibilityLabel="Search"
             >
-              <Ic.Search size={18} color={colors.ink3} stroke={1.5} />
+              <IconWell size={34}>
+                <Ic.Search size={16} color={colors.ink2} stroke={1.8} />
+              </IconWell>
             </Pressable>
-            <CompanionAvatar
-              size={56}
-              level={meta.level}
-              color={meta.color}
-              state={state}
-              speech={t.home.speechHi}
-            />
+            <View style={styles.avatarWrap}>
+              {t.home.speechHi ? (
+                <View style={styles.speechBubble}>
+                  <Text style={styles.speechText}>{t.home.speechHi}</Text>
+                  <View style={styles.speechTail} />
+                </View>
+              ) : null}
+              <AlfredAvatar
+                size={64}
+                color={meta.color}
+                state={state}
+                accessibilityLabel="Alfred"
+              />
+            </View>
           </View>
         </View>
 
@@ -614,7 +623,12 @@ export function HomeScreen() {
         ) : null}
 
         <View style={styles.butlerBlock}>
-          <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
+          <View style={styles.sectionTitleRow}>
+            <IconWell size={28} tone="accent">
+              <Ic.MailFill size={14} color={colors.accent} />
+            </IconWell>
+            <Text style={styles.butlerLabel}>{t.home.butlerLabel}</Text>
+          </View>
           <View style={styles.proactiveCard}>
             <Serif size={18} style={styles.proactiveText}>
               {butlerPrompt}
@@ -781,7 +795,14 @@ export function HomeScreen() {
         ) : null}
 
         <View style={styles.scheduleHeader}>
-          <Text style={styles.sectionLabel}>{scheduleSectionLabel}</Text>
+          <View style={styles.sectionTitleRow}>
+            <IconWell size={28}>
+              <Ic.CalendarFill size={14} color={colors.ink2} />
+            </IconWell>
+            <Serif size={22} display style={styles.scheduleTitle}>
+              {scheduleSectionLabel}
+            </Serif>
+          </View>
           <View style={styles.scheduleToggle}>
             {(["day", "week", "month"] as const).map((view) => (
               <Pill
@@ -890,13 +911,58 @@ const styles = StyleSheet.create({
   eyebrowDate: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: "uppercase",
     color: colors.ink4,
   },
   greeting: { maxWidth: 280 },
-  searchBtn: { paddingTop: 8 },
+  searchBtn: { paddingTop: 4 },
+  avatarWrap: {
+    position: "relative",
+    alignItems: "center",
+  },
+  speechBubble: {
+    position: "absolute",
+    right: "100%",
+    top: 6,
+    marginRight: 6,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    zIndex: 2,
+    shadowColor: "#19171A",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  speechText: {
+    fontFamily: fonts.serif,
+    fontSize: 15,
+    fontStyle: "italic",
+    color: colors.accentInk,
+  },
+  speechTail: {
+    position: "absolute",
+    right: -5,
+    top: 12,
+    width: 10,
+    height: 10,
+    backgroundColor: colors.card,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hair2,
+    transform: [{ rotate: "45deg" }],
+  },
   butlerBlock: { marginTop: spacing.lg, gap: 8 },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  scheduleTitle: { color: colors.ink },
   conversationBlock: { marginTop: spacing.md },
   conversationCard: {
     backgroundColor: colors.card,
@@ -943,17 +1009,18 @@ const styles = StyleSheet.create({
     color: colors.ink3,
   },
   butlerLabel: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoMedium,
     fontSize: 10,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
-    color: colors.ink4,
+    color: colors.ink3,
   },
   dayOverview: {
     fontFamily: fonts.sans,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.ink3,
+    marginTop: 2,
   },
   proactiveCard: {
     backgroundColor: colors.card,
@@ -1010,11 +1077,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   sectionLabel: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.monoMedium,
     fontSize: 10,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
-    color: colors.ink4,
+    color: colors.ink3,
   },
   scheduleHeader: {
     marginTop: spacing.lg,

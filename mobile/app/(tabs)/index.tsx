@@ -1,14 +1,21 @@
 // The tab container, built from plain primitives. No native navigator.
 //
 // Custom bottom bar: Today · Inbox · (center avatar → Alfred hub) · Chats · You.
+// Tab glyphs are small illustrated PNGs (not flat line icons).
 // MailboxProvider + WorkflowProvider wire Inbox → Chat with live Gmail data.
 
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  type ImageSourcePropType,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import * as Notifications from "expo-notifications";
 
-import { CompanionAvatarHome } from "@/components/CompanionAvatar";
-import { Ic } from "@/components/icons";
+import AlfredAvatar from "@/components/AlfredAvatar";
 import { ShellProvider } from "@/components/Shell";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
@@ -28,6 +35,13 @@ import { HomeScreen } from "@/screens/HomeScreen";
 import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { colors, fonts, layout } from "@/theme/theme";
+
+const TAB_IMAGES = {
+  today: require("../../assets/tabs/home.png") as ImageSourcePropType,
+  inbox: require("../../assets/tabs/inbox.png") as ImageSourcePropType,
+  ask: require("../../assets/tabs/chats.png") as ImageSourcePropType,
+  settings: require("../../assets/tabs/you.png") as ImageSourcePropType,
+} as const;
 
 // CompanionAvatarProvider now lives in the root layout (app/_layout.tsx), not
 // here — see T4 in docs/designs/2026-07-02-avatar-interaction-space.md.
@@ -115,17 +129,17 @@ function TabsChrome({
             label={t.tabs.today}
             active={tab === "today"}
             onPress={() => setTab("today")}
-            icon={(c) => <Ic.Today size={22} color={c} stroke={1.5} />}
+            source={TAB_IMAGES.today}
           />
           <Tab
             label={t.tabs.inbox}
             active={tab === "inbox"}
             onPress={() => setTab("inbox")}
-            icon={(c) => <Ic.Inbox size={22} color={c} stroke={1.5} />}
+            source={TAB_IMAGES.inbox}
           />
           <View style={styles.capture}>
-            <CompanionAvatarHome
-              size={54}
+            <AlfredAvatar
+              size={52}
               color={meta.color}
               state={state}
               occupied={atHome}
@@ -139,13 +153,13 @@ function TabsChrome({
             label={t.tabs.ask}
             active={tab === "ask"}
             onPress={() => openFreeChat()}
-            icon={(c) => <Ic.Stack size={22} color={c} stroke={1.5} />}
+            source={TAB_IMAGES.ask}
           />
           <Tab
             label={t.tabs.you}
             active={tab === "settings"}
             onPress={() => setTab("settings")}
-            icon={(c) => <Ic.User size={22} color={c} stroke={1.5} />}
+            source={TAB_IMAGES.settings}
           />
         </View>
       </View>
@@ -157,17 +171,30 @@ function Tab({
   label,
   active,
   onPress,
-  icon,
+  source,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
-  icon: (color: string) => React.ReactNode;
+  source: ImageSourcePropType;
 }) {
   const color = active ? colors.accent : colors.ink4;
   return (
-    <Pressable style={styles.tab} onPress={onPress}>
-      {icon(color)}
+    <Pressable
+      style={({ pressed }) => [
+        styles.tab,
+        active && styles.tabActive,
+        pressed && styles.tabPressed,
+      ]}
+      onPress={onPress}
+    >
+      <View style={[styles.glyphWell, active && styles.glyphWellActive]}>
+        <Image
+          source={source}
+          style={[styles.glyph, active && styles.glyphActive]}
+          resizeMode="contain"
+        />
+      </View>
       <Text style={[styles.label, { color }]}>{label}</Text>
     </Pressable>
   );
@@ -185,13 +212,45 @@ const styles = StyleSheet.create({
     backgroundColor: colors.washBottom,
     paddingBottom: layout.padX + 4,
     paddingTop: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
   },
   tab: {
     alignItems: "center",
-    gap: 3,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  tabActive: {
+    transform: [{ translateY: -1 }],
+  },
+  tabPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.96 }],
+  },
+  glyphWell: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  glyphWellActive: {
+    backgroundColor: colors.accentSoft,
+    shadowColor: "#141316",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  glyph: {
+    width: 24,
+    height: 24,
+    opacity: 0.72,
+  },
+  glyphActive: {
+    width: 26,
+    height: 26,
+    opacity: 1,
   },
   label: {
     fontFamily: fonts.mono,

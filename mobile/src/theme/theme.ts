@@ -55,13 +55,16 @@ export const layout = {
 } as const;
 
 // Font family keys must match the names registered in app/_layout.tsx useFonts().
+// Display serif is heavier so hero greetings read as inked type, not flat Medium.
 export const fonts = {
   serif: "Newsreader_500Medium",
+  serifDisplay: "Newsreader_600SemiBold",
   serifItalic: "Newsreader_400Regular_Italic",
   mono: "IBMPlexMono_400Regular",
   monoMedium: "IBMPlexMono_500Medium",
   sans: "DMSans_400Regular",
   sansMedium: "DMSans_500Medium",
+  sansSemibold: "DMSans_600SemiBold",
 } as const;
 
 export const spacing = {

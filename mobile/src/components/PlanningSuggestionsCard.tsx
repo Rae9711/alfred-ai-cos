@@ -10,10 +10,11 @@ import {
 } from "@albert/shared-types";
 
 import { api } from "@/api/client";
+import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
-import { Btn, Meta, Serif } from "@/components/ui";
+import { Btn, IconWell, Meta, Serif } from "@/components/ui";
 import { useLocale } from "@/context/LocaleContext";
-import { colors, radius, spacing } from "@/theme/theme";
+import { colors, fonts, radius, spacing } from "@/theme/theme";
 
 type Props = {
   data: TodayDashboard | null;
@@ -95,9 +96,14 @@ function TimeBlockRow({
 
   return (
     <View style={styles.blockCard}>
-      <Serif size={16} style={styles.blockTitle}>
-        {suggestion.title}
-      </Serif>
+      <View style={styles.blockHead}>
+        <IconWell size={30} tone="accent">
+          <Ic.ClockFill size={15} color={colors.accent} />
+        </IconWell>
+        <Serif size={17} style={styles.blockTitle}>
+          {suggestion.title}
+        </Serif>
+      </View>
       <Text style={styles.blockReason}>
         {t.planning.timeBlock(
           suggestion.duration_minutes,
@@ -157,7 +163,12 @@ export function PlanningSuggestionsCard({ data, onChanged }: Props) {
 
   return (
     <View style={styles.root}>
-      <Text style={styles.label}>{t.planning.sectionLabel}</Text>
+      <View style={styles.labelRow}>
+        <IconWell size={26}>
+          <Ic.CalendarFill size={13} color={colors.ink2} />
+        </IconWell>
+        <Text style={styles.label}>{t.planning.sectionLabel}</Text>
+      </View>
 
       {suggestions.map((s) => (
         <TimeBlockRow
@@ -176,6 +187,9 @@ export function PlanningSuggestionsCard({ data, onChanged }: Props) {
               style={({ pressed }) => [styles.quickRow, pressed && styles.pressed]}
               onPress={() => markQuickWinDone(q)}
             >
+              <IconWell size={24} tone="accent">
+                <Ic.StackFill size={12} color={colors.accent} />
+              </IconWell>
               <Text style={styles.quickText}>{q.title}</Text>
               <Meta>{t.planning.minutes(q.estimated_minutes)}</Meta>
             </Pressable>
@@ -188,11 +202,17 @@ export function PlanningSuggestionsCard({ data, onChanged }: Props) {
 
 const styles = StyleSheet.create({
   root: { marginTop: spacing.lg, gap: 10 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   label: {
+    fontFamily: fonts.monoMedium,
     fontSize: 10,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
-    color: colors.ink4,
+    color: colors.ink3,
   },
   blockCard: {
     backgroundColor: colors.card,
@@ -201,11 +221,26 @@ const styles = StyleSheet.create({
     borderColor: colors.hair2,
     padding: spacing.md,
     gap: 10,
+    shadowColor: "#141316",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
   },
-  blockTitle: { color: colors.ink },
-  blockReason: { fontSize: 13, lineHeight: 19, color: colors.ink3 },
+  blockHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  blockTitle: { color: colors.ink, flex: 1 },
+  blockReason: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.ink3,
+  },
   slotRow: { gap: 6 },
   slotLabel: {
+    fontFamily: fonts.mono,
     fontSize: 10,
     letterSpacing: 1.2,
     textTransform: "uppercase",
@@ -223,23 +258,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.paper2,
   },
-  slotBtnText: { fontSize: 12, fontWeight: "500", color: colors.ink2 },
+  slotBtnText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 12,
+    color: colors.ink2,
+  },
   slotTime: {
     flex: 1,
     minWidth: 120,
+    fontFamily: fonts.sansSemibold,
     fontSize: 15,
-    fontWeight: "600",
     color: colors.ink,
     textAlign: "center",
   },
   scheduleBtn: { alignSelf: "stretch" },
   dismissBtn: { alignSelf: "flex-start" },
-  dismissText: { fontSize: 13, color: colors.ink4 },
+  dismissText: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink4 },
   quickSection: { gap: 6 },
   quickRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -248,6 +286,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair,
   },
-  quickText: { flex: 1, color: colors.ink, fontSize: 14 },
+  quickText: {
+    flex: 1,
+    fontFamily: fonts.sansMedium,
+    color: colors.ink,
+    fontSize: 14,
+  },
   pressed: { opacity: 0.85 },
 });

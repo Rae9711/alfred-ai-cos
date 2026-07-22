@@ -22,27 +22,40 @@ import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 // Serif display text (greetings, titles, priority titles). Italic optional.
 // `em` portions of a title are italic + accentInk; use <SerifEm> inline.
+// `display` uses SemiBold + tighter tracking so hero type feels inked, not flat.
 export function Serif({
   children,
   size = 18,
   color = colors.ink,
   italic = false,
+  display = false,
   style,
 }: {
   children: ReactNode;
   size?: number;
   color?: string;
   italic?: boolean;
+  /** Heavier optical weight for hero greetings / focal titles. */
+  display?: boolean;
   style?: StyleProp<TextStyle>;
 }) {
+  const family = italic
+    ? fonts.serifItalic
+    : display
+      ? fonts.serifDisplay
+      : fonts.serif;
+  // Display: slightly tighter tracking + denser leading for "inked" feel.
+  // Body serif: milder negative tracking so it stays readable at smaller sizes.
+  const tracking = display ? -0.028 * size : -0.012 * size;
+  const leading = display ? size * 1.08 : size * 1.2;
   return (
     <Text
       style={[
         {
-          fontFamily: italic ? fonts.serifItalic : fonts.serif,
+          fontFamily: family,
           fontSize: size,
-          lineHeight: size * 1.18,
-          letterSpacing: -0.015 * size,
+          lineHeight: leading,
+          letterSpacing: tracking,
           color,
         },
         style,
@@ -100,7 +113,7 @@ export function Disclose({
   );
 }
 
-// alf-h2: serif 22, used in sheet headers.
+// alf-h2: serif display 24, used in sheet headers — heavier than body serif.
 export function H2({
   children,
   style,
@@ -159,7 +172,7 @@ export function ScreenHeader({
   title,
   titleEm,
   subtitle,
-  titleSize = 34,
+  titleSize = 38,
   right,
 }: {
   eyebrow: string;
@@ -175,7 +188,7 @@ export function ScreenHeader({
         <Eyebrow>{eyebrow}</Eyebrow>
         {right ?? null}
       </View>
-      <Serif size={titleSize} style={styles.screenTitle}>
+      <Serif size={titleSize} display style={styles.screenTitle}>
         {title}
         {titleEm ? <SerifEm>{titleEm}</SerifEm> : null}
       </Serif>
@@ -346,6 +359,37 @@ export function IconBtn({
   );
 }
 
+/** Soft circular well for content glyphs — tonal depth without neon glow. */
+export function IconWell({
+  children,
+  size = 32,
+  tone = "stone",
+  style,
+}: {
+  children: ReactNode;
+  size?: number;
+  tone?: "stone" | "accent" | "warn";
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View
+      style={[
+        styles.iconWell,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        },
+        tone === "accent" && styles.iconWellAccent,
+        tone === "warn" && styles.iconWellWarn,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
 // ── Check ─────────────────────────────────────────────────────────────────
 
 // Circular checkbox. Tapping animates an accent fill scaling in from the center with
@@ -456,16 +500,16 @@ export function FooterStamp({ text }: { text?: string }) {
 
 const styles = StyleSheet.create({
   h2: {
-    fontFamily: fonts.serif,
-    fontSize: 22,
-    letterSpacing: -0.22,
-    lineHeight: 25,
+    fontFamily: fonts.serifDisplay,
+    fontSize: 24,
+    letterSpacing: -0.55,
+    lineHeight: 28,
     color: colors.ink,
   },
   eyebrow: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
   },
   sectionRow: {
@@ -476,10 +520,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
-    fontFamily: fonts.sansMedium,
-    fontSize: 13,
-    fontWeight: "500",
-    letterSpacing: 0.78,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 12,
+    letterSpacing: 0.9,
     textTransform: "uppercase",
     color: colors.ink3,
   },
@@ -494,8 +537,8 @@ const styles = StyleSheet.create({
   screenTitle: { marginTop: 2 },
   screenSubtitle: {
     fontFamily: fonts.sans,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     color: colors.ink3,
     marginTop: spacing.xs,
     maxWidth: 320,
@@ -611,6 +654,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
+  },
+
+  iconWell: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.paper2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.7)",
+    shadowColor: "#141316",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  iconWellAccent: {
+    backgroundColor: colors.accentSoft,
+    borderColor: "rgba(255,255,255,0.55)",
+  },
+  iconWellWarn: {
+    backgroundColor: colors.warnSoft,
+    borderColor: "rgba(255,255,255,0.55)",
   },
 
   check: {
