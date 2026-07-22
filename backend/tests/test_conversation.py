@@ -704,6 +704,38 @@ def test_analyze_formats_self_as_wo_and_passes_style_samples(
     assert call["reply_language"] == "zh"
 
 
+def test_analyze_does_not_pass_email_writing_style(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sent-mail style must not leak into chat drafts (wrong names/greetings)."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    prefs = dict(user.preferences or {})
+    prefs["writing_style"] = {
+        "greeting": "Hi Mr. Fortino",
+        "tone": "formal",
+        "length": "medium",
+        "avg_length_chars": 120,
+        "emoji_usage": "rare",
+        "sample_phrases": ["Hi Mr. Fortino,", "Best regards"],
+    }
+    user.preferences = prefs
+    flag_modified(user, "preferences")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    conversation_service.analyze_conversation(parsed, user=user, self_aliases=["Rui🌞"])
+    call = fake.conversation_reply_calls[0]
+    assert call.get("writing_style_prompt") in (None, "")
+    assert "Fortino" not in (call.get("style_samples") or "")
+    assert "Fortino" not in call["context"]
+
+
 def test_detect_reply_language_english_vs_chinese() -> None:
     from app.schemas.api import ConversationMessageOut
 

@@ -936,14 +936,9 @@ def analyze_conversation(
     context = _format_context(selected)
     style_samples = _style_samples_from_self(selected)
     reply_language = detect_reply_language(selected)
+    # Chat replies must not use email writing_style — it injects wrong greetings
+    # / recipient names from Sent mail into messenger drafts.
     writing_style_prompt = None
-    if user is not None:
-        from app.services.writing_style import (
-            format_writing_style_prompt,
-            get_writing_style,
-        )
-
-        writing_style_prompt = format_writing_style_prompt(get_writing_style(user))
     tone_options = tones or list(_DEFAULT_TONES)
     goal_text = _GOAL_LABELS.get(goal, goal) if goal else _GOAL_LABELS["custom"]
     user_name = user.name if user else None

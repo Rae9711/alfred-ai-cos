@@ -207,19 +207,28 @@ _NORMALIZE_CONVERSATION_SYSTEM = (
     "next line(s), keep that structure. Prefer source=wechat."
 )
 _CONVERSATION_REPLY_SYSTEM = (
-    "You are Alfred's reply agent for chat (WeChat/SMS/WhatsApp-style). Write short "
-    "replies that match each requested tone. Lines labeled 我 are the USER; 对方 are "
-    "others. Always write the USER's next message in 我's voice — never speak as 对方. "
-    "When style samples from the user's own bubbles are provided, mimic their length, "
-    "wording, and emoji habits. Read the FULL thread — do not cherry-pick a single "
-    "message. Reply to the overall situation and the latest turn in light of all prior "
-    "context. Stay grounded in the selected conversation context. Never invent facts. "
-    "CRITICAL — reply language: follow the Language instruction in the user message "
-    "exactly. If the thread is English, write EVERY reply body fully in English "
-    "(no Chinese characters unless quoting the other person). If the thread is Chinese, "
-    "write in Chinese. Do not include a signature. Replies should be ready to paste into "
-    "a chat input. Always pass `replies` as a JSON array of objects (not a stringified "
-    "JSON array)."
+    "You are Alfred's reply agent for chat (WeChat/SMS/WhatsApp/iMessage-style). "
+    "Write short chat bubbles that match each requested tone. "
+    "Lines labeled 我 are the USER; 对方 are others. Always write the USER's next "
+    "message in 我's voice — never speak as 对方. "
+    "GROUNDING (critical): Use ONLY people, names, facts, plans, and topics that "
+    "appear in the conversation thread below. Never invent or import names, "
+    "titles (Mr./Ms./Dr.), companies, or greetings from email habits or outside "
+    "knowledge. Do not open with email-style salutations like 'Hi Mr. …' or "
+    "'Dear …' unless that exact phrasing already appears in this chat and fits "
+    "as a natural continuation. Prefer continuing the latest turn the way a "
+    "messenger reply would — usually no formal greeting. "
+    "When style samples from the user's own bubbles in THIS thread are provided, "
+    "mimic only their length/wording/emoji — never copy names from those samples "
+    "if those names are not in the thread. "
+    "Read the FULL thread. Reply to the overall situation and the latest turn. "
+    "Never invent facts. "
+    "CRITICAL — reply language: follow the Language instruction in the user "
+    "message exactly. If the thread is English, write EVERY reply body fully in "
+    "English (no Chinese characters unless quoting the other person). If the "
+    "thread is Chinese, write in Chinese. Do not include a signature. Replies "
+    "must be ready to paste into a chat input. Always pass `replies` as a JSON "
+    "array of objects (not a stringified JSON array)."
 )
 _CONVERSATION_ACTIONS_SYSTEM = (
     "You are Alfred's action extractor for chat conversations. Find actionable items the "
@@ -542,12 +551,14 @@ class AnthropicLLMClient:
         name_line = f"User display name: {user_name}\n" if user_name else ""
         style_block = ""
         if style_samples:
-            style_block += f"{style_samples}\n\n"
-        if writing_style_prompt:
             style_block += (
-                f"{writing_style_prompt}\n"
-                "(Prefer chat bubble samples over email style when both exist.)\n\n"
+                f"{style_samples}\n"
+                "(Match voice only from these THIS-thread bubbles; do not introduce "
+                "any name that is not already in the conversation thread.)\n\n"
             )
+        # Intentionally ignore writing_style_prompt (email Sent-mail style). It
+        # leaks greetings like "Hi Mr. Fortino" into chat replies.
+        _ = writing_style_prompt
         if reply_language == "en":
             lang_line = (
                 "Language: ENGLISH. Write every reply body entirely in English. "
@@ -567,6 +578,11 @@ class AnthropicLLMClient:
                 f"{name_line}{style_block}{lang_line}"
                 f"Reply goal: {goal or 'natural continuation'}\n"
                 f"Produce one reply for each tone: {tones}\n\n"
+                "Grounding rules:\n"
+                "- Reply only about what is in the thread below.\n"
+                "- Do not address anyone by a name/title unless that name appears "
+                "in the thread as someone you are talking to.\n"
+                "- No email salutations or invented recipients.\n\n"
                 "Conversation thread (我 = user, 对方 = other; reply as 我):\n"
                 f"{context}"
             ),
