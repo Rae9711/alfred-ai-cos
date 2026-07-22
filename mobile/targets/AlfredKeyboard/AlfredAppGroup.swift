@@ -14,6 +14,7 @@ enum AlfredAppGroup {
     static let pendingActionsKey = "alfred.pending_confirmed_actions"
     static let keyboardLastSeenKey = "alfred.keyboard_last_seen"
     static let pendingHandoffKey = "alfred.pending_conversation_handoff"
+    static let chatSelfNameKey = "alfred.chat_self_name"
     static let defaultAPIBaseURL = "https://alfredaitech.com"
 
     static var containerURL: URL? {
@@ -100,5 +101,19 @@ enum AlfredAppGroup {
         defaults.removeObject(forKey: pendingHandoffKey)
         defaults.synchronize()
         return value
+    }
+
+    static func setChatSelfName(_ name: String?) {
+        guard let defaults = sharedDefaults else { return }
+        if let name, !name.isEmpty {
+            defaults.set(name, forKey: chatSelfNameKey)
+        } else {
+            defaults.removeObject(forKey: chatSelfNameKey)
+        }
+        defaults.synchronize()
+    }
+
+    static func chatSelfName() -> String? {
+        sharedDefaults?.string(forKey: chatSelfNameKey)
     }
 }

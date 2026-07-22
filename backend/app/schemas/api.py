@@ -484,6 +484,7 @@ class ParsedConversationOut(BaseModel):
 
 class ConversationParseRequest(BaseModel):
     text: str
+    self_aliases: list[str] | None = None
 
 
 class ReplySuggestionOut(BaseModel):
@@ -511,6 +512,7 @@ class ConversationAnalyzeRequest(BaseModel):
     goal: str = "custom"  # comfort | follow_up | confirm | custom
     tones: list[str] | None = None
     timezone: str | None = None
+    self_aliases: list[str] | None = None
 
 
 class ConversationAnalyzeResponse(BaseModel):

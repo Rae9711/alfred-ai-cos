@@ -1,12 +1,14 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// Custom keyboard state machine (mockup-aligned):
-/// IDLE → IMPORTING → CONTEXT_INSIGHT → GENERATING → REPLY_READY → EDITING → SUCCESS
+/// Custom keyboard state machine:
+/// IDLE → IMPORTING → GENERATING → SUCCESS (auto-insert)
+/// Optional: PICKING_SELF when speaker identity is ambiguous.
 final class KeyboardViewController: UIInputViewController {
     private enum Phase {
         case idle
         case importing
+        case pickingSelf
         case contextInsight
         case generating
         case replyReady
@@ -37,6 +39,10 @@ final class KeyboardViewController: UIInputViewController {
     private var generatingTimer: Timer?
     private var generatingComplete = false
     private var clipboardHintCount: Int?
+    private var lastAutoPasteCount: Int = -1
+    private var lastInsertedBody: String = ""
+    private var pendingSelfCandidates: [String] = []
+    private var autoStartInFlight = false
 
     /// Target height closer to a stock iOS custom keyboard (~260–280pt).
     private let preferredKeyboardHeight: CGFloat = 272
@@ -78,10 +84,12 @@ final class KeyboardViewController: UIInputViewController {
         case .idle:
             clipboardHintCount = estimateClipboardMessageCount()
             render()
+            tryAutoStart()
         case .error(let message) where Self.authGateCopy.contains(message):
             phase = .idle
             clipboardHintCount = estimateClipboardMessageCount()
             render()
+            tryAutoStart()
         default:
             break
         }
@@ -159,7 +167,7 @@ final class KeyboardViewController: UIInputViewController {
     /// Scroll only when dense phases can overflow the fixed keyboard height.
     private func updateScrollPolicy() {
         switch phase {
-        case .contextInsight, .replyReady, .editing, .success:
+        case .contextInsight, .replyReady, .editing, .success, .pickingSelf:
             contentScroll.isScrollEnabled = true
             contentScroll.showsVerticalScrollIndicator = true
         default:
@@ -176,6 +184,7 @@ final class KeyboardViewController: UIInputViewController {
         switch phase {
         case .idle: renderIdle()
         case .importing: renderImporting()
+        case .pickingSelf: renderPickingSelf()
         case .contextInsight: renderContextInsight()
         case .generating: renderGenerating()
         case .replyReady: renderReplyReady()
@@ -255,25 +264,34 @@ final class KeyboardViewController: UIInputViewController {
 
         contentStack.addArrangedSubview(makeMascotView(height: 40))
 
-        let title = makeLabel("检测到微信聊天", size: 15, weight: .semibold, color: bodyText)
+        let hasShot = AlfredScreenshotImporter.hasRecentScreenshot()
+        let titleText: String
+        if hasShot {
+            titleText = "检测到聊天截图"
+        } else if let n = clipboardHintCount, n > 0 {
+            titleText = "检测到已复制聊天"
+        } else {
+            titleText = "Alfred 回复助手"
+        }
+        let title = makeLabel(titleText, size: 15, weight: .semibold, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
         let subtitleText: String
-        if let n = clipboardHintCount, n > 0 {
-            subtitleText = "已复制 \(n) 条消息"
+        if hasShot {
+            subtitleText = "将自动识别并填入回复"
+        } else if let n = clipboardHintCount, n > 0 {
+            subtitleText = "已复制 \(n) 条 · 将自动生成回复"
         } else if clipboardHintCount == 0 {
-            // Confident clipboard text exists but message boundaries unclear.
             subtitleText = "已检测到剪贴板内容"
         } else {
-            subtitleText = "复制微信聊天后即可导入"
+            subtitleText = "截一张当前聊天，或多选复制（备选）"
         }
         let subtitle = makeLabel(subtitleText, size: 12, weight: .medium, color: mutedText)
         subtitle.textAlignment = .center
         contentStack.addArrangedSubview(subtitle)
 
-        // One compact feature line instead of three stacked bullets.
-        let features = makeLabel("理解上下文 · 找重点 · 生成回复", size: 11, weight: .regular, color: mutedText)
+        let features = makeLabel("识别对话 · 按你的语气回复 · 自动填入", size: 11, weight: .regular, color: mutedText)
         features.textAlignment = .center
         contentStack.addArrangedSubview(features)
 
@@ -281,7 +299,27 @@ final class KeyboardViewController: UIInputViewController {
             contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
         }
 
-        contentStack.addArrangedSubview(makePrimaryButton("导入所选聊天", action: #selector(importTapped)))
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = 8
+        row.distribution = .fillEqually
+        row.addArrangedSubview(makePrimaryButton("识别截图", action: #selector(screenshotTapped)))
+        row.addArrangedSubview(makeSecondaryButton("用剪贴板", action: #selector(importTapped), symbol: nil))
+        contentStack.addArrangedSubview(row)
+    }
+
+    private func renderPickingSelf() {
+        let title = makeLabel("哪一句是你发的？", size: 14, weight: .semibold, color: bodyText)
+        title.textAlignment = .center
+        contentStack.addArrangedSubview(title)
+        let hint = makeLabel("选一次即可，下次自动记住", size: 11, color: mutedText)
+        hint.textAlignment = .center
+        contentStack.addArrangedSubview(hint)
+        for (idx, name) in pendingSelfCandidates.enumerated() {
+            let btn = makeSoftPrimaryButton(name, action: #selector(selfCandidateTapped(_:)))
+            btn.tag = idx
+            contentStack.addArrangedSubview(btn)
+        }
     }
 
     private func renderImporting() {
@@ -290,7 +328,7 @@ final class KeyboardViewController: UIInputViewController {
         spinner.startAnimating()
         contentStack.addArrangedSubview(spinner)
 
-        let title = makeLabel("正在导入聊天…", size: 14, weight: .medium, color: bodyText)
+        let title = makeLabel("正在识别聊天…", size: 14, weight: .medium, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
     }
@@ -400,7 +438,7 @@ final class KeyboardViewController: UIInputViewController {
         let spacer = UIView()
         titleRow.addArrangedSubview(spacer)
         if replies.count > 1 {
-            titleRow.addArrangedSubview(makeGhostButton("换一个", action: #selector(cycleReply)))
+            titleRow.addArrangedSubview(makeGhostButton("换一个", action: #selector(cycleAndReinsert)))
         }
         contentStack.addArrangedSubview(titleRow)
 
@@ -411,9 +449,13 @@ final class KeyboardViewController: UIInputViewController {
         actionsRow.axis = .horizontal
         actionsRow.spacing = 8
         actionsRow.distribution = .fillEqually
-        actionsRow.addArrangedSubview(makeSecondaryButton("编辑", action: #selector(enterEditing), symbol: "pencil"))
-        actionsRow.addArrangedSubview(makePrimaryButton("插入微信", action: #selector(insertCurrentReply), symbol: "square.and.arrow.down"))
+        actionsRow.addArrangedSubview(makeSecondaryButton("编辑", action: #selector(enterEditing)))
+        actionsRow.addArrangedSubview(makePrimaryButton("填入输入框", action: #selector(insertCurrentReply), symbol: "square.and.arrow.down"))
         contentStack.addArrangedSubview(actionsRow)
+
+        let tip = makeLabel("也可点下方「重新填入」；发送请用聊天 App 的发送键", size: 10, color: mutedText)
+        tip.textAlignment = .center
+        contentStack.addArrangedSubview(tip)
 
         if let banner = statusBanner {
             contentStack.addArrangedSubview(makeLabel(banner, size: 11, color: mutedText))
@@ -484,7 +526,7 @@ final class KeyboardViewController: UIInputViewController {
         tones.addArrangedSubview(makeChipButton("更坚定", symbol: "seal", action: #selector(rewriteDirect)))
         contentStack.addArrangedSubview(tones)
 
-        contentStack.addArrangedSubview(makePrimaryButton("插入微信", action: #selector(insertEditedReply)))
+        contentStack.addArrangedSubview(makePrimaryButton("填入输入框", action: #selector(insertEditedReply)))
 
         // Focus after the next layout pass so the TextView is in the hierarchy.
         DispatchQueue.main.async { [weak self] in
@@ -509,9 +551,17 @@ final class KeyboardViewController: UIInputViewController {
         ])
         contentStack.addArrangedSubview(checkWrap)
 
-        let title = makeLabel("已插入微信", size: 15, weight: .semibold, color: bodyText)
+        let title = makeLabel("已填入，点发送即可", size: 15, weight: .semibold, color: bodyText)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
+
+        let actionsRow = UIStackView()
+        actionsRow.axis = .horizontal
+        actionsRow.spacing = 8
+        actionsRow.distribution = .fillEqually
+        actionsRow.addArrangedSubview(makeGhostButton("换一个", action: #selector(cycleAndReinsert)))
+        actionsRow.addArrangedSubview(makeGhostButton("撤销", action: #selector(undoLastInsert)))
+        contentStack.addArrangedSubview(actionsRow)
 
         let count = actions.count
         if count > 0 {
@@ -526,10 +576,6 @@ final class KeyboardViewController: UIInputViewController {
             for action in actions.prefix(2) {
                 contentStack.addArrangedSubview(makeSuccessActionCard(action))
             }
-        } else {
-            let none = makeLabel("没有更多跟进事项", size: 12, color: mutedText)
-            none.textAlignment = .center
-            contentStack.addArrangedSubview(none)
         }
 
         if let banner = statusBanner {
@@ -650,39 +696,125 @@ final class KeyboardViewController: UIInputViewController {
         openContainingApp(urlString: "albert://")
     }
 
+    @objc private func screenshotTapped() {
+        if let gate = authGateMessage() {
+            phase = .error(gate)
+            render()
+            return
+        }
+        phase = .importing
+        render()
+        Task { await runScreenshotPipeline() }
+    }
+
+    /// Auto-run when a fresh screenshot or chat clipboard is available.
+    private func tryAutoStart() {
+        guard !autoStartInFlight else { return }
+        guard authGateMessage() == nil else { return }
+        guard case .idle = phase else { return }
+
+        if AlfredScreenshotImporter.hasRecentScreenshot() {
+            autoStartInFlight = true
+            phase = .importing
+            render()
+            Task { await runScreenshotPipeline() }
+            return
+        }
+
+        let count = UIPasteboard.general.changeCount
+        guard count != lastAutoPasteCount else { return }
+        guard let text = readClipboardChatText(), !text.isEmpty else { return }
+        let hint = estimateClipboardMessageCount() ?? 0
+        // Require multi-bubble or rich paste before auto-running.
+        guard hint >= 2 || text.filter({ $0 == "\n" }).count >= 3 else { return }
+        lastAutoPasteCount = count
+        autoStartInFlight = true
+        phase = .importing
+        render()
+        Task { await runParse(text: text, autoContinue: true) }
+    }
+
     @objc private func importTapped() {
         if let gate = authGateMessage() {
             phase = .error(gate)
             render()
             return
         }
-        // WeChat iOS multi-select Copy often places EACH bubble as its own
-        // UIPasteboard item. `UIPasteboard.general.string` only returns the
-        // FIRST item (~2–3 lines → 「已选 1 条」). Always merge all items.
         guard let text = readClipboardChatText(), !text.isEmpty else {
-            phase = .error("剪贴板是空的 — 先在微信多选复制")
+            phase = .error("剪贴板是空的 — 先多选复制，或截一张当前聊天")
             render()
             return
         }
+        lastAutoPasteCount = UIPasteboard.general.changeCount
         phase = .importing
         render()
-        Task { await runParse(text: text) }
+        Task { await runParse(text: text, autoContinue: true) }
     }
 
     @MainActor
-    private func runParse(text: String) async {
+    private func runScreenshotPipeline() async {
+        defer { autoStartInFlight = false }
         do {
-            // Local parse first when clipboard already looks multi-message —
-            // never show CONTEXT_INSIGHT with 1 bubble while paste has many turns.
+            let result = try await AlfredScreenshotImporter.ingestRecentScreenshot(deleteAfter: true)
+            let id = UUID().uuidString
+            var messages: [[String: Any]] = []
+            var working: [AlfredKeyboardAPI.Message] = []
+            for (idx, bubble) in result.bubbles.enumerated() {
+                let mid = "\(id)-\(idx)"
+                let sender = bubble.isSelf ? "我" : "对方"
+                let role = bubble.isSelf ? "self" : "other"
+                working.append(
+                    AlfredKeyboardAPI.Message(
+                        id: mid,
+                        sender: sender,
+                        content: bubble.text,
+                        is_selected: true,
+                        weight: 1.0,
+                        role: role
+                    )
+                )
+                messages.append([
+                    "id": mid,
+                    "sender": sender,
+                    "content": bubble.text,
+                    "role": role,
+                    "is_selected": true,
+                    "weight": 1.0,
+                ])
+            }
+            conversationId = id
+            parsedMessages = working
+            selectedMessageIds = Set(working.map(\.id))
+            conversationJSON = [
+                "id": id,
+                "source": "unknown",
+                "participants": [
+                    ["name": "我", "is_self": true],
+                    ["name": "对方", "is_self": false],
+                ],
+                "messages": messages,
+                "imported_at": ISO8601DateFormatter().string(from: Date()),
+            ]
+            insight = "已从截图识别 \(working.count) 条"
+            await continueAnalyzeAndInsert()
+        } catch {
+            phase = .error(mapError(error))
+            render()
+        }
+    }
+
+    @MainActor
+    private func runParse(text: String, autoContinue: Bool) async {
+        defer { autoStartInFlight = false }
+        do {
+            let aliases = selfAliasList()
             let localFirst = locallyExtractMessages(from: text)
             let itemCount = UIPasteboard.general.numberOfItems
             var working = localFirst
 
-            let parsed = try await AlfredKeyboardAPI.parse(text: text)
+            let parsed = try await AlfredKeyboardAPI.parse(text: text, selfAliases: aliases)
             conversationId = parsed.id
 
-            // Take the richest of API vs local. Multi-item pasteboard ⇒ each
-            // item is usually one bubble; prefer that count when higher.
             if parsed.messages.count > working.count {
                 working = parsed.messages
             }
@@ -692,7 +824,6 @@ final class KeyboardViewController: UIInputViewController {
                     working = perItem
                 }
             }
-            // Final safety: if UI would say 1 but text has many newlines, force local.
             let newlineRich = text.filter { $0 == "\n" || $0 == "\u{2028}" }.count >= 3
             if working.count <= 1 && (newlineRich || localFirst.count > working.count) {
                 if localFirst.count > working.count {
@@ -701,8 +832,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             parsedMessages = working
 
-            // Product: 复制 N 条 → 读取全部 → 再回复. Never cap to top-K.
-            // Prefer server non-noise selection; if under-selected, take all weight>=1.
             var selected = Set(working.filter(\.is_selected).map(\.id))
             let nonNoise = working.filter { ($0.weight ?? 1.0) >= 1.0 }
             if selected.isEmpty {
@@ -710,15 +839,11 @@ final class KeyboardViewController: UIInputViewController {
             } else if selected.count < working.count,
                       selected.count < max(2, (working.count + 1) / 2)
             {
-                // Parser/LLM under-selected (e.g. only 1 of 10); restore full thread.
                 selected = Set((nonNoise.isEmpty ? working : nonNoise).map(\.id))
             }
-            // Always select every extracted non-noise bubble by default.
             if selected.count < nonNoise.count {
                 selected = Set(nonNoise.map(\.id))
             }
-            // selected_count = max(apiSelected, localSplitCount) — already enforced
-            // by taking the richest working set above.
             selectedMessageIds = selected
 
             let messages: [[String: Any]] = working.map { m in
@@ -726,42 +851,102 @@ final class KeyboardViewController: UIInputViewController {
                     "id": m.id,
                     "sender": m.sender,
                     "content": m.content,
-                    "role": "unknown",
+                    "role": m.role ?? "unknown",
                     "is_selected": selected.contains(m.id),
                     "weight": m.weight ?? 1.0,
                     "timestamp": NSNull(),
                 ]
             }
+            let participants: [[String: Any]] = (parsed.participants ?? []).map {
+                ["name": $0.name, "is_self": $0.is_self]
+            }
             conversationJSON = [
                 "id": parsed.id,
                 "source": "wechat",
-                "participants": [],
+                "participants": participants,
                 "messages": messages,
                 "imported_at": ISO8601DateFormatter().string(from: Date()),
             ]
             insight = buildHeuristicInsight()
-            phase = .contextInsight
-            render()
+
+            let hasSelf = working.contains { ($0.role ?? "") == "self" }
+                || (parsed.participants ?? []).contains(where: \.is_self)
+            let names = Array(Set(working.map(\.sender).filter { $0 != "Unknown" })).sorted()
+            if !hasSelf && names.count >= 2 && AlfredAppGroup.chatSelfName() == nil {
+                pendingSelfCandidates = names
+                phase = .pickingSelf
+                render()
+                return
+            }
+
+            if autoContinue {
+                await continueAnalyzeAndInsert()
+            } else {
+                phase = .contextInsight
+                render()
+            }
         } catch {
             phase = .error(mapError(error))
             render()
         }
     }
 
-    @objc private func continueFromInsight() {
+    private func selfAliasList() -> [String] {
+        var aliases: [String] = []
+        if let saved = AlfredAppGroup.chatSelfName(), !saved.isEmpty {
+            aliases.append(saved)
+        }
+        return aliases
+    }
+
+    @objc private func selfCandidateTapped(_ sender: UIButton) {
+        let idx = sender.tag
+        guard pendingSelfCandidates.indices.contains(idx) else { return }
+        let name = pendingSelfCandidates[idx]
+        AlfredAppGroup.setChatSelfName(name)
+        // Patch roles in conversation JSON
+        if var conversation = conversationJSON,
+           var messages = conversation["messages"] as? [[String: Any]]
+        {
+            messages = messages.map { m in
+                var copy = m
+                let sender = (m["sender"] as? String) ?? ""
+                copy["role"] = sender == name ? "self" : "other"
+                return copy
+            }
+            conversation["messages"] = messages
+            conversation["participants"] = pendingSelfCandidates.map { n -> [String: Any] in
+                ["name": n, "is_self": n == name]
+            }
+            conversationJSON = conversation
+        }
+        pendingSelfCandidates = []
+        Task { await continueAnalyzeAndInsert() }
+    }
+
+    @MainActor
+    private func continueAnalyzeAndInsert() async {
         phase = .generating
         generatingStep = 0
         generatingComplete = false
         render()
         startGeneratingProgress()
-        Task { await runAnalyze() }
+        await runAnalyze(returnToEditing: false, autoInsert: true)
+    }
+
+    @objc private func continueFromInsight() {
+        Task { await continueAnalyzeAndInsert() }
     }
 
     @MainActor
-    private func runAnalyze(tones: [String]? = nil, returnToEditing: Bool = false) async {
+    private func runAnalyze(
+        tones: [String]? = nil,
+        returnToEditing: Bool = false,
+        autoInsert: Bool = false
+    ) async {
         guard var conversation = conversationJSON else {
             stopGeneratingProgress()
-            phase = .error("会话丢失，请重新导入")
+            phase = .error("会话丢失，请重新识别")
             render()
             return
         }
@@ -780,7 +965,8 @@ final class KeyboardViewController: UIInputViewController {
             let analyzed = try await AlfredKeyboardAPI.analyze(
                 conversation: conversation,
                 goal: "custom",
-                tones: tones
+                tones: tones,
+                selfAliases: selfAliasList()
             )
             replies = analyzed.reply_suggestions
             replyIndex = 0
@@ -792,19 +978,23 @@ final class KeyboardViewController: UIInputViewController {
                 if let first = actions.first?.title, !first.isEmpty {
                     insight = first
                 } else {
-                    insight = "已分析对话，可插入回复"
+                    insight = "已分析对话"
                 }
             }
             finishGeneratingProgress()
             if returnToEditing {
                 phase = .editing
-            } else {
-                phase = .replyReady
-            }
-            render()
-            if returnToEditing {
+                render()
                 editTextView?.text = currentReply()?.body
                 updateCharCount()
+            } else if autoInsert, let body = currentReply()?.body, !body.isEmpty {
+                insertBody(body)
+                phase = .success
+                statusBanner = nil
+                render()
+            } else {
+                phase = .replyReady
+                render()
             }
         } catch {
             stopGeneratingProgress()
@@ -825,6 +1015,31 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    private func insertBody(_ body: String) {
+        textDocumentProxy.insertText(body)
+        lastInsertedBody = body
+    }
+
+    @objc private func cycleAndReinsert() {
+        guard !replies.isEmpty else { return }
+        undoLastInsert()
+        replyIndex = (replyIndex + 1) % replies.count
+        if let body = currentReply()?.body, !body.isEmpty {
+            insertBody(body)
+        }
+        phase = .success
+        render()
+    }
+
+    @objc private func undoLastInsert() {
+        let n = lastInsertedBody.count
+        guard n > 0 else { return }
+        for _ in 0..<n {
+            textDocumentProxy.deleteBackward()
+        }
+        lastInsertedBody = ""
+    }
+
     @objc private func cycleReply() {
         guard !replies.isEmpty else { return }
         replyIndex = (replyIndex + 1) % replies.count
@@ -838,7 +1053,7 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func insertCurrentReply() {
         guard let body = currentReply()?.body else { return }
-        textDocumentProxy.insertText(body)
+        insertBody(body)
         phase = .success
         statusBanner = nil
         render()
@@ -850,7 +1065,7 @@ final class KeyboardViewController: UIInputViewController {
             text = String(text.prefix(maxEditChars))
         }
         guard !text.isEmpty else { return }
-        textDocumentProxy.insertText(text)
+        insertBody(text)
         if !replies.isEmpty {
             let tone = replies[replyIndex].tone
             replies[replyIndex] = AlfredKeyboardAPI.Reply(tone: tone, body: text)
@@ -1179,7 +1394,8 @@ final class KeyboardViewController: UIInputViewController {
                         sender: "Unknown",
                         content: raw,
                         is_selected: !noise,
-                        weight: noise ? 0.3 : 1.0
+                        weight: noise ? 0.3 : 1.0,
+                        role: nil
                     )
                 )
             }
@@ -1341,7 +1557,8 @@ final class KeyboardViewController: UIInputViewController {
                 sender: sender,
                 content: content,
                 is_selected: !noise,
-                weight: noise ? 0.3 : 1.0
+                weight: noise ? 0.3 : 1.0,
+                role: nil
             )
         }
     }

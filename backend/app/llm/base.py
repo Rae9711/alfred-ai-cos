@@ -158,6 +158,9 @@ class LLMClient(Protocol):
         goal: str,
         tone_options: list[str],
         user_name: str | None = None,
+        style_samples: str | None = None,
+        writing_style_prompt: str | None = None,
+        reply_language: str | None = None,
     ) -> ConversationRepliesResult:
         """Draft several tone-labeled replies for a chat conversation."""
         ...

@@ -1,15 +1,32 @@
 # Alfred Keyboard Extension
 
-Custom iOS keyboard that turns a WeChat multi-select paste into reply suggestions
-and confirmed actions (task / calendar / follow-up).
+Custom iOS keyboard that drafts chat replies in place: **screenshot-first for any
+messenger**, WeChat multi-select copy as fallback. Replies are auto-inserted;
+the user only taps the host app's Send.
+
+## Primary flow (all chats: WeChat / SMS / WhatsApp / Instagram / …)
+
+1. Screenshot the current chat thread (system gesture).
+2. Switch to the Alfred keyboard (Full Access + signed-in App Group token).
+3. Keyboard auto-picks the newest screenshot (last ~45s) → Vision OCR →
+   `/conversations/analyze` → **auto `insertText`**.
+4. Screenshot asset is **deleted from Photos** after OCR.
+5. User taps the host **Send** button. Optional: 换一个 / 撤销.
+
+## Fallback (WeChat multi-select)
+
+1. Multi-select → Copy.
+2. Switch to Alfred → auto parse → analyze → auto insert (no 导入 / 下一步).
+3. If speakers are ambiguous, tap **我是谁** once (saved in App Group).
 
 ## Requirements
 
 - Custom/dev client build (not Expo Go) — run `npx expo prebuild --platform ios`
   then open `ios/` in Xcode, or build with EAS (`eas build --profile preview`).
 - App Group `group.com.haoruiwang.alfred` on both the app and the keyboard target.
-- Keyboard **Full Access** enabled (Settings → General → Keyboard → Alfred → Allow Full Access)
-  so the extension can read the clipboard and call the Alfred API.
+- Keyboard **Full Access** enabled (clipboard + network).
+- **Photo Library** access (read/write) so the keyboard can OCR then delete the
+  temporary screenshot.
 - User signed in to the main Alfred app (session token is mirrored into the App Group).
 
 ## Build (cloud / CI-friendly)
@@ -22,16 +39,24 @@ bun run prebuild:ios          # expo prebuild + wire-alfred-keyboard.cjs
 bun run device:ios            # or: eas build --profile preview --platform ios
 ```
 
-`scripts/wire-alfred-keyboard.cjs` attaches Swift sources, `AlfredKeyboard-Info.plist`,
-and entitlements to the extension target created during prebuild.
-
-After JS-only changes to the main app (not native keyboard code):
-
-```bash
-bun run update:preview -- "WeChat import polish"
-```
+`scripts/wire-alfred-keyboard.cjs` attaches Swift sources (including
+`AlfredScreenshotImporter.swift`), `AlfredKeyboard-Info.plist`, and entitlements.
 
 Keyboard Swift / entitlements / target changes **require a new native build**, not OTA.
+
+## State machine
+
+```
+IDLE → IMPORTING → [PICKING_SELF?] → GENERATING → SUCCESS (auto-insert)
+```
+
+Legacy CONTEXT_INSIGHT / REPLY_READY remain for manual fallback UI.
+
+## Self identity
+
+Backend `apply_self_identity` marks `我` / `对方` from account name, saved
+`alfred.chat_self_name`, or OCR left/right bubbles. Analyze prompts use those
+labels and the user's own bubbles as style samples.
 
 ## Wiring the keyboard target in Xcode (first prebuild)
 
@@ -116,63 +141,34 @@ no token). Suite failure surfaces as「未发现共享容器」in the keyboard.
 | Full Access on, container OK, no token | 主 App 尚未同步 |
 | API 401 / expired | 登录已过期 |
 | Network failure | 网络不可用 |
+| No recent screenshot | 未找到最近截图 — 请先截一张当前聊天 |
+| Photo library denied | 需要相册权限以读取截图 |
 
-## State machine UI (~320pt, cool white / deep-blue mockup)
+## UI notes
 
-```
-IDLE → IMPORTING → CONTEXT_INSIGHT → GENERATING → REPLY_READY → EDITING → SUCCESS
-```
+- **IDLE:** screenshot / clipboard detection + [识别截图] [用剪贴板]
+- **IMPORTING / GENERATING:** progress, then auto-insert
+- **PICKING_SELF:** one-time speaker chips when identity is ambiguous
+- **SUCCESS:** 「已填入，点发送即可」+ 换一个 / 撤销 + optional follow-up cards
 
-Visual language: white / light-gray panels, deep-blue primary CTAs, light-blue reply
-bubble (not the earlier beige paper look). Header: **Alfred** + sparkles + chevron
-(chevron → 展开 deep link when a conversation exists, else next keyboard).
+Bottom chrome: 🌐 123 空格 ⌫ blue ↵ (no full QWERTY).
 
-- **IDLE:** mascot + 「检测到微信聊天」+ clipboard count hint + capability bullets + [导入所选聊天]
-- **IMPORTING:** spinner while `POST /parse`
-- **CONTEXT_INSIGHT:** heuristic 「Alfred 理解」+ evidence bubbles from top selected messages + [下一步：生成回复]
-- **GENERATING:** spinner + checklist (解析 → 情绪意图 → 关键信息 → 生成回复…) while `POST /analyze`
-- **REPLY_READY:** light-blue 推荐回复 bubble + [编辑] [插入微信]
-- **EDITING:** TextView + `n/200` counter + tone chips 更短 / 更温柔 / 更坚定 + [插入微信]
-- **SUCCESS:** checkmark 「已插入微信」+ follow-up action cards ([添加提醒]) + 完成 → IDLE
-
-Bottom chrome: 🌐 123 空格 ⌫ blue ↵ (minimal bar styled closer to the mockup; no full QWERTY).
-
-Mascot asset: `targets/AlfredKeyboard/alfred-mascot.png` (copied into the extension
-Resources phase by `keyboard-wiring.cjs`).
-
-**展开** (header chevron when session exists) and **打开 Alfred** open
-`albert://…` (scheme from `app.json`). Host apps — especially **WeChat** — often
-block `extensionContext.open` / responder `openURL:` from keyboard extensions.
-The keyboard copies the deep link to the pasteboard and shows「已复制链接，请打开 Alfred」
-as a fallback.
-
-Keyboard Swift / assets / entitlements changes **require a new native IPA** — OTA will not update the extension UI.
+**展开** / **打开 Alfred** use `albert://…`. Host apps (esp. WeChat) often block
+extension `openURL`; fallback copies the deep link to the pasteboard.
 
 ## Deep link
 
 - Scheme: `albert` (not `alfred`)
-- `albert://conversation/{id}` → `/conversation/[id]` → `ImportConversationScreen` with handoff
+- `albert://conversation/{id}` → Import workstation with handoff
 - Confirm actions: `POST /conversations/actions/confirm` + App Group drain for reminders
-
-## Flow
-
-1. User multi-selects WeChat messages → Copy
-2. Switch to Alfred Keyboard → tap **导入所选聊天**
-3. Extension calls `POST /conversations/parse` → context insight → **下一步：生成回复** → `/analyze`
-4. User inserts a reply via `textDocumentProxy.insertText` (插入微信) → success + follow-ups
-5. User confirms an action → `POST /conversations/actions/confirm` + enqueue into App Group
-6. Main app drains App Group on foreground and schedules a local notification **only**
-   if the confirmed action has `remind_at`
-7. Header chevron / 展开 opens the Import workstation with the same session
 
 ## In-app alternative (no keyboard build)
 
-Home → **从对话中发现** / route `/import` → clipboard paste → same parse/analyze/confirm
-API. Works after an OTA that includes `ImportConversationScreen`; does not need Full Access.
+Home → **从对话中发现** / `/import` → clipboard paste → same parse/analyze/confirm APIs.
 
 ## OTA vs new IPA
 
 | Change | Ship via |
 |---|---|
 | Import UI, diagnostics screen, deep-link routing (JS) | OTA (`bun run update:preview`) |
-| Keyboard Swift UI / App Group / shared-storage native module | **New native EAS / Xcode build** |
+| Keyboard Swift / screenshot OCR / Info.plist privacy | **New native EAS / Xcode build** |

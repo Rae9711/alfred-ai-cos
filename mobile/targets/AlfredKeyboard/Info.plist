@@ -34,5 +34,9 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Alfred 读取刚截的聊天截图以识别对话并生成回复，识别后会删除该截图。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Alfred 仅在识别聊天截图时访问相册，并在识别后删除临时截图。</string>
 </dict>
 </plist>

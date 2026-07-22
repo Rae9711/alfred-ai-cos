@@ -2,17 +2,24 @@ import Foundation
 
 /// Minimal API client for the keyboard extension (network requires Full Access).
 enum AlfredKeyboardAPI {
-    struct ParseResponse: Decodable {
-        let id: String
-        let messages: [Message]
-    }
-
     struct Message: Decodable {
         let id: String
         let sender: String
         let content: String
         let is_selected: Bool
         let weight: Double?
+        let role: String?
+    }
+
+    struct Participant: Decodable {
+        let name: String
+        let is_self: Bool
+    }
+
+    struct ParseResponse: Decodable {
+        let id: String
+        let messages: [Message]
+        let participants: [Participant]?
     }
 
     struct AnalyzeResponse: Decodable {
@@ -70,17 +77,25 @@ enum AlfredKeyboardAPI {
         }
     }
 
-    static func parse(text: String) async throws -> ParseResponse {
-        try await post(path: "/api/v1/conversations/parse", body: ["text": text])
+    static func parse(text: String, selfAliases: [String]? = nil) async throws -> ParseResponse {
+        var body: [String: Any] = ["text": text]
+        if let selfAliases, !selfAliases.isEmpty {
+            body["self_aliases"] = selfAliases
+        }
+        return try await post(path: "/api/v1/conversations/parse", body: body)
     }
 
     static func analyze(
         conversation: [String: Any],
         goal: String,
-        tones: [String]? = nil
+        tones: [String]? = nil,
+        selfAliases: [String]? = nil
     ) async throws -> AnalyzeResponse {
         var body: [String: Any] = ["conversation": conversation, "goal": goal]
         if let tones { body["tones"] = tones }
+        if let selfAliases, !selfAliases.isEmpty {
+            body["self_aliases"] = selfAliases
+        }
         return try await post(path: "/api/v1/conversations/analyze", body: body)
     }
 

@@ -716,6 +716,151 @@ def parse_conversation(text: str, *, use_llm_fallback: bool = True) -> ParsedCon
 # most recent thread window when over the limit.
 _MAX_ANALYZE_MESSAGES = 24
 
+# Senders that always mean the authenticated user (OCR / synthetic labels).
+_SELF_LABELS = frozenset({"我", "me", "myself", "i", "self"})
+
+
+def _normalize_sender_key(name: str) -> str:
+    """Loose key for matching display names (strip spaces / common emoji noise)."""
+    raw = (name or "").strip().casefold()
+    if not raw:
+        return ""
+    # Drop trailing emoji / symbols that WeChat nicknames often append.
+    cleaned = re.sub(
+        r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F1E0-\U0001F1FF]+$",
+        "",
+        raw,
+    )
+    return re.sub(r"\s+", "", cleaned.strip())
+
+
+def _self_name_keys(*names: str | None) -> set[str]:
+    keys: set[str] = set()
+    for name in names:
+        if not name:
+            continue
+        key = _normalize_sender_key(name)
+        if key:
+            keys.add(key)
+        if name.strip().casefold() in _SELF_LABELS:
+            keys.add(_normalize_sender_key(name))
+    keys |= {_normalize_sender_key(label) for label in _SELF_LABELS}
+    return {k for k in keys if k}
+
+
+def apply_self_identity(
+    conversation: ParsedConversationOut,
+    *,
+    self_names: list[str] | None = None,
+) -> ParsedConversationOut:
+    """Mark participants/messages as self using account name + aliases.
+
+    Prefer explicit matches. In a clean 1:1 thread, if exactly one participant
+    matches, the other is treated as other. Messages already tagged
+    ``role=self`` / ``role=other`` (e.g. OCR left/right) are preserved.
+    """
+    aliases = [n for n in (self_names or []) if (n or "").strip()]
+    keys = _self_name_keys(*aliases)
+    # Preserve prior OCR/role tags when no name keys available.
+    if not keys and not any(m.role != MessageRole.unknown for m in conversation.messages):
+        return conversation
+
+    self_senders: set[str] = set()
+    for m in conversation.messages:
+        if m.role == MessageRole.self:
+            self_senders.add(m.sender)
+        elif keys and _normalize_sender_key(m.sender) in keys:
+            self_senders.add(m.sender)
+        elif m.sender.strip().casefold() in _SELF_LABELS:
+            self_senders.add(m.sender)
+
+    # Unique participant names from messages (stable order).
+    seen: list[str] = []
+    for m in conversation.messages:
+        if m.sender not in seen and m.sender != "Unknown":
+            seen.append(m.sender)
+
+    if not self_senders and keys and len(seen) == 2:
+        for name in seen:
+            if _normalize_sender_key(name) in keys:
+                self_senders.add(name)
+                break
+
+    new_messages: list[ConversationMessageOut] = []
+    for m in conversation.messages:
+        if m.role in (MessageRole.self, MessageRole.other):
+            role = m.role
+        elif m.sender in self_senders or _normalize_sender_key(m.sender) in {
+            _normalize_sender_key(s) for s in self_senders
+        }:
+            role = MessageRole.self
+        elif self_senders:
+            role = MessageRole.other
+        else:
+            role = MessageRole.unknown
+        new_messages.append(m.model_copy(update={"role": role}))
+
+    participants = [
+        ParticipantOut(
+            name=n,
+            is_self=n in self_senders
+            or _normalize_sender_key(n) in {_normalize_sender_key(s) for s in self_senders},
+        )
+        for n in seen
+    ]
+    # Ensure every self sender appears even if filtered from `seen`.
+    for s in self_senders:
+        if s not in seen:
+            participants.append(ParticipantOut(name=s, is_self=True))
+
+    return conversation.model_copy(
+        update={"messages": new_messages, "participants": participants}
+    )
+
+
+def self_identity_ambiguous(conversation: ParsedConversationOut) -> bool:
+    """True when we still cannot tell which participant is the user."""
+    if any(m.role == MessageRole.self for m in conversation.messages):
+        return False
+    if any(p.is_self for p in conversation.participants):
+        return False
+    names = {m.sender for m in conversation.messages if m.sender and m.sender != "Unknown"}
+    return len(names) >= 2
+
+
+def _style_samples_from_self(messages: list[ConversationMessageOut], *, limit: int = 6) -> str:
+    samples = [
+        m.content.strip()
+        for m in messages
+        if m.role == MessageRole.self and m.content.strip() and (m.weight or 1.0) >= 1.0
+    ]
+    if not samples:
+        return ""
+    clipped = [s if len(s) <= 80 else s[:77] + "…" for s in samples[-limit:]]
+    return "User's own recent bubbles (match this voice):\n- " + "\n- ".join(clipped)
+
+
+_CJK_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+
+def detect_reply_language(messages: list[ConversationMessageOut]) -> str:
+    """Return ``en`` or ``zh`` from message bodies (default ``zh`` when unclear)."""
+    cjk = 0
+    latin = 0
+    for m in messages:
+        text = m.content or ""
+        cjk += len(_CJK_RE.findall(text))
+        latin += len(_LATIN_RE.findall(text))
+    if latin == 0 and cjk == 0:
+        return "zh"
+    # Prefer English when Latin clearly dominates (e.g. SMS / WhatsApp EN threads).
+    if latin >= max(8, cjk * 2):
+        return "en"
+    if cjk >= max(2, latin):
+        return "zh"
+    return "en" if latin > cjk else "zh"
+
 
 def _selected_messages(conversation: ParsedConversationOut) -> list[ConversationMessageOut]:
     selected = [m for m in conversation.messages if m.is_selected]
@@ -729,7 +874,13 @@ def _format_context(messages: list[ConversationMessageOut]) -> str:
     lines: list[str] = []
     for i, m in enumerate(messages):
         ts = f" ({m.timestamp.isoformat()})" if m.timestamp else ""
-        lines.append(f"[{i}] {m.sender}{ts}: {m.content}")
+        if m.role == MessageRole.self:
+            label = "我"
+        elif m.role == MessageRole.other:
+            label = f"对方({m.sender})" if m.sender and m.sender not in ("对方", "Unknown") else "对方"
+        else:
+            label = m.sender or "Unknown"
+        lines.append(f"[{i}] {label}{ts}: {m.content}")
     return "\n".join(lines)
 
 
@@ -764,10 +915,35 @@ def analyze_conversation(
     tones: list[str] | None = None,
     user: User | None = None,
     timezone: str = "UTC",
+    self_aliases: list[str] | None = None,
 ) -> ConversationAnalyzeResponse:
     """Run reply generation and action extraction in parallel over the same context."""
+    names: list[str] = []
+    if user and user.name:
+        names.append(user.name)
+    if self_aliases:
+        names.extend(self_aliases)
+    # Also pull WeChat alias from preferences when present.
+    if user and isinstance(user.preferences, dict):
+        alias = user.preferences.get("wechat_display_name") or user.preferences.get(
+            "chat_self_name"
+        )
+        if isinstance(alias, str) and alias.strip():
+            names.append(alias.strip())
+    conversation = apply_self_identity(conversation, self_names=names)
+
     selected = _selected_messages(conversation)
     context = _format_context(selected)
+    style_samples = _style_samples_from_self(selected)
+    reply_language = detect_reply_language(selected)
+    writing_style_prompt = None
+    if user is not None:
+        from app.services.writing_style import (
+            format_writing_style_prompt,
+            get_writing_style,
+        )
+
+        writing_style_prompt = format_writing_style_prompt(get_writing_style(user))
     tone_options = tones or list(_DEFAULT_TONES)
     goal_text = _GOAL_LABELS.get(goal, goal) if goal else _GOAL_LABELS["custom"]
     user_name = user.name if user else None
@@ -786,6 +962,9 @@ def analyze_conversation(
             goal=goal_text,
             tone_options=tone_options,
             user_name=user_name,
+            style_samples=style_samples or None,
+            writing_style_prompt=writing_style_prompt,
+            reply_language=reply_language,
         )
         return [ReplySuggestionOut(tone=r.tone, body=r.body) for r in result.replies]
 

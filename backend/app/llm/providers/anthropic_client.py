@@ -207,13 +207,19 @@ _NORMALIZE_CONVERSATION_SYSTEM = (
     "next line(s), keep that structure. Prefer source=wechat."
 )
 _CONVERSATION_REPLY_SYSTEM = (
-    "You are Alfred's reply agent for chat (WeChat/SMS-style). Write short replies that "
-    "match each requested tone. Read the FULL conversation thread provided — do not "
-    "cherry-pick a single message. Reply to the overall situation and the latest turn "
-    "in light of all prior context. Stay grounded in the selected conversation context. "
-    "Never invent facts. Match the language of the conversation (Chinese or English). "
-    "Do not include a signature. Replies should be ready to paste into a chat input. "
-    "Always pass `replies` as a JSON array of objects (not a stringified JSON array)."
+    "You are Alfred's reply agent for chat (WeChat/SMS/WhatsApp-style). Write short "
+    "replies that match each requested tone. Lines labeled 我 are the USER; 对方 are "
+    "others. Always write the USER's next message in 我's voice — never speak as 对方. "
+    "When style samples from the user's own bubbles are provided, mimic their length, "
+    "wording, and emoji habits. Read the FULL thread — do not cherry-pick a single "
+    "message. Reply to the overall situation and the latest turn in light of all prior "
+    "context. Stay grounded in the selected conversation context. Never invent facts. "
+    "CRITICAL — reply language: follow the Language instruction in the user message "
+    "exactly. If the thread is English, write EVERY reply body fully in English "
+    "(no Chinese characters unless quoting the other person). If the thread is Chinese, "
+    "write in Chinese. Do not include a signature. Replies should be ready to paste into "
+    "a chat input. Always pass `replies` as a JSON array of objects (not a stringified "
+    "JSON array)."
 )
 _CONVERSATION_ACTIONS_SYSTEM = (
     "You are Alfred's action extractor for chat conversations. Find actionable items the "
@@ -528,17 +534,40 @@ class AnthropicLLMClient:
         goal: str,
         tone_options: list[str],
         user_name: str | None = None,
+        style_samples: str | None = None,
+        writing_style_prompt: str | None = None,
+        reply_language: str | None = None,
     ) -> ConversationRepliesResult:
         tones = ", ".join(tone_options) if tone_options else "natural, caring, brief"
         name_line = f"User display name: {user_name}\n" if user_name else ""
+        style_block = ""
+        if style_samples:
+            style_block += f"{style_samples}\n\n"
+        if writing_style_prompt:
+            style_block += (
+                f"{writing_style_prompt}\n"
+                "(Prefer chat bubble samples over email style when both exist.)\n\n"
+            )
+        if reply_language == "en":
+            lang_line = (
+                "Language: ENGLISH. Write every reply body entirely in English. "
+                "Do not use Chinese characters except when quoting someone.\n"
+            )
+        elif reply_language == "zh":
+            lang_line = "Language: CHINESE. Write every reply body in Chinese.\n"
+        else:
+            lang_line = (
+                "Language: match the dominant language of the conversation thread "
+                "(English thread → English replies; Chinese thread → Chinese replies).\n"
+            )
         raw = self._structured(
             model=settings.llm_draft_model,
             system=_CONVERSATION_REPLY_SYSTEM,
             user_content=(
-                f"{name_line}Reply goal: {goal or 'natural continuation'}\n"
+                f"{name_line}{style_block}{lang_line}"
+                f"Reply goal: {goal or 'natural continuation'}\n"
                 f"Produce one reply for each tone: {tones}\n\n"
-                "Conversation thread (consider ALL messages; reply to the overall "
-                "situation / last turn in context of the whole thread):\n"
+                "Conversation thread (我 = user, 对方 = other; reply as 我):\n"
                 f"{context}"
             ),
             tool=_tool_for(

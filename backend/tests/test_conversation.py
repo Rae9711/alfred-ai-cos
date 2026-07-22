@@ -632,3 +632,129 @@ def test_conversation_actions_result_coerces_json_string() -> None:
     result = ConversationActionsResult.model_validate(raw)
     assert len(result.actions) == 1
     assert result.actions[0].title == "发合同"
+
+
+def test_apply_self_identity_marks_matching_sender() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    marked = conversation_service.apply_self_identity(parsed, self_names=["Rui"])
+    assert any(p.is_self and p.name.startswith("Rui") for p in marked.participants)
+    self_msgs = [m for m in marked.messages if m.role.value == "self"]
+    other_msgs = [m for m in marked.messages if m.role.value == "other"]
+    assert self_msgs
+    assert other_msgs
+    assert all(m.sender.startswith("Rui") for m in self_msgs)
+    ctx = conversation_service._format_context(  # noqa: SLF001
+        [m for m in marked.messages if m.is_selected]
+    )
+    assert "我:" in ctx or "我 (" in ctx or "] 我" in ctx
+    assert "对方" in ctx
+
+
+def test_apply_self_identity_preserves_ocr_roles() -> None:
+    from app.schemas.api import ConversationMessageOut, ParsedConversationOut, ParticipantOut
+    from app.schemas.llm import ConversationSource, MessageRole
+    from datetime import UTC, datetime
+
+    conversation = ParsedConversationOut(
+        id="c1",
+        source=ConversationSource.unknown,
+        participants=[
+            ParticipantOut(name="对方", is_self=False),
+            ParticipantOut(name="我", is_self=True),
+        ],
+        messages=[
+            ConversationMessageOut(
+                id="1",
+                sender="对方",
+                content="今晚见吗",
+                role=MessageRole.other,
+            ),
+            ConversationMessageOut(
+                id="2",
+                sender="我",
+                content="好啊",
+                role=MessageRole.self,
+            ),
+        ],
+        imported_at=datetime.now(UTC),
+    )
+    marked = conversation_service.apply_self_identity(conversation, self_names=[])
+    assert marked.messages[0].role == MessageRole.other
+    assert marked.messages[1].role == MessageRole.self
+    assert conversation_service.self_identity_ambiguous(marked) is False
+
+
+def test_analyze_formats_self_as_wo_and_passes_style_samples(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    conversation_service.analyze_conversation(
+        parsed, user=user, self_aliases=["Rui🌞"]
+    )
+    assert fake.conversation_reply_calls
+    call = fake.conversation_reply_calls[0]
+    assert "我" in call["context"]
+    assert "对方" in call["context"]
+    assert call["style_samples"]
+    assert "一吃一堆" in call["style_samples"] or "已吃" in (call["style_samples"] or "")
+    assert call["reply_language"] == "zh"
+
+
+def test_detect_reply_language_english_vs_chinese() -> None:
+    from app.schemas.api import ConversationMessageOut
+
+    en = [
+        ConversationMessageOut(
+            id="1", sender="A", content="Hey, are we still on for dinner tonight?"
+        ),
+        ConversationMessageOut(
+            id="2", sender="B", content="Yes, see you at 7pm near the station."
+        ),
+    ]
+    zh = [
+        ConversationMessageOut(id="1", sender="A", content="今晚还吃饭吗"),
+        ConversationMessageOut(id="2", sender="B", content="好，七点见"),
+    ]
+    assert conversation_service.detect_reply_language(en) == "en"
+    assert conversation_service.detect_reply_language(zh) == "zh"
+
+
+def test_analyze_english_thread_sets_reply_language_en(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.schemas.api import ConversationMessageOut, ParsedConversationOut, ParticipantOut
+    from app.schemas.llm import ConversationSource, MessageRole
+
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    conversation = ParsedConversationOut(
+        id="c-en",
+        source=ConversationSource.unknown,
+        participants=[
+            ParticipantOut(name="Alex", is_self=False),
+            ParticipantOut(name="Rui", is_self=True),
+        ],
+        messages=[
+            ConversationMessageOut(
+                id="1",
+                sender="Alex",
+                content="Can you send the deck before the meeting?",
+                role=MessageRole.other,
+            ),
+            ConversationMessageOut(
+                id="2",
+                sender="Rui",
+                content="Sure, I'll polish it and send it over this afternoon.",
+                role=MessageRole.self,
+            ),
+        ],
+        imported_at=datetime.now(UTC),
+    )
+    conversation_service.analyze_conversation(conversation, user=user)
+    assert fake.conversation_reply_calls[0]["reply_language"] == "en"

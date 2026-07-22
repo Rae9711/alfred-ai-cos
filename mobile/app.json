@@ -21,7 +21,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": ["shortcuts"],
-        "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name."
+        "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name.",
+        "NSPhotoLibraryUsageDescription": "Alfred reads a recent chat screenshot to draft a reply, then deletes that screenshot."
       },
       "entitlements": {
         "com.apple.security.application-groups": [
