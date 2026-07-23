@@ -6,10 +6,12 @@ through here, so calendar actions from natural language have one audited path.""
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from google.auth.exceptions import RefreshError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,7 @@ from app.db.models import Message, User
 from app.llm import get_llm
 from app.services import execution, meeting_prep
 from app.services.actions import propose_action_internal
+from app.services.connected_accounts import TokenReconnectRequired
 from app.services.inbox_filter import message_in_primary_inbox
 from app.services.inbox_view import (
     effective_inbox_category,
@@ -28,6 +31,20 @@ from app.services.inbox_view import (
 )
 from app.services.today import build_today
 from app.services.waiting import build_waiting
+
+
+_GOOGLE_RECONNECT_REPLY = (
+    "Your Google connection expired — open You → Settings, reconnect Google, "
+    "then ask me again and I'll put it on your calendar."
+)
+
+_GOOGLE_CONNECT_REPLY = (
+    "Connect Google in You → Settings first, then I can book this on your calendar."
+)
+
+
+def _is_missing_google_account(exc: BaseException) -> bool:
+    return isinstance(exc, ValueError) and "No connected Google account" in str(exc)
 
 
 def resolve_timezone(db: Session, user: User, requested: str | None) -> str:
@@ -216,6 +233,26 @@ class AssistantOutcome:
     remind_at: str | None = None
 
 
+def _calendar_write_outcome(
+    *,
+    action: str,
+    reply: str,
+    run: Callable[[], ExecutionResult],
+) -> AssistantOutcome:
+    """Run a calendar mutation; turn reconnect / missing-grant into a clear reply."""
+    try:
+        result = run()
+    except (TokenReconnectRequired, RefreshError):
+        return AssistantOutcome(action="none", reply=_GOOGLE_RECONNECT_REPLY)
+    except ValueError as exc:
+        if _is_missing_google_account(exc):
+            return AssistantOutcome(action="none", reply=_GOOGLE_CONNECT_REPLY)
+        raise
+    return AssistantOutcome(
+        action=action, reply=reply or result.detail, detail=result.detail
+    )
+
+
 def _outcome_from_task_execution(
     *,
     result: ExecutionResult,
@@ -280,9 +317,10 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
             target={"title": interp.title, "start": interp.start, "end": interp.end},
             reason="Booked from an assistant request",
         )
-        result = execution.execute_proposal(db, user, proposal)
-        return AssistantOutcome(
-            action="booked", reply=interp.reply or result.detail, detail=result.detail
+        return _calendar_write_outcome(
+            action="booked",
+            reply=interp.reply or "",
+            run=lambda: execution.execute_proposal(db, user, proposal),
         )
 
     if interp.intent == "reschedule_calendar" and interp.event_id and (interp.start or interp.end):
@@ -300,9 +338,10 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
             target=target,
             reason="Rescheduled from an assistant request",
         )
-        result = execution.execute_proposal(db, user, proposal)
-        return AssistantOutcome(
-            action="updated", reply=interp.reply or result.detail, detail=result.detail
+        return _calendar_write_outcome(
+            action="updated",
+            reply=interp.reply or "",
+            run=lambda: execution.execute_proposal(db, user, proposal),
         )
 
     if interp.intent == "cancel_calendar" and interp.event_id:
@@ -313,9 +352,10 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
             target={"event_id": interp.event_id},
             reason="Cancelled from an assistant request",
         )
-        result = execution.execute_proposal(db, user, proposal)
-        return AssistantOutcome(
-            action="cancelled", reply=interp.reply or result.detail, detail=result.detail
+        return _calendar_write_outcome(
+            action="cancelled",
+            reply=interp.reply or "",
+            run=lambda: execution.execute_proposal(db, user, proposal),
         )
 
     # Reminders before check_calendar — the LLM often mislabels "明天提醒我…" as a

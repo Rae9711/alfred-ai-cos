@@ -151,3 +151,58 @@ def test_create_task_when_llm_mislabels_check_calendar(
     task = db.query(Task).filter(Task.user_id == user.id).one()
     assert "房租" in task.title
     assert task.remind_at is not None
+
+
+def test_book_calendar_reconnect_returns_clear_reply(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revoked Google grant must not 500 Ask/chat — tell the user to reconnect."""
+    from app.services.connected_accounts import TokenReconnectRequired
+
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="book_calendar",
+            title="Leave for Meeting",
+            start="2026-07-23T14:00:00+08:00",
+            end="2026-07-23T15:00:00+08:00",
+            reply="Booked.",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+
+    def _boom(*_a, **_k):  # noqa: ANN002, ANN003
+        raise TokenReconnectRequired("Google grant needs reconnect")
+
+    monkeypatch.setattr("app.services.execution.execute_proposal", _boom)
+    out = interpret_and_act(
+        db,
+        user,
+        text="Put 2pm Leave for meeting today on my calendar",
+        tz="Asia/Shanghai",
+    )
+    assert out.action == "none"
+    assert "reconnect" in out.reply.lower()
+    assert "Settings" in out.reply
+
+
+def test_book_calendar_missing_google_returns_connect_reply(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(
+            intent="book_calendar",
+            title="Focus",
+            start="2026-07-23T14:00:00+08:00",
+            end="2026-07-23T15:00:00+08:00",
+            reply="",
+        )
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+
+    def _boom(*_a, **_k):  # noqa: ANN002, ANN003
+        raise ValueError("No connected Google account for user")
+
+    monkeypatch.setattr("app.services.execution.execute_proposal", _boom)
+    out = interpret_and_act(db, user, text="Book focus 2-3pm", tz="Asia/Shanghai")
+    assert out.action == "none"
+    assert "Connect Google" in out.reply

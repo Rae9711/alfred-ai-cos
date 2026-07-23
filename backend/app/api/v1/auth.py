@@ -136,6 +136,9 @@ def _upsert_google_account(
     else:
         account.token_ciphertext = ciphertext
         account.scopes = token_payload.get("scopes", [])
+        # Fresh grant — clear a prior reconnect/error so UI + sync can recover.
+        account.sync_status = SyncStatus.never
+        account.sync_error = None
     return account
 
 

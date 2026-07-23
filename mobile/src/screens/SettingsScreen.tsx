@@ -826,20 +826,26 @@ export function SettingsScreen() {
 
           <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
           <View style={styles.group}>
-            {connectedMailboxes.map((mailbox) => (
-              <Row
-                key={mailbox.id}
-                label={mailbox.email}
-                detail={
-                  mailbox.gmail_modify ? "Gmail · synced" : s.reconnectForRead
-                }
-                onPress={() =>
-                  mailbox.gmail_modify
-                    ? disconnectMailbox(mailbox.id, mailbox.email)
-                    : void linkGmail()
-                }
-              />
-            ))}
+            {connectedMailboxes.map((mailbox) => {
+              const needsReconnect = mailbox.sync_status === "error";
+              const detail = needsReconnect
+                ? s.reconnectGrant
+                : mailbox.gmail_modify
+                  ? "Gmail · synced"
+                  : s.reconnectForRead;
+              return (
+                <Row
+                  key={mailbox.id}
+                  label={mailbox.email}
+                  detail={detail}
+                  onPress={() =>
+                    needsReconnect || !mailbox.gmail_modify
+                      ? void linkGmail()
+                      : disconnectMailbox(mailbox.id, mailbox.email)
+                  }
+                />
+              );
+            })}
             <Integration
               name={s.addGmail}
               detail="Link another inbox"

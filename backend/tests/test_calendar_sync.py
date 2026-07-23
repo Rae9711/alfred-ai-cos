@@ -77,8 +77,11 @@ def test_sync_calendar_removes_stale_local_events(
             }
         ],
     )
-    monkeypatch.setattr(calendar, "decrypt_token", lambda _c: {"token": "x"})
-    monkeypatch.setattr(calendar, "fresh_credentials", lambda _t: (None, {"token": "x"}))
+    monkeypatch.setattr(
+        calendar,
+        "refresh_google_token",
+        lambda _db, _account: (None, {"token": "x"}),
+    )
 
     calendar.sync_calendar(db, user.id)
     assert db.get(CalendarEvent, kept.id) is not None
