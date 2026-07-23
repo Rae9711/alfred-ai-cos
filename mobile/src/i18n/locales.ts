@@ -316,6 +316,33 @@ export const translations = {
       contactsOpenSettings: "Open Settings",
       contactsGrantedToast: "Contacts access enabled.",
       contactsDeniedToast: "Contacts access denied — enable in Settings.",
+      appleCalendarTitle: "Apple Calendar",
+      appleCalendarHint:
+        "Read events from this iPhone’s Calendar app into Alfred’s schedule. New events Alfred books go only to your Default calendar below — not both (avoids duplicates if iCloud↔Google sync is on).",
+      appleCalendarStatusGranted: "Connected",
+      appleCalendarStatusDenied: "Denied",
+      appleCalendarStatusUndetermined: "Not connected",
+      appleCalendarStatusUnavailable: "Requires app update",
+      appleCalendarUnavailableHint:
+        "Full Apple Calendar access needs a new Alfred install (TestFlight / IPA) with calendar permission — OTA alone can’t add the native module. UI and Google write still work now.",
+      appleCalendarConnect: "Connect",
+      appleCalendarOpenSettings: "Open Settings",
+      appleCalendarGrantedToast: "Apple Calendar connected.",
+      appleCalendarDeniedToast:
+        "Calendar access denied — enable in Settings → Alfred → Calendars.",
+      googleCalendarDetail: "Synced to Alfred Home",
+      appleCalendarIntegrationDetail: "iPhone Calendar app",
+      calendarWritePrimaryTitle: "Default calendar for new events",
+      calendarWritePrimaryHint:
+        "Alfred writes new events to only one calendar. Home still shows Google + Apple when both are connected.",
+      calendarWritePrimaryGoogle: "Google",
+      calendarWritePrimaryApple: "Apple",
+      calendarWritePrimarySaved: ( which: string) =>
+        `New events will go to ${which}.`,
+      calendarWritePrimaryNeedApple:
+        "Connect Apple Calendar first, then choose it as default.",
+      calendarWritePrimaryNeedGoogle:
+        "Connect Google Calendar first, then choose it as default.",
       subscriptionTitle: "Subscription",
       subscriptionValueProp:
         "We handle AI and email for you — no API keys to configure.",
@@ -834,6 +861,30 @@ export const translations = {
       contactsOpenSettings: "打开设置",
       contactsGrantedToast: "已开启通讯录访问。",
       contactsDeniedToast: "通讯录访问被拒绝 — 请在设置中开启。",
+      appleCalendarTitle: "苹果日历",
+      appleCalendarHint:
+        "把本机「日历」App 的日程读入 Alfred。Alfred 新建日程只写入下方「新日程写入」所选日历，不会双写（避免 iCloud↔Google 同步时重复）。",
+      appleCalendarStatusGranted: "已连接",
+      appleCalendarStatusDenied: "已拒绝",
+      appleCalendarStatusUndetermined: "未连接",
+      appleCalendarStatusUnavailable: "需要更新 App",
+      appleCalendarUnavailableHint:
+        "完整苹果日历权限需要新安装 Alfred（含原生日历模块）— 仅 OTA 不够。设置界面与 Google 写入现在仍可用。",
+      appleCalendarConnect: "连接",
+      appleCalendarOpenSettings: "打开设置",
+      appleCalendarGrantedToast: "已连接苹果日历。",
+      appleCalendarDeniedToast:
+        "日历访问被拒绝 — 请在 设置 → Alfred → 日历 中开启。",
+      googleCalendarDetail: "已同步到 Alfred 首页",
+      appleCalendarIntegrationDetail: "本机日历 App",
+      calendarWritePrimaryTitle: "新日程写入",
+      calendarWritePrimaryHint:
+        "新建日程只写入一个日历。首页在两者都连接时仍会合并显示 Google 与苹果日程。",
+      calendarWritePrimaryGoogle: "Google",
+      calendarWritePrimaryApple: "苹果",
+      calendarWritePrimarySaved: (which: string) => `新日程将写入${which}。`,
+      calendarWritePrimaryNeedApple: "请先连接苹果日历，再设为默认。",
+      calendarWritePrimaryNeedGoogle: "请先连接 Google 日历，再设为默认。",
       subscriptionTitle: "订阅",
       subscriptionValueProp: "AI 与邮件由我们托管 — 无需自行配置 API 密钥。",
       subscriptionCurrentPlan: "当前方案",

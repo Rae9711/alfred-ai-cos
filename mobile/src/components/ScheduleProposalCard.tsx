@@ -15,6 +15,7 @@ import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
+import { bookOnPrimaryCalendar } from "@/lib/calendarWrite";
 import { colors, fonts, radius, spacing } from "@/theme/theme";
 import { surfaces } from "@/theme/surfaces";
 
@@ -87,22 +88,48 @@ export function ScheduleProposalCard({ proposal, onReply, onChanged }: Props) {
   const addToCalendar = () => {
     if (slot.done || slot.busy) return;
     setSlot((s) => ({ ...s, busy: true }));
-    void api
-      .acceptScheduleProposal(proposal.id, {
-        start: slot.start.toISOString(),
-        end: slot.end.toISOString(),
-      })
-      .then(() => {
-        showToast(t.home.scheduleProposalAccepted);
+    void (async () => {
+      try {
+        const result = await bookOnPrimaryCalendar(
+          {
+            title: proposal.title,
+            start: slot.start,
+            end: slot.end,
+            notes: proposal.counterparty
+              ? `With ${proposal.counterparty}`
+              : undefined,
+            location: proposal.location,
+          },
+          {
+            googleConnected: true,
+            googleBook: async () => {
+              const res = await api.acceptScheduleProposal(proposal.id, {
+                start: slot.start.toISOString(),
+                end: slot.end.toISOString(),
+                write_target: "google",
+              });
+              return { eventId: res.event_id };
+            },
+          },
+        );
+        if (result.target === "apple") {
+          await api.acceptScheduleProposal(proposal.id, {
+            start: slot.start.toISOString(),
+            end: slot.end.toISOString(),
+            write_target: "apple",
+          });
+        }
+        if (result.fallbackNotice) showToast(result.fallbackNotice);
+        else showToast(t.home.scheduleProposalAccepted);
         setSlot((s) => ({ ...s, done: true, busy: false }));
         onChanged?.();
-      })
-      .catch((e) => {
+      } catch (e) {
         showToast(
           e instanceof Error ? e.message : t.home.scheduleProposalFailed,
         );
         setSlot((s) => ({ ...s, busy: false }));
-      });
+      }
+    })();
   };
 
   const dismiss = () => {

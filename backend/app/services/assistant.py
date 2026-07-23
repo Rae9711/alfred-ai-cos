@@ -225,12 +225,23 @@ def _default_remind_at(due: date, tz: str) -> datetime:
 
 @dataclass
 class AssistantOutcome:
-    action: str  # booked | updated | cancelled | created | none
+    action: str  # booked | updated | cancelled | created | device_book | none
     reply: str
     detail: str | None = None
     task_id: str | None = None
     task_title: str | None = None
     remind_at: str | None = None
+    device_calendar_title: str | None = None
+    device_calendar_start: str | None = None
+    device_calendar_end: str | None = None
+    device_calendar_location: str | None = None
+
+
+_APPLE_PRIMARY_MODIFY_REPLY = (
+    "Your default calendar for new events is Apple Calendar. "
+    "Reschedule and cancel still use Google Calendar for synced events — "
+    "switch Default calendar to Google in Settings, or cancel in the Calendar app."
+)
 
 
 def _calendar_write_outcome(
@@ -310,6 +321,18 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
     )
 
     if interp.intent == "book_calendar" and interp.start and interp.end and interp.title:
+        from app.services.calendar_write import should_write_apple
+
+        if should_write_apple(user):
+            return AssistantOutcome(
+                action="device_book",
+                reply=interp.reply
+                or f"I'll add “{interp.title}” to your Apple Calendar.",
+                detail=f"Book on Apple Calendar: {interp.title}",
+                device_calendar_title=interp.title,
+                device_calendar_start=interp.start,
+                device_calendar_end=interp.end,
+            )
         proposal = propose_action_internal(
             db,
             user,
@@ -324,6 +347,10 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         )
 
     if interp.intent == "reschedule_calendar" and interp.event_id and (interp.start or interp.end):
+        from app.services.calendar_write import should_write_apple
+
+        if should_write_apple(user):
+            return AssistantOutcome(action="none", reply=_APPLE_PRIMARY_MODIFY_REPLY)
         target: dict[str, str] = {"event_id": interp.event_id}
         if interp.start:
             target["start"] = interp.start
@@ -345,6 +372,10 @@ def interpret_and_act(db: Session, user: User, *, text: str, tz: str) -> Assista
         )
 
     if interp.intent == "cancel_calendar" and interp.event_id:
+        from app.services.calendar_write import should_write_apple
+
+        if should_write_apple(user):
+            return AssistantOutcome(action="none", reply=_APPLE_PRIMARY_MODIFY_REPLY)
         proposal = propose_action_internal(
             db,
             user,

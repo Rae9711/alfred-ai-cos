@@ -45,6 +45,13 @@ import { WeekScheduleView } from "@/components/schedule/WeekScheduleView";
 import { firstNameOf, greetingFor } from "@/lib/today";
 import { parseSenderDisplay } from "@/lib/inbox";
 import {
+  listDeviceCalendarEvents,
+  mergeCalendarMeetings,
+  isAppleEventId,
+} from "@/lib/appleCalendar";
+import { bookOnPrimaryCalendar } from "@/lib/calendarWrite";
+import { fulfillDeviceCalendarBook } from "@/lib/fulfillDeviceCalendarBook";
+import {
   type ScheduleView,
   buildDayTimelineItems,
   isSameDay,
@@ -184,7 +191,26 @@ export function HomeScreen() {
         ]);
       setMe(profile);
       setPendingCount(pending.length);
-      setMeetings(upcoming);
+      const rangeStart = new Date();
+      rangeStart.setHours(0, 0, 0, 0);
+      if (view === "month") {
+        rangeStart.setDate(1);
+      } else {
+        // week view: start of this week (Mon)
+        const dow = (rangeStart.getDay() + 6) % 7;
+        rangeStart.setDate(rangeStart.getDate() - dow);
+      }
+      const rangeEnd = new Date(rangeStart);
+      if (view === "month") {
+        rangeEnd.setMonth(rangeEnd.getMonth() + 1);
+        rangeEnd.setDate(0);
+        rangeEnd.setHours(23, 59, 59, 999);
+      } else {
+        rangeEnd.setDate(rangeEnd.getDate() + 14);
+        rangeEnd.setHours(23, 59, 59, 999);
+      }
+      const appleEvents = await listDeviceCalendarEvents(rangeStart, rangeEnd);
+      setMeetings(mergeCalendarMeetings(upcoming, appleEvents));
       setTodayData(today);
       setReminders(upcomingReminders);
       setHomeInbox(Array.isArray(inboxView?.messages) ? inboxView.messages.slice(0, 3) : []);
@@ -278,6 +304,7 @@ export function HomeScreen() {
       openSheet(
         <MeetingDetailSheet
           eventId={item.id}
+          initialEvent={isAppleEventId(item.id) ? item : undefined}
           onChanged={() => void load(scheduleView)}
         />,
       );
@@ -337,12 +364,35 @@ export function HomeScreen() {
       setHabitAction(true);
       void (async () => {
         try {
-          await api.schedulePlanningBlock({
-            title: topHabitSuggestion.activity,
-            start: topHabitSuggestion.suggested_start,
-            end: topHabitSuggestion.suggested_end,
-          });
-          showToast(t.home.habitBlockScheduled);
+          const googleConnected = (me?.connected_mailboxes?.length ?? 0) > 0;
+          const result = await bookOnPrimaryCalendar(
+            {
+              title: topHabitSuggestion.activity,
+              start: topHabitSuggestion.suggested_start,
+              end: topHabitSuggestion.suggested_end,
+            },
+            {
+              googleConnected,
+              googleBook: async () => {
+                const res = await api.schedulePlanningBlock({
+                  title: topHabitSuggestion.activity,
+                  start: topHabitSuggestion.suggested_start,
+                  end: topHabitSuggestion.suggested_end,
+                  write_target: "google",
+                });
+                return { eventId: res.event_id };
+              },
+            },
+          );
+          if (result.target === "apple") {
+            await api.schedulePlanningBlock({
+              title: topHabitSuggestion.activity,
+              start: topHabitSuggestion.suggested_start,
+              end: topHabitSuggestion.suggested_end,
+              write_target: "apple",
+            });
+          }
+          showToast(result.fallbackNotice ?? t.home.habitBlockScheduled);
           flashState("success");
           await api.sync({ calendarOnly: true }).catch(() => undefined);
           await load(scheduleView);
@@ -472,8 +522,10 @@ export function HomeScreen() {
     async (item: ConversationInboxItem) => {
       try {
         const evidence = item.evidence ? ` Context: ${item.evidence}` : "";
-        const res = await api.ask(
-          `Add this to my calendar: ${item.title}.${evidence}`,
+        const res = await fulfillDeviceCalendarBook(
+          await api.ask(
+            `Add this to my calendar: ${item.title}.${evidence}`,
+          ),
         );
         if (res.action === "booked" || res.action === "created" || res.action === "updated") {
           const resolved = await resolveConversationItem(item, "done", { silent: true });

@@ -361,14 +361,24 @@ export const api = {
     const q = opts?.upcoming ? "?upcoming=true" : "";
     return request<Task[]>(`/tasks${q}`);
   },
-  schedulePlanningBlock: (body: { title: string; start: string; end: string }) =>
+  schedulePlanningBlock: (body: {
+    title: string;
+    start: string;
+    end: string;
+    write_target?: "google" | "apple";
+  }) =>
     request<{ booked: boolean; reply: string; event_id?: string | null }>(
       "/today/schedule-block",
       { method: "POST", body: JSON.stringify(body) },
     ),
   acceptScheduleProposal: (
     id: string,
-    opts?: { timezone?: string; start?: string; end?: string },
+    opts?: {
+      timezone?: string;
+      start?: string;
+      end?: string;
+      write_target?: "google" | "apple";
+    },
   ) =>
     request<{ accepted: boolean; reply: string; event_id?: string | null }>(
       `/schedule-proposals/${id}/accept`,
@@ -378,6 +388,7 @@ export const api = {
           timezone: opts?.timezone ?? deviceTimezone(),
           start: opts?.start,
           end: opts?.end,
+          write_target: opts?.write_target,
         }),
       },
     ),
@@ -474,6 +485,11 @@ export const api = {
     request<void>("/notifications/prefs", {
       method: "POST",
       body: JSON.stringify({ quiet_hours }),
+    }),
+  setCalendarWritePrimary: (calendar_write_primary: "google" | "apple") =>
+    request<void>("/notifications/prefs", {
+      method: "POST",
+      body: JSON.stringify({ calendar_write_primary }),
     }),
   disconnectAccount: (provider: string) =>
     request<void>(`/connected-accounts/provider/${provider}`, { method: "DELETE" }),

@@ -45,6 +45,7 @@ import {
   type PersistedFreeMsg,
 } from "@/lib/freeChatHistory";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
+import { fulfillDeviceCalendarBook } from "@/lib/fulfillDeviceCalendarBook";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
 
 export type AlfredFreeMsg = ChatMessage & {
@@ -596,7 +597,9 @@ export function useAlfredFreeChat(scrollRef: RefObject<ScrollView | null>) {
               role: m.role === "user" ? "user" : "assistant",
               content: m.text,
             }));
-          const res = await api.chat(q, history);
+          const res = await fulfillDeviceCalendarBook(
+            await api.chat(q, history),
+          );
           await scheduleFromAssistantResponse(res);
           setFreeChat((c) => [
             ...c,

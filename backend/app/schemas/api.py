@@ -195,6 +195,8 @@ class ScheduleBlockRequest(BaseModel):
     start: str  # ISO 8601 with timezone
     end: str
     timezone: str | None = None
+    # When "apple", skip Google write — device creates via EventKit.
+    write_target: str | None = None
 
 
 class ScheduleBlockResponse(BaseModel):
@@ -208,6 +210,7 @@ class AcceptScheduleProposalRequest(BaseModel):
     timezone: str | None = None
     start: str | None = None
     end: str | None = None
+    write_target: str | None = None
 
 
 class AcceptScheduleProposalResponse(BaseModel):
@@ -215,6 +218,13 @@ class AcceptScheduleProposalResponse(BaseModel):
     reply: str
     detail: str | None = None
     event_id: str | None = None
+
+
+class DeviceCalendarEventOut(BaseModel):
+    title: str
+    start: str
+    end: str
+    location: str | None = None
 
 
 class AssistantAskRequest(BaseModel):
@@ -226,11 +236,12 @@ class AssistantAskRequest(BaseModel):
 
 class AssistantAskResponse(BaseModel):
     reply: str  # one-line message to show the user
-    action: str  # "booked" | "updated" | "cancelled" | "created" | "none"
+    action: str  # "booked" | "updated" | "cancelled" | "created" | "device_book" | "none"
     detail: str | None = None  # execution detail when an action ran
     task_id: str | None = None
     task_title: str | None = None
     remind_at: datetime | None = None
+    device_calendar: DeviceCalendarEventOut | None = None
 
 
 class AssistantChatMessage(BaseModel):
@@ -251,6 +262,7 @@ class AssistantChatResponse(BaseModel):
     task_id: str | None = None
     task_title: str | None = None
     remind_at: datetime | None = None
+    device_calendar: DeviceCalendarEventOut | None = None
 
 
 class UpdateMeetingRequest(BaseModel):
@@ -325,6 +337,7 @@ class UpcomingMeeting(BaseModel):
     attendees: list[str]
     prep_required: bool
     html_link: str | None = None
+    source: str | None = "google"
 
     model_config = {"from_attributes": True}
 
@@ -400,6 +413,8 @@ class NotificationFeedbackRequest(BaseModel):
 class NotificationPrefs(BaseModel):
     # Stored in User.preferences. quiet_hours is "HH-HH" or "HH:MM-HH:MM".
     quiet_hours: str | None = None
+    # "google" | "apple" — primary calendar for new events (writes only).
+    calendar_write_primary: str | None = None
 
 
 # --- Onboarding / account ---

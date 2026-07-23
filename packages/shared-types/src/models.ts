@@ -113,6 +113,8 @@ export interface UpcomingMeeting {
   attendees: string[];
   prep_required: boolean;
   html_link?: string | null;
+  /** Origin calendar when known. Alfred merges google + apple reads. */
+  source?: "google" | "apple" | string | null;
 }
 
 export interface MeetingPrep {
@@ -295,14 +297,22 @@ export interface BookMessageResponse {
 }
 
 // Response from the Ask screen's free-text request. `action` is "booked" when a
-// calendar event was created, "none" otherwise; `reply` is the line to show.
+// calendar event was created, "device_book" when the client should write to Apple
+// Calendar, "none" otherwise; `reply` is the line to show.
 export interface AssistantAskResponse {
   reply: string;
-  action: "booked" | "updated" | "cancelled" | "created" | "none";
+  action: "booked" | "updated" | "cancelled" | "created" | "device_book" | "none";
   detail: string | null;
   task_id?: string | null;
   task_title?: string | null;
   remind_at?: string | null;
+  /** Present when action is device_book — mobile writes via EventKit. */
+  device_calendar?: {
+    title: string;
+    start: string;
+    end: string;
+    location?: string | null;
+  } | null;
 }
 
 export type AssistantChatResponse = AssistantAskResponse;

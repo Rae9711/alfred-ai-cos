@@ -15,6 +15,7 @@ import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { Meta } from "@/components/ui";
 import { useLocale } from "@/context/LocaleContext";
+import { bookOnPrimaryCalendar } from "@/lib/calendarWrite";
 import { colors, fonts, radius, spacing } from "@/theme/theme";
 import { surfaces } from "@/theme/surfaces";
 
@@ -101,21 +102,45 @@ function FocusTimeBlock({
   const addToCalendar = () => {
     if (slot.done) return;
     setSlot((s) => ({ ...s, scheduling: true }));
-    void api
-      .schedulePlanningBlock({
-        title: suggestion.title,
-        start: slot.start.toISOString(),
-        end: slot.end.toISOString(),
-      })
-      .then(() => {
-        showToast(t.planning.scheduled);
+    void (async () => {
+      try {
+        const result = await bookOnPrimaryCalendar(
+          {
+            title: suggestion.title,
+            start: slot.start,
+            end: slot.end,
+            notes: suggestion.reason,
+          },
+          {
+            googleConnected: true,
+            googleBook: async () => {
+              const res = await api.schedulePlanningBlock({
+                title: suggestion.title,
+                start: slot.start.toISOString(),
+                end: slot.end.toISOString(),
+                write_target: "google",
+              });
+              return { eventId: res.event_id };
+            },
+          },
+        );
+        if (result.target === "apple") {
+          await api.schedulePlanningBlock({
+            title: suggestion.title,
+            start: slot.start.toISOString(),
+            end: slot.end.toISOString(),
+            write_target: "apple",
+          });
+        }
+        if (result.fallbackNotice) showToast(result.fallbackNotice);
+        else showToast(t.planning.scheduled);
         setSlot((s) => ({ ...s, done: true, scheduling: false }));
         onChanged?.();
-      })
-      .catch(() => {
+      } catch {
         showToast(t.planning.scheduleFailed);
         setSlot((s) => ({ ...s, scheduling: false }));
-      });
+      }
+    })();
   };
 
   return (

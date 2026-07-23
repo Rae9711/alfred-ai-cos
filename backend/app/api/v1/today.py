@@ -38,8 +38,21 @@ def schedule_block(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ScheduleBlockResponse:
-    """Book a planning time-block onto the user's calendar (level-2 reversible write)."""
+    """Book a planning time-block onto the user's calendar (level-2 reversible write).
+
+    When write_target/preference is Apple, acknowledge without Google write —
+    the mobile client creates the EventKit event.
+    """
+    from app.services.calendar_write import should_write_apple
+
     resolve_timezone(db, user, payload.timezone)
+    if should_write_apple(user, write_target=payload.write_target):
+        return ScheduleBlockResponse(
+            booked=True,
+            reply=f"Booked “{payload.title}” on Apple Calendar",
+            detail=f"Booked “{payload.title}” on Apple Calendar",
+            event_id=None,
+        )
     proposal = propose_action_internal(
         db,
         user,

@@ -50,6 +50,18 @@ import {
   requestContactsPermission,
   type ContactsPermissionStatus,
 } from "@/lib/contacts";
+import {
+  getAppleCalendarPermissionStatus,
+  isAppleCalendarNativeAvailable,
+  requestAppleCalendarPermission,
+  type AppleCalendarPermissionStatus,
+} from "@/lib/appleCalendar";
+import {
+  getStoredCalendarWritePrimary,
+  hydrateCalendarWritePrimaryFromMe,
+  setCalendarWritePrimary,
+  type CalendarWritePrimary,
+} from "@/lib/calendarWrite";
 import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
 // Concierge-test pilot window: real billing isn't legally cleared yet
@@ -77,6 +89,11 @@ export function SettingsScreen() {
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
     null,
   );
+  const [appleCalendarStatus, setAppleCalendarStatus] =
+    useState<AppleCalendarPermissionStatus | null>(null);
+  const [writePrimary, setWritePrimary] = useState<CalendarWritePrimary | null>(
+    null,
+  );
   const [quietHoursDraft, setQuietHoursDraft] = useState("");
   const [editingQuietHours, setEditingQuietHours] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -86,8 +103,13 @@ export function SettingsScreen() {
   useEffect(() => {
     api
       .getMe()
-      .then(setMe)
+      .then(async (profile) => {
+        setMe(profile);
+        const primary = await hydrateCalendarWritePrimaryFromMe(profile);
+        setWritePrimary(primary);
+      })
       .catch(() => setMe(null));
+    void getStoredCalendarWritePrimary().then(setWritePrimary);
     api
       .getSmsForwardingInstall()
       .then((cfg) => {
@@ -125,16 +147,28 @@ export function SettingsScreen() {
     }
   }, []);
 
+  const refreshAppleCalendarStatus = useCallback(async () => {
+    try {
+      setAppleCalendarStatus(await getAppleCalendarPermissionStatus());
+    } catch {
+      setAppleCalendarStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshContactsStatus();
-  }, [refreshContactsStatus]);
+    void refreshAppleCalendarStatus();
+  }, [refreshContactsStatus, refreshAppleCalendarStatus]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refreshContactsStatus();
+      if (state === "active") {
+        void refreshContactsStatus();
+        void refreshAppleCalendarStatus();
+      }
     });
     return () => sub.remove();
-  }, [refreshContactsStatus]);
+  }, [refreshContactsStatus, refreshAppleCalendarStatus]);
 
   const handleContactsPermission = useCallback(async () => {
     setNote(null);
@@ -159,6 +193,71 @@ export function SettingsScreen() {
     s.contactsDeniedToast,
     s.contactsGrantedToast,
   ]);
+
+  const handleAppleCalendarPermission = useCallback(async () => {
+    setNote(null);
+    if (appleCalendarStatus === "denied") {
+      try {
+        await Linking.openSettings();
+      } catch {
+        setNote(s.appleCalendarDeniedToast);
+      }
+      return;
+    }
+    try {
+      const granted = await requestAppleCalendarPermission();
+      await refreshAppleCalendarStatus();
+      setNote(granted ? s.appleCalendarGrantedToast : s.appleCalendarDeniedToast);
+      if (granted && !writePrimary) {
+        await setCalendarWritePrimary("apple");
+        setWritePrimary("apple");
+      }
+    } catch {
+      setNote(s.appleCalendarDeniedToast);
+    }
+  }, [
+    appleCalendarStatus,
+    refreshAppleCalendarStatus,
+    s.appleCalendarDeniedToast,
+    s.appleCalendarGrantedToast,
+    writePrimary,
+  ]);
+
+  const chooseWritePrimary = useCallback(
+    async (primary: CalendarWritePrimary) => {
+      setNote(null);
+      if (primary === "apple" && appleCalendarStatus !== "granted") {
+        setNote(s.calendarWritePrimaryNeedApple);
+        return;
+      }
+      if (primary === "google" && (me?.connected_mailboxes?.length ?? 0) === 0) {
+        setNote(s.calendarWritePrimaryNeedGoogle);
+        return;
+      }
+      try {
+        await setCalendarWritePrimary(primary);
+        setWritePrimary(primary);
+        setNote(
+          s.calendarWritePrimarySaved(
+            primary === "apple"
+              ? s.calendarWritePrimaryApple
+              : s.calendarWritePrimaryGoogle,
+          ),
+        );
+      } catch (e) {
+        setNote(e instanceof Error ? e.message : "Could not save");
+      }
+    },
+    [
+      appleCalendarStatus,
+      me?.connected_mailboxes?.length,
+      s.calendarWritePrimaryApple,
+      s.calendarWritePrimaryGoogle,
+      s.calendarWritePrimaryNeedApple,
+      s.calendarWritePrimaryNeedGoogle,
+      s.calendarWritePrimarySaved,
+    ],
+  );
 
   const editQuietHours = useCallback(() => {
     if (Alert.prompt) {
@@ -453,6 +552,19 @@ export function SettingsScreen() {
   const contactsActionLabel =
     contactsStatus === "denied" ? s.contactsOpenSettings : s.contactsAllow;
   const contactsNativeReady = isContactsNativeAvailable();
+  const appleCalendarStatusLabel =
+    appleCalendarStatus === "granted"
+      ? s.appleCalendarStatusGranted
+      : appleCalendarStatus === "denied"
+        ? s.appleCalendarStatusDenied
+        : appleCalendarStatus === "unavailable"
+          ? s.appleCalendarStatusUnavailable
+          : s.appleCalendarStatusUndetermined;
+  const appleCalendarActionLabel =
+    appleCalendarStatus === "denied"
+      ? s.appleCalendarOpenSettings
+      : s.appleCalendarConnect;
+  const appleCalendarNativeReady = isAppleCalendarNativeAvailable();
   const smsHint =
     Platform.OS === "ios" ? s.smsHintIos : s.smsHintAndroid;
   const proPlan = plans[0] ?? null;
@@ -785,6 +897,70 @@ export function SettingsScreen() {
             )}
           </View>
 
+          <Meta style={styles.langHint}>{s.appleCalendarTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.appleCalendarHint}</Text>
+            {appleCalendarNativeReady ? (
+              <>
+                <View style={styles.contactsStatusRow}>
+                  <View
+                    style={[
+                      styles.contactsDot,
+                      appleCalendarStatus === "granted" &&
+                        styles.contactsDotGranted,
+                      appleCalendarStatus === "denied" &&
+                        styles.contactsDotDenied,
+                    ]}
+                  />
+                  <Text style={styles.contactsStatusText}>
+                    {appleCalendarStatusLabel}
+                  </Text>
+                </View>
+                {appleCalendarStatus !== "granted" ? (
+                  <View style={styles.smsActions}>
+                    <Btn
+                      label={appleCalendarActionLabel}
+                      kind="accent"
+                      tiny
+                      onPress={() => void handleAppleCalendarPermission()}
+                    />
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.smsHint}>
+                {s.appleCalendarUnavailableHint}
+              </Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.calendarWritePrimaryTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.calendarWritePrimaryHint}</Text>
+            <View style={styles.smsActions}>
+              <Btn
+                label={
+                  writePrimary === "google"
+                    ? `✓ ${s.calendarWritePrimaryGoogle}`
+                    : s.calendarWritePrimaryGoogle
+                }
+                kind={writePrimary === "google" ? "accent" : "ghost"}
+                tiny
+                onPress={() => void chooseWritePrimary("google")}
+              />
+              <Btn
+                label={
+                  writePrimary === "apple"
+                    ? `✓ ${s.calendarWritePrimaryApple}`
+                    : s.calendarWritePrimaryApple
+                }
+                kind={writePrimary === "apple" ? "accent" : "ghost"}
+                tiny
+                onPress={() => void chooseWritePrimary("apple")}
+              />
+            </View>
+          </View>
+
           <Meta style={styles.langHint}>{s.smsTitle}</Meta>
           <View style={styles.smsCard}>
             <Text style={styles.smsHint}>{smsHint}</Text>
@@ -853,8 +1029,18 @@ export function SettingsScreen() {
             />
             <Integration
               name="Google Calendar"
-              detail="Primary calendar"
+              detail={s.googleCalendarDetail}
               connected={connectedMailboxes.length > 0}
+            />
+            <Integration
+              name={s.appleCalendarTitle}
+              detail={s.appleCalendarIntegrationDetail}
+              connected={appleCalendarStatus === "granted"}
+              onConnect={
+                appleCalendarStatus === "granted"
+                  ? undefined
+                  : () => void handleAppleCalendarPermission()
+              }
             />
             <Integration
               name="Notion"

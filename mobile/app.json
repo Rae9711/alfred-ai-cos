@@ -24,6 +24,10 @@
           "shortcuts"
         ],
         "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name.",
+        "NSCalendarsUsageDescription": "Alfred adds events you confirm to your iPhone Calendar.",
+        "NSCalendarsFullAccessUsageDescription": "Alfred adds events you confirm to your iPhone Calendar.",
+        "NSRemindersUsageDescription": "Alfred may use Reminders only when calendar access requires it.",
+        "NSRemindersFullAccessUsageDescription": "Alfred may use Reminders only when calendar access requires it.",
         "NSPhotoLibraryUsageDescription": "Alfred reads a recent chat screenshot to draft a reply, then deletes that screenshot."
       },
       "entitlements": {
@@ -85,6 +89,13 @@
         "expo-contacts",
         {
           "contactsPermission": "Alfred looks up contacts when you ask to text someone by name."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Alfred adds events you confirm to your iPhone Calendar.",
+          "remindersPermission": "Alfred may use Reminders only when calendar access requires it."
         }
       ],
       "./plugins/withAlfredKeyboard.js",

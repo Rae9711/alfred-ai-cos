@@ -57,6 +57,7 @@ import {
 } from "@/lib/freeChatHistory";
 import { normalizeSmsBody } from "@/lib/smsBody";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
+import { fulfillDeviceCalendarBook } from "@/lib/fulfillDeviceCalendarBook";
 import { useVoiceCapture } from "@/api/useVoiceCapture";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
@@ -664,7 +665,9 @@ export function AskScreen() {
               role: m.role === "user" ? "user" : "assistant",
               content: m.text,
             }));
-          const res = await api.chat(q, history);
+          const res = await fulfillDeviceCalendarBook(
+            await api.chat(q, history),
+          );
           await scheduleFromAssistantResponse(res);
           setFreeChat((c) => [
             ...c,
