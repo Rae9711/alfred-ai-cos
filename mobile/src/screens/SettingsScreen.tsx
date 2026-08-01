@@ -64,10 +64,6 @@ import {
 } from "@/lib/calendarWrite";
 import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
-// When true, hides the Stripe subscribe CTA (plan card still shows). Keep false
-// for TestFlight / production once Stripe Price + STRIPE_* env are configured.
-const PILOT_HIDE_BILLING = false;
-
 type SettingsTab = "personal" | "preferences" | "integrations" | "security";
 
 export function SettingsScreen() {
@@ -532,7 +528,7 @@ export function SettingsScreen() {
   );
 
   const openBillingCheckout = useCallback(async () => {
-    if (PILOT_HIDE_BILLING || billingBusy) return;
+    if (billingBusy) return;
     setNote(null);
     setBillingBusy(true);
     try {
@@ -757,15 +753,9 @@ export function SettingsScreen() {
                   tiny
                   onPress={() => void openBillingManage()}
                 />
-              ) : PILOT_HIDE_BILLING ? (
-                <Meta style={styles.smsHint}>{s.subscriptionComingSoon}</Meta>
               ) : (
                 <Btn
-                  label={
-                    subscription?.checkout_available
-                      ? s.subscriptionSubscribe
-                      : s.subscriptionComingSoon
-                  }
+                  label={s.subscriptionSubscribe}
                   kind="accent"
                   tiny
                   onPress={() => void openBillingCheckout()}
