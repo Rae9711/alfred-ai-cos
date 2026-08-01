@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
+  type ActionProposal,
   type Me,
   type Task,
   TaskStatus,
@@ -171,26 +172,6 @@ export function HomeScreen() {
 
   const load = useCallback(async (view: ScheduleView) => {
     try {
-      const [profile, pending, upcoming, today, upcomingReminders, conversationInbox, inboxView] =
-        await Promise.all([
-          api.getMe().catch(() => null),
-          api.listPendingActions(),
-          api.listUpcomingMeetings(
-            view === "month" ? { month: true } : { week: true },
-          ),
-          view === "day" || view === "week"
-            ? api.getToday(locale).catch(() => null)
-            : Promise.resolve(null),
-          view === "day" || view === "week"
-            ? api.listTasks({ upcoming: true }).catch(() => [] as Task[])
-            : Promise.resolve([] as Task[]),
-          api.getConversationInbox().catch(() => ({ items: [], counts: {} })),
-          api
-            .getInbox({ scope: "needs_action" })
-            .catch(() => ({ messages: [], filtered_count: 0, mailboxes: [] })),
-        ]);
-      setMe(profile);
-      setPendingCount(pending.length);
       const rangeStart = new Date();
       rangeStart.setHours(0, 0, 0, 0);
       if (view === "month") {
@@ -209,7 +190,38 @@ export function HomeScreen() {
         rangeEnd.setDate(rangeEnd.getDate() + 14);
         rangeEnd.setHours(23, 59, 59, 999);
       }
-      const appleEvents = await listDeviceCalendarEvents(rangeStart, rangeEnd);
+
+      const [
+        profile,
+        pending,
+        upcoming,
+        today,
+        upcomingReminders,
+        conversationInbox,
+        inboxView,
+        appleEvents,
+      ] = await Promise.all([
+        api.getMe().catch(() => null),
+        api.listPendingActions().catch(() => [] as ActionProposal[]),
+        api
+          .listUpcomingMeetings(
+            view === "month" ? { month: true } : { week: true },
+          )
+          .catch(() => [] as UpcomingMeeting[]),
+        view === "day" || view === "week"
+          ? api.getToday(locale).catch(() => null)
+          : Promise.resolve(null),
+        view === "day" || view === "week"
+          ? api.listTasks({ upcoming: true }).catch(() => [] as Task[])
+          : Promise.resolve([] as Task[]),
+        api.getConversationInbox().catch(() => ({ items: [], counts: {} })),
+        api
+          .getInbox({ scope: "needs_action" })
+          .catch(() => ({ messages: [], filtered_count: 0, mailboxes: [] })),
+        listDeviceCalendarEvents(rangeStart, rangeEnd),
+      ]);
+      setMe(profile);
+      setPendingCount(pending.length);
       setMeetings(mergeCalendarMeetings(upcoming, appleEvents));
       setTodayData(today);
       setReminders(upcomingReminders);
@@ -238,14 +250,21 @@ export function HomeScreen() {
     void (async () => {
       setLoading(true);
       try {
-        await Promise.all([
-          api.sync({ ingestOnly: true }).catch(() => undefined),
-          api.sync({ calendarOnly: true }).catch(() => undefined),
-        ]);
+        // Paint home from cached API data first — do not wait on Gmail/calendar sync
+        // (those can take tens of seconds and used to block the whole Today tab).
         if (!cancelled) await load(scheduleView);
       } finally {
         if (!cancelled) setLoading(false);
       }
+      if (cancelled) return;
+      // Refresh mail + calendar in the background; MailboxProvider also runs a
+      // background sync, so keep this fire-and-forget.
+      void Promise.all([
+        api.sync({ ingestOnly: true }).catch(() => undefined),
+        api.sync({ calendarOnly: true }).catch(() => undefined),
+      ]).then(() => {
+        if (!cancelled) void load(scheduleView);
+      });
     })();
     return () => {
       cancelled = true;

@@ -7,8 +7,10 @@ the foundation does today and what it owes before it touches real user data at s
 
 ### OAuth, not passwords
 
-Google OAuth is the only login. Albert never sees or stores a Google password. The same
-consent grants Gmail and Calendar and serves as Albert's sign-in.
+Google OAuth and Sign in with Apple mint Albert session JWTs. Albert never sees or
+stores a Google or Apple password. Google consent still grants Gmail and Calendar when
+the user connects a mailbox; Apple / “continue without Gmail” create a session with no
+`ConnectedAccount` until the user links Gmail from Settings.
 
 ### Token encryption at rest
 
@@ -117,17 +119,22 @@ it) and fails open if Redis is unreachable.
 
 These are required before a real beta, tracked in TODO.md:
 
-- **Log redaction in app logs.** Audit-payload redaction exists; a structured app-logging
-  policy that scrubs email content, tokens, and PII does not yet (PRD 13.2).
-- **Rate limiting** on the API and on Gmail calls.
 - **Role-based backend access.**
 - **Multi-currency spend accounting.** The `SpendLimit` is a single-currency per-period cap,
   not a ledger; cross-currency charges are not normalized against the cap.
 - **No model training on user data.** The Anthropic API is used for inference only. Make
   this an explicit, enforced policy and surface it in the privacy settings.
+- **Broader API rate limits** beyond auth minting and the SMS webhook (Gmail quota
+  handling exists separately via sync locks / retries).
 
 ### Recently closed
 
+- **Log redaction in app logs.** Structured logging scrubs tokens and sensitive fields via
+  `app.core.redaction` (PRD 13.2 baseline).
+- **Auth + SMS webhook rate limiting.** Redis fixed-window limits on Apple / anonymous
+  session minting and `POST /inbox/sms` (fail-open if Redis is down).
+- **Indexed SMS forward tokens.** `users.sms_forward_token` replaces a full-table scan of
+  preferences JSON; Settings can rotate the token.
 - **OAuth token refresh.** All Gmail/Calendar access goes through
   `connected_accounts.refresh_google_token`, which refreshes the access token when expired,
   re-encrypts and persists the rotated payload, and raises `TokenReconnectRequired` (surfaced

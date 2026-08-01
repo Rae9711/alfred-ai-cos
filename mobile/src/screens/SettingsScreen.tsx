@@ -64,11 +64,9 @@ import {
 } from "@/lib/calendarWrite";
 import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
-// Concierge-test pilot window: real billing isn't legally cleared yet
-// (KYC/compliance pending), so the Stripe subscribe entry point stays hidden
-// until that clears. Flip to false once billing is cleared for real users.
-// Plan: user-main-eng-review-test-plan-20260702-172820.md, T8.
-const PILOT_HIDE_BILLING = true;
+// When true, hides the Stripe subscribe CTA (plan card still shows). Keep false
+// for TestFlight / production once Stripe Price + STRIPE_* env are configured.
+const PILOT_HIDE_BILLING = false;
 
 type SettingsTab = "personal" | "preferences" | "integrations" | "security";
 
@@ -86,6 +84,10 @@ export function SettingsScreen() {
   const [smsWebhookUrl, setSmsWebhookUrl] = useState<string | null>(null);
   const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
+  const [smsShareShortcutUrl, setSmsShareShortcutUrl] = useState<string | null>(
+    null,
+  );
+  const [smsShareImportUrl, setSmsShareImportUrl] = useState<string | null>(null);
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
     null,
   );
@@ -121,6 +123,16 @@ export function SettingsScreen() {
         setSmsToken(null);
         setSmsShortcutUrl(null);
         setSmsImportUrl(null);
+      });
+    api
+      .getSmsBackfillInstall()
+      .then((cfg) => {
+        setSmsShareShortcutUrl(cfg.shortcut_url);
+        setSmsShareImportUrl(cfg.import_url);
+      })
+      .catch(() => {
+        setSmsShareShortcutUrl(null);
+        setSmsShareImportUrl(null);
       });
     api
       .getSmsForwarding()
@@ -326,6 +338,37 @@ export function SettingsScreen() {
       setNote(s.smsInstallFailed);
     }
   }, [smsShortcutUrl, smsImportUrl, s.smsInstallFailed]);
+
+  const installSmsShareShortcut = useCallback(async () => {
+    const target = smsShareShortcutUrl ?? smsShareImportUrl;
+    if (!target) return;
+    setNote(null);
+    try {
+      await Linking.openURL(target);
+    } catch {
+      if (smsShareImportUrl && target !== smsShareImportUrl) {
+        try {
+          await Linking.openURL(smsShareImportUrl);
+          return;
+        } catch {
+          // fall through
+        }
+      }
+      setNote(s.smsInstallFailed);
+    }
+  }, [smsShareShortcutUrl, smsShareImportUrl, s.smsInstallFailed]);
+
+  const rotateSmsToken = useCallback(async () => {
+    setNote(null);
+    try {
+      const cfg = await api.rotateSmsForwarding();
+      setSmsToken(cfg.token);
+      setSmsWebhookUrl(cfg.webhook_url);
+      setNote(s.smsTokenRotated);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : s.smsInstallFailed);
+    }
+  }, [s.smsTokenRotated, s.smsInstallFailed]);
 
   const openSmsSetupGuide = useCallback(() => {
     setNote(null);
@@ -609,7 +652,9 @@ export function SettingsScreen() {
               ) : null}
             </View>
             <Text style={styles.profileEmail}>
-              {me?.email ?? "Connected account"}
+              {me?.email?.endsWith("@deferred.alfred.local")
+                ? s.deferredAccount
+                : (me?.email ?? "Connected account")}
             </Text>
           </View>
         </View>
@@ -645,33 +690,6 @@ export function SettingsScreen() {
             </Pressable>
           );
         })}
-      </View>
-
-      <View style={styles.statsCard}>
-        <View style={styles.statsHeader}>
-          <Text style={styles.statsTitle}>AI 统计</Text>
-          <View style={styles.statsPeriod}>
-            <Text style={styles.statsPeriodText}>本周</Text>
-          </View>
-        </View>
-        <View style={styles.statsGrid}>
-          {(
-            [
-              ["对话次数", "—"],
-              ["节省时间", "—"],
-              ["完成任务", "—"],
-              ["处理邮件", "—"],
-            ] as const
-          ).map(([label, value], i) => (
-            <View
-              key={label}
-              style={[styles.statsCell, i === 3 && styles.statsCellLast]}
-            >
-              <Text style={styles.statsLabel}>{label}</Text>
-              <Text style={styles.statsValue}>{value}</Text>
-            </View>
-          ))}
-        </View>
       </View>
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
@@ -973,12 +991,28 @@ export function SettingsScreen() {
                   onPress={() => void installSmsShortcut()}
                 />
               ) : null}
+              {Platform.OS === "ios" ? (
+                <Btn
+                  label={s.smsInstallShareShortcut}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void installSmsShareShortcut()}
+                />
+              ) : null}
               {smsToken ? (
                 <Btn
                   label={s.smsCopyToken}
                   kind={Platform.OS === "ios" ? "ghost" : "accent"}
                   tiny
                   onPress={() => void copySmsToken()}
+                />
+              ) : null}
+              {smsToken ? (
+                <Btn
+                  label={s.smsRotateToken}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void rotateSmsToken()}
                 />
               ) : null}
               <Btn
@@ -1024,7 +1058,11 @@ export function SettingsScreen() {
             })}
             <Integration
               name={s.addGmail}
-              detail="Link another inbox"
+              detail={
+                connectedMailboxes.length === 0
+                  ? s.addGmailFirstDetail
+                  : s.addGmailDetail
+              }
               onConnect={() => void linkGmail()}
             />
             <Integration
@@ -1318,57 +1356,6 @@ const styles = StyleSheet.create({
   shortcutLabelActive: {
     fontFamily: fonts.sansMedium,
     color: colors.accent,
-  },
-  statsCard: {
-    ...surfaces.glassCard,
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 14,
-  },
-  statsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statsTitle: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 13,
-    color: colors.ink,
-  },
-  statsPeriod: {
-    borderWidth: 1,
-    borderColor: "#E3DDD3",
-    backgroundColor: "#FFFAF4",
-    borderRadius: radius.pill,
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-  },
-  statsPeriodText: {
-    fontFamily: fonts.sans,
-    fontSize: 9,
-    color: colors.ink3,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    marginTop: 14,
-  },
-  statsCell: {
-    flex: 1,
-    alignItems: "center",
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.line,
-  },
-  statsCellLast: { borderRightWidth: 0 },
-  statsLabel: {
-    fontFamily: fonts.sans,
-    fontSize: 8,
-    color: "#77756F",
-  },
-  statsValue: {
-    fontFamily: fonts.sansSemibold,
-    fontSize: 14,
-    color: colors.ink,
-    marginTop: 6,
   },
   name: { marginTop: 2 },
   note: { color: colors.accentInk, fontSize: 13, marginTop: spacing.sm },

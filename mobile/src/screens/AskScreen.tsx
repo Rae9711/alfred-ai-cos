@@ -58,7 +58,8 @@ import {
 import { normalizeSmsBody } from "@/lib/smsBody";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
 import { fulfillDeviceCalendarBook } from "@/lib/fulfillDeviceCalendarBook";
-import { useVoiceCapture } from "@/api/useVoiceCapture";
+import { useVoiceDictation } from "@/api/useVoiceCapture";
+import { appendVoiceTranscript } from "@/lib/voiceDraft";
 import { colors, fonts, layout, radius } from "@/theme/theme";
 
 type TaskMessage = {
@@ -144,10 +145,23 @@ export function AskScreen() {
     void saveFreeChatHistory(messages);
   }, []);
 
-  const voice = useVoiceCapture((r) => {
-    const q = r.tasks.map((t) => t.title).join("; ");
-    if (q.trim()) sendFreeRef.current(q);
+  const voice = useVoiceDictation((transcript) => {
+    const spoken = transcript.trim();
+    if (!spoken) {
+      showToast(t.voice.empty);
+      return;
+    }
+    setInput((prev) => appendVoiceTranscript(prev, spoken));
   });
+
+  useEffect(() => {
+    if (!voice.error) return;
+    if (voice.error.toLowerCase().includes("microphone permission")) {
+      showToast(t.voice.permissionDenied);
+    } else {
+      showToast(voice.error);
+    }
+  }, [voice.error, showToast, t.voice.permissionDenied]);
 
   const seedMsg = useCallback(
     (): FreeMsg => ({ role: "alfred", text: t.freeChat.seed, ts: "now" }),
@@ -1000,21 +1014,31 @@ export function AskScreen() {
           >
             <Ic.ArrowUp size={16} color="#fff" stroke={2} />
           </Pressable>
-          {Platform.OS === "android" ? (
+          {voice.state === "uploading" ? (
             <Pressable
               style={styles.micBtn}
-              onPress={() =>
-                void (voice.state === "recording" ? voice.stop() : voice.start())
-              }
-              accessibilityLabel="Voice input"
+              disabled
+              accessibilityLabel={t.a11y.voiceInput}
             >
-              {voice.state !== "idle" ? (
-                <ActivityIndicator size="small" color={colors.accent} />
-              ) : (
-                <Ic.Mic size={16} color={colors.accent} stroke={2} />
-              )}
+              <ActivityIndicator size="small" color={colors.accent} />
             </Pressable>
-          ) : null}
+          ) : voice.state === "recording" ? (
+            <Pressable
+              style={[styles.micBtn, styles.micBtnActive]}
+              onPress={() => void voice.stop()}
+              accessibilityLabel={t.a11y.voiceStop}
+            >
+              <Ic.Mic size={16} color="#fff" stroke={2} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.micBtn}
+              onPress={() => void voice.start()}
+              accessibilityLabel={t.a11y.voiceInput}
+            >
+              <Ic.Mic size={16} color={colors.accent} stroke={2} />
+            </Pressable>
+          )}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -1324,5 +1348,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+  },
+  micBtnActive: {
+    backgroundColor: colors.accent,
   },
 });

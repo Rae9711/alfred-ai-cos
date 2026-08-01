@@ -21,7 +21,8 @@ DEFAULT_WEBHOOK_URL = "https://alfredaitech.com/api/v1/inbox/sms"
 # Widely supported on iOS 13+ — coerces Shortcut Input (text or message object) to text.
 DETECT_TEXT_ACTION = "is.workflow.actions.detect.text"
 HASH_ACTION = "is.workflow.actions.hash"
-MESSAGE_PROPERTIES_ACTION = "is.workflow.actions.properties.messages"
+# Do NOT use is.workflow.actions.properties.messages / contentitemproperties.
+# Those IDs resolve as "Unknown Action" on many iOS builds and strip Dictionary items.
 
 
 def _uid() -> str:
@@ -152,22 +153,6 @@ def _post_sms_webhook_action(
     }
 
 
-def _get_message_property_action(
-    *, property_name: str, output_name: str
-) -> tuple[dict[str, Any], str]:
-    """Read a field from the incoming message (phone/name when iOS exposes it)."""
-    action_uuid = _uid()
-    return {
-        "WFWorkflowActionIdentifier": MESSAGE_PROPERTIES_ACTION,
-        "WFWorkflowActionParameters": {
-            "UUID": action_uuid,
-            "WFContentItemPropertyName": property_name,
-            "WFInput": _shortcut_input_variable(),
-            "CustomOutputName": output_name,
-        },
-    }, action_uuid
-
-
 def _payload_dict_items(
     *,
     body_attachment: dict[str, Any],
@@ -222,33 +207,14 @@ def build_sms_forward_shortcut(
       When ``sms_token`` is set (personalized download), it is embedded in the header.
       Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
 
-      Message Received passes the incoming message as Shortcut Input. Map Shortcut Input
-      directly into the JSON body (body/text/shortcut_input). ``detect.text`` output refs
-      in Dictionary/WFJSONValues are stripped on import for automation shortcuts — the
-    Dictionary block shows empty and POST sends ``{}``.
-
-      Sender phone/name are best-effort via Get Details of Messages — when iOS omits them
-      Albert still ingests the text and the app can resolve contacts if phone arrives.
+      Stock actions only (Text → Dictionary → Get Contents of URL). Message Received
+      passes Shortcut Input; map it directly into body/text/shortcut_input. Do not use
+      Get Details of Messages — that action ID shows as Unknown Action on many devices
+      and causes the Dictionary to import empty (POST ``{}``).
     """
     dict_uuid = _uid()
     input_ref = _shortcut_input_attachment()
-    get_phone, phone_uuid = _get_message_property_action(
-        property_name="Phone Number",
-        output_name="Sender Phone",
-    )
-    get_name, name_uuid = _get_message_property_action(
-        property_name="Name",
-        output_name="Sender Name",
-    )
-    phone_ref = _attachment(phone_uuid, "Sender Phone")
-    name_ref = _attachment(name_uuid, "Sender Name")
-    json_values = _payload_dict_items(
-        body_attachment=input_ref,
-        extra=[
-            _dict_field("from_number", phone_ref),
-            _dict_field("from_name", name_ref),
-        ],
-    )
+    json_values = _payload_dict_items(body_attachment=input_ref)
     payload_dict = {
         "WFWorkflowActionIdentifier": "is.workflow.actions.dictionary",
         "WFWorkflowActionParameters": {
@@ -264,10 +230,10 @@ def build_sms_forward_shortcut(
             "WFSerializationType": "WFTextTokenString",
         }
         import_questions: list[dict[str, Any]] = []
-        actions: list[dict[str, Any]] = [get_phone, get_name, payload_dict]
+        actions: list[dict[str, Any]] = [payload_dict]
     else:
         token_action, token_header_value, import_questions = _token_prompt_action()
-        actions = [token_action, get_phone, get_name, payload_dict]
+        actions = [token_action, payload_dict]
 
     actions.append(
         _post_sms_webhook_action(
@@ -360,16 +326,6 @@ def build_sms_share_shortcut(
     input_ref = _shortcut_input_attachment()
     get_body, body_uuid = _detect_text_from_shortcut_input(output_name="Message Text")
     body_ref = _attachment(body_uuid, "Message Text")
-    get_phone, phone_uuid = _get_message_property_action(
-        property_name="Phone Number",
-        output_name="Sender Phone",
-    )
-    get_name, name_uuid = _get_message_property_action(
-        property_name="Name",
-        output_name="Sender Name",
-    )
-    phone_ref = _attachment(phone_uuid, "Sender Phone")
-    name_ref = _attachment(name_uuid, "Sender Name")
     get_hash, hash_uuid = _hash_action(
         input_attachment=input_ref,
         output_name="Message ID",
@@ -381,8 +337,6 @@ def build_sms_share_shortcut(
                 _dict_field("body", body_ref),
                 _dict_field("text", body_ref),
                 _dict_field("shortcut_input", input_ref),
-                _dict_field("from_number", phone_ref),
-                _dict_field("from_name", name_ref),
                 _dict_field("message_id", _attachment(hash_uuid, "Message ID")),
                 _dict_field_text("backfill", "true"),
             ],
@@ -404,10 +358,10 @@ def build_sms_share_shortcut(
             "WFSerializationType": "WFTextTokenString",
         }
         import_questions: list[dict[str, Any]] = []
-        actions: list[dict[str, Any]] = [get_body, get_phone, get_name, get_hash, payload_dict]
+        actions: list[dict[str, Any]] = [get_body, get_hash, payload_dict]
     else:
         token_action, token_header_value, import_questions = _token_prompt_action()
-        actions = [token_action, get_body, get_phone, get_name, get_hash, payload_dict]
+        actions = [token_action, get_body, get_hash, payload_dict]
 
     actions.append(
         _post_sms_webhook_action(

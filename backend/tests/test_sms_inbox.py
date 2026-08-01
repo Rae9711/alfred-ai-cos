@@ -97,8 +97,21 @@ def test_ingest_sms_dedupes(db: Session, user: User, monkeypatch: pytest.MonkeyP
 def test_sms_token_lookup(db: Session, user: User) -> None:
     token = sms_inbox.ensure_sms_forward_token(user)
     db.commit()
-    assert sms_inbox.find_user_by_sms_token(db, token) is not None
+    assert user.sms_forward_token == token
+    found = sms_inbox.find_user_by_sms_token(db, token)
+    assert found is not None
+    assert found.id == user.id
     assert sms_inbox.find_user_by_sms_token(db, "bad") is None
+
+
+def test_sms_token_rotate(db: Session, user: User) -> None:
+    first = sms_inbox.ensure_sms_forward_token(user)
+    db.commit()
+    second = sms_inbox.rotate_sms_forward_token(user)
+    db.commit()
+    assert second != first
+    assert sms_inbox.find_user_by_sms_token(db, first) is None
+    assert sms_inbox.find_user_by_sms_token(db, second) is not None
 
 
 def test_normalize_phone() -> None:

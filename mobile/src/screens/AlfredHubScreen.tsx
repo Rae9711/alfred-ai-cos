@@ -1,4 +1,4 @@
-// Alfred hub — center-tab assistant: schedule / SMS / reminder / capture + email NL.
+// Alfred hub — center-tab assistant: schedule / email / SMS / reminder (+ capture via deep link).
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -38,7 +38,7 @@ import { colors, fonts, layout, spacing } from "@/theme/theme";
 import { surfaces } from "@/theme/surfaces";
 import type { Me } from "@albert/shared-types";
 
-type HubMode = "idle" | "schedule" | "sms" | "reminder" | "capture";
+type HubMode = "idle" | "schedule" | "email" | "sms" | "reminder" | "capture";
 
 export function AlfredHubScreen({
   initialCaptureText,
@@ -81,8 +81,10 @@ export function AlfredHubScreen({
   const hub = t.alfredHub;
 
   const beginSmsFlowRef = useRef(chat.beginSmsFlow);
+  const beginEmailFlowRef = useRef(chat.beginEmailFlow);
   const setInputRef = useRef(chat.setInput);
   beginSmsFlowRef.current = chat.beginSmsFlow;
+  beginEmailFlowRef.current = chat.beginEmailFlow;
   setInputRef.current = chat.setInput;
   const seedReminder = hub.seedReminder;
 
@@ -91,6 +93,15 @@ export function AlfredHubScreen({
       setCaptureText(opts.text);
       setCaptureKey((k) => k + 1);
       setMode("capture");
+      return;
+    }
+    if (opts.mode === "email") {
+      setMode("email");
+      if (opts.text?.trim()) {
+        chat.sendFreeRef.current(opts.text.trim());
+      } else {
+        beginEmailFlowRef.current();
+      }
       return;
     }
     if (opts.mode === "sms") {
@@ -142,14 +153,12 @@ export function AlfredHubScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only props
   }, []);
 
-  const onAction = (key: HubMode) => {
-    if (key === "capture") {
-      setCaptureText(undefined);
-      setCaptureKey((k) => k + 1);
-      setMode("capture");
+  const onAction = (key: Exclude<HubMode, "idle" | "capture">) => {
+    setMode(key);
+    if (key === "email") {
+      chat.beginEmailFlow();
       return;
     }
-    setMode(key);
     if (key === "sms") {
       chat.beginSmsFlow();
       return;
@@ -203,9 +212,9 @@ export function AlfredHubScreen({
           {(
             [
               { key: "schedule" as const, label: hub.actionSchedule, icon: Ic.Calendar, tone: "blue" as const },
+              { key: "email" as const, label: hub.actionEmail, icon: Ic.Mail, tone: "purple" as const },
               { key: "sms" as const, label: hub.actionSms, icon: Ic.Chat, tone: "green" as const },
               { key: "reminder" as const, label: hub.actionReminder, icon: Ic.Bell, tone: "yellow" as const },
-              { key: "capture" as const, label: hub.actionCapture, icon: Ic.Mic, tone: "purple" as const },
             ] as const
           ).map((a) => {
             const active = mode === a.key;
@@ -228,9 +237,11 @@ export function AlfredHubScreen({
           <Text style={styles.modeHint}>
             {mode === "schedule"
               ? hub.hintSchedule
-              : mode === "sms"
-                ? hub.hintSms
-                : hub.hintReminder}
+              : mode === "email"
+                ? hub.hintEmail
+                : mode === "sms"
+                  ? hub.hintSms
+                  : hub.hintReminder}
           </Text>
         ) : null}
 
@@ -272,23 +283,27 @@ export function AlfredHubScreen({
 
       <View style={styles.composerWrap}>
         <View style={styles.composerInner}>
-          {Platform.OS === "android" && chat.voice.state !== "idle" ? (
+          {chat.voice.state === "uploading" ? (
             <Pressable
               style={styles.composerIconBtn}
-              onPress={() => void chat.voice.stop()}
-              accessibilityLabel="Voice input"
+              disabled
+              accessibilityLabel={t.a11y.voiceInput}
             >
               <ActivityIndicator size="small" color={colors.accent} />
+            </Pressable>
+          ) : chat.voice.state === "recording" ? (
+            <Pressable
+              style={[styles.composerIconBtn, styles.composerMicActive]}
+              onPress={() => void chat.voice.stop()}
+              accessibilityLabel={t.a11y.voiceStop}
+            >
+              <Ic.Mic size={17} color="#FFFFFF" stroke={2} />
             </Pressable>
           ) : (
             <Pressable
               style={styles.composerIconBtn}
-              onPress={
-                Platform.OS === "android"
-                  ? () => void chat.voice.start()
-                  : undefined
-              }
-              accessibilityLabel="Voice input"
+              onPress={() => void chat.voice.start()}
+              accessibilityLabel={t.a11y.voiceInput}
             >
               <Ic.Mic size={17} color="#60708D" stroke={2} />
             </Pressable>
@@ -545,6 +560,10 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: "center",
     justifyContent: "center",
+  },
+  composerMicActive: {
+    borderRadius: 16,
+    backgroundColor: colors.accent,
   },
   sendBtn: {
     width: 32,

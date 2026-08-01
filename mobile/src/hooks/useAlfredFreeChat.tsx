@@ -46,7 +46,8 @@ import {
 } from "@/lib/freeChatHistory";
 import { scheduleFromAssistantResponse } from "@/lib/taskReminders";
 import { fulfillDeviceCalendarBook } from "@/lib/fulfillDeviceCalendarBook";
-import { useVoiceCapture } from "@/api/useVoiceCapture";
+import { useVoiceDictation } from "@/api/useVoiceCapture";
+import { appendVoiceTranscript } from "@/lib/voiceDraft";
 
 export type AlfredFreeMsg = ChatMessage & {
   smsDraft?: { name: string; phone: string; body: string };
@@ -104,10 +105,23 @@ export function useAlfredFreeChat(scrollRef: RefObject<ScrollView | null>) {
 
   const sendFreeRef = useRef<(text: string) => void>(() => undefined);
 
-  const voice = useVoiceCapture((r) => {
-    const q = r.tasks.map((task) => task.title).join("; ");
-    if (q.trim()) sendFreeRef.current(q);
+  const voice = useVoiceDictation((transcript) => {
+    const spoken = transcript.trim();
+    if (!spoken) {
+      showToast(t.voice.empty);
+      return;
+    }
+    setInput((prev) => appendVoiceTranscript(prev, spoken));
   });
+
+  useEffect(() => {
+    if (!voice.error) return;
+    if (voice.error.toLowerCase().includes("microphone permission")) {
+      showToast(t.voice.permissionDenied);
+    } else {
+      showToast(voice.error);
+    }
+  }, [voice.error, showToast, t.voice.permissionDenied]);
 
   useEffect(() => {
     freeChatRef.current = freeChat;

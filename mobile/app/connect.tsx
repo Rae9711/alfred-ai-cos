@@ -4,10 +4,15 @@
 import { Redirect } from "expo-router";
 
 import { useAuth } from "@/api/AuthContext";
+import { LocaleProvider } from "@/context/LocaleContext";
 import { ConnectScreen } from "@/screens/ConnectScreen";
 
 export default function Connect() {
   const { authed, refresh } = useAuth();
   if (authed) return <Redirect href="/(tabs)" />;
-  return <ConnectScreen onConnected={() => void refresh()} />;
+  return (
+    <LocaleProvider>
+      <ConnectScreen onConnected={() => void refresh()} />
+    </LocaleProvider>
+  );
 }

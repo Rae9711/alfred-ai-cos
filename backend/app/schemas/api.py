@@ -34,6 +34,15 @@ class SessionToken(BaseModel):
     token_type: str = "bearer"
 
 
+class AppleSignInRequest(BaseModel):
+    """Native Sign in with Apple identity token + optional name (first grant only)."""
+
+    identity_token: str
+    full_name: str | None = None
+    # Optional Apple-provided email from the credential (may be omitted on later sign-ins).
+    email: str | None = None
+
+
 # --- Commitments ---
 class CommitmentOut(BaseModel):
     id: str
@@ -471,6 +480,13 @@ class CaptureRequest(BaseModel):
 class CaptureResponse(BaseModel):
     tasks: list[TaskOut]
     detected_project: str | None
+    transcript: str | None = None
+
+
+class TranscribeResponse(BaseModel):
+    """Raw speech-to-text for composer dictation (no task persistence)."""
+
+    transcript: str
 
 
 # --- Conversation (WeChat paste workflow) ---

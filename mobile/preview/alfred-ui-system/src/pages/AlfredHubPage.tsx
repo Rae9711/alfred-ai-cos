@@ -1,12 +1,12 @@
-import { CalendarDays, Bell, MessageSquare, Mic, Send, Sparkles } from "lucide-react";
+import { CalendarDays, Bell, Mail, MessageSquare, Mic, Send, Sparkles } from "lucide-react";
 import AlfredAvatar from "../components/AlfredAvatar";
 import { IconTile } from "../components/IconTile";
 
 const ACTIONS = [
   { label: "日程", tone: "blue" as const, icon: CalendarDays },
+  { label: "邮件", tone: "purple" as const, icon: Mail },
   { label: "短信", tone: "green" as const, icon: MessageSquare },
   { label: "提醒", tone: "yellow" as const, icon: Bell },
-  { label: "速记", tone: "purple" as const, icon: Mic },
 ];
 
 export default function AlfredHubPage() {

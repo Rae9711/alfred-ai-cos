@@ -156,6 +156,13 @@ export interface TaskCreateRequest {
 export interface CaptureResponse {
   tasks: Task[];
   detected_project: string | null;
+  /** Present when the note was transcribed from audio. */
+  transcript?: string | null;
+}
+
+/** Speech-to-text only (composer dictation — no task persistence). */
+export interface TranscribeResponse {
+  transcript: string;
 }
 
 export interface WaitingEntry {

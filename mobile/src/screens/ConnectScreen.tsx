@@ -1,9 +1,17 @@
-// Onboarding entry (PRD 9.1). Editorial hero: 阿福 eyebrow, serif Albert wordmark,
-// serif tagline, then Connect Gmail. Opens the backend-provided Google consent URL;
-// the backend redirects back via the albert://auth deep link, handled in _layout.tsx.
+// Onboarding entry (PRD 9.1). Editorial hero + Sign in with Apple (primary on iOS),
+// Connect Gmail, and continue without a mailbox. Google OAuth still redirects via
+// albert://auth (handled in _layout.tsx). Apple / skip mint a JWT from the API.
 
-import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 
@@ -16,14 +24,49 @@ import {
   inputPlaceholder,
   inputStyle,
 } from "@/components/ui";
+import { useLocale } from "@/context/LocaleContext";
 import { colors, fonts, radius, spacing } from "@/theme/theme";
 
 type Props = { onConnected: () => void };
 
+function fullNameFromApple(
+  fullName: AppleAuthentication.AppleAuthenticationFullName | null,
+): string | null {
+  if (!fullName) return null;
+  const parts = [fullName.givenName, fullName.middleName, fullName.familyName]
+    .map((p) => (typeof p === "string" ? p.trim() : ""))
+    .filter(Boolean);
+  return parts.length ? parts.join(" ") : null;
+}
+
+function friendlyError(
+  e: unknown,
+  fallback: string,
+  networkFailed: string,
+): string {
+  if (!(e instanceof Error)) return fallback;
+  if (
+    /can't reach alfred|network request failed/i.test(e.message)
+  ) {
+    return networkFailed;
+  }
+  return e.message || fallback;
+}
+
 export function ConnectScreen({ onConnected }: Props) {
+  const { t } = useLocale();
+  const c = t.connect;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [devEmail, setDevEmail] = useState("zeraikiadam@gmail.com");
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    void AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => setAppleAvailable(false));
+  }, []);
 
   const connect = useCallback(async () => {
     setBusy(true);
@@ -46,13 +89,61 @@ export function ConnectScreen({ onConnected }: Props) {
       }
       if (await getToken()) onConnected();
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not start Google sign-in",
-      );
+      setError(friendlyError(e, c.connectFailed, c.networkFailed));
     } finally {
       setBusy(false);
     }
-  }, [onConnected]);
+  }, [c.connectFailed, c.networkFailed, onConnected]);
+
+  const signInWithApple = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error(c.appleFailed);
+      }
+      const { access_token } = await api.signInWithApple({
+        identity_token: credential.identityToken,
+        full_name: fullNameFromApple(credential.fullName),
+        email: credential.email,
+      });
+      await setToken(access_token);
+      onConnected();
+    } catch (e) {
+      // User dismissed the sheet — not an error worth showing.
+      if (
+        e &&
+        typeof e === "object" &&
+        "code" in e &&
+        (e as { code?: string }).code === "ERR_REQUEST_CANCELED"
+      ) {
+        return;
+      }
+      setError(friendlyError(e, c.appleFailed, c.networkFailed));
+    } finally {
+      setBusy(false);
+    }
+  }, [c.appleFailed, c.networkFailed, onConnected]);
+
+  const continueWithoutGmail = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { access_token } = await api.continueWithoutGmail();
+      await setToken(access_token);
+      onConnected();
+    } catch (e) {
+      setError(friendlyError(e, c.skipFailed, c.networkFailed));
+    } finally {
+      setBusy(false);
+    }
+  }, [c.networkFailed, c.skipFailed, onConnected]);
 
   // Development only: skip the OAuth round-trip (which needs a LAN-reachable redirect
   // on a phone) by minting a session for an already-connected account.
@@ -72,22 +163,43 @@ export function ConnectScreen({ onConnected }: Props) {
 
   return (
     <View style={styles.screen}>
-      <Eyebrow>阿福 · Your chief of staff</Eyebrow>
+      <Eyebrow>{c.eyebrow}</Eyebrow>
       <Serif size={52} style={styles.title}>
         Alfred
       </Serif>
       <Serif size={22} color={colors.ink2} style={styles.tagline}>
-        Connect Gmail and Calendar. I'll find what matters, what you're
-        forgetting, and what needs action.
+        {c.tagline}
       </Serif>
 
       <View style={styles.ctaWrap}>
+        {appleAvailable ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={radius.pill}
+            style={styles.appleButton}
+            onPress={() => {
+              if (!busy) void signInWithApple();
+            }}
+          />
+        ) : null}
         <Btn
-          label={busy ? "Opening…" : "Connect Gmail"}
+          label={busy ? c.opening : c.connectGmail}
           kind="accent"
           onPress={connect}
           disabled={busy}
         />
+        <Pressable
+          onPress={continueWithoutGmail}
+          disabled={busy}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={c.skipGmail}
+        >
+          <Text style={[styles.skip, busy && styles.skipDisabled]}>
+            {c.skipGmail}
+          </Text>
+        </Pressable>
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -125,7 +237,16 @@ const styles = StyleSheet.create({
   },
   title: { marginTop: spacing.sm },
   tagline: { marginTop: spacing.md, lineHeight: 29 },
-  ctaWrap: { marginTop: spacing.xl, alignSelf: "flex-start" },
+  ctaWrap: { marginTop: spacing.xl, alignSelf: "stretch", gap: spacing.md },
+  appleButton: { width: "100%", height: 48 },
+  skip: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    color: colors.ink3,
+    textDecorationLine: "underline",
+    alignSelf: "flex-start",
+  },
+  skipDisabled: { opacity: 0.45 },
   error: { color: colors.warn, fontSize: 13, marginTop: spacing.sm },
   devBox: {
     marginTop: spacing.xl,

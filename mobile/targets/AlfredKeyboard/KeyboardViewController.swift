@@ -235,21 +235,26 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func renderChrome() {
-        let globe = makeChromeKey("🌐", action: #selector(advanceTapped), width: 36)
-        chromeBar.addArrangedSubview(globe)
-
-        let num = makeChromeKey("123", action: #selector(numbersHintTapped), width: 40)
-        chromeBar.addArrangedSubview(num)
-
-        let space = makeChromeKey("空格", action: #selector(spaceTapped))
-        space.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        chromeBar.addArrangedSubview(space)
-
-        let back = makeChromeKey("⌫", action: #selector(backspaceTapped), width: 40)
-        chromeBar.addArrangedSubview(back)
-
-        let ret = makePrimaryChromeKey("↵", action: #selector(returnTapped), width: 44)
-        chromeBar.addArrangedSubview(ret)
+        switch phase {
+        case .success:
+            // After a reply is filled: 换一个 / 撤销 / 发送 — no globe, 123, or space.
+            chromeBar.addArrangedSubview(makeChromeKey("换一个", action: #selector(cycleAndReinsert)))
+            chromeBar.addArrangedSubview(makeChromeKey("撤销", action: #selector(undoLastInsert)))
+            let spacer = UIView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            chromeBar.addArrangedSubview(spacer)
+            chromeBar.addArrangedSubview(makePrimaryChromeKey("发送", action: #selector(sendInsertedReply), width: 72))
+        case .editing:
+            // Keep delete/return only while editing the draft TextView.
+            let spacer = UIView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            chromeBar.addArrangedSubview(spacer)
+            chromeBar.addArrangedSubview(makeChromeKey("⌫", action: #selector(backspaceTapped), width: 40))
+            chromeBar.addArrangedSubview(makePrimaryChromeKey("↵", action: #selector(returnTapped), width: 44))
+        default:
+            // Idle / generating / etc.: no bottom chrome keys (globe / 123 / space removed).
+            break
+        }
     }
 
     // MARK: - Phase views
@@ -455,7 +460,7 @@ final class KeyboardViewController: UIInputViewController {
         actionsRow.addArrangedSubview(makePrimaryButton("填入输入框", action: #selector(insertCurrentReply), symbol: "square.and.arrow.down"))
         contentStack.addArrangedSubview(actionsRow)
 
-        let tip = makeLabel("也可点下方「重新填入」；发送请用聊天 App 的发送键", size: 10, color: AlfredKeyboardTheme.inkTertiary)
+        let tip = makeLabel("也可点下方「重新填入」；填入后可用发送", size: 10, color: AlfredKeyboardTheme.inkTertiary)
         tip.textAlignment = .center
         contentStack.addArrangedSubview(tip)
 
@@ -550,17 +555,13 @@ final class KeyboardViewController: UIInputViewController {
         ])
         contentStack.addArrangedSubview(checkWrap)
 
-        let title = makeLabel("已填入，点发送即可", size: 16, weight: .semibold, color: bodyText, style: .title)
+        let title = makeLabel("回复已填入", size: 16, weight: .semibold, color: bodyText, style: .title)
         title.textAlignment = .center
         contentStack.addArrangedSubview(title)
 
-        let actionsRow = UIStackView()
-        actionsRow.axis = .horizontal
-        actionsRow.spacing = 8
-        actionsRow.distribution = .fillEqually
-        actionsRow.addArrangedSubview(makeGhostButton("换一个", action: #selector(cycleAndReinsert)))
-        actionsRow.addArrangedSubview(makeGhostButton("撤销", action: #selector(undoLastInsert)))
-        contentStack.addArrangedSubview(actionsRow)
+        let hint = makeLabel("点下方发送；也可换一个或撤销", size: 12, color: mutedText)
+        hint.textAlignment = .center
+        contentStack.addArrangedSubview(hint)
 
         let count = actions.count
         if count > 0 {
@@ -580,13 +581,6 @@ final class KeyboardViewController: UIInputViewController {
         if let banner = statusBanner {
             contentStack.addArrangedSubview(makeStatusBanner(banner, tone: .success))
         }
-
-        let done = UIButton(type: .system)
-        done.setTitle("完成", for: .normal)
-        done.titleLabel?.font = AlfredKeyboardTheme.bodyFont(size: 14, weight: .semibold)
-        done.setTitleColor(accent, for: .normal)
-        done.addTarget(self, action: #selector(resetToIdle), for: .touchUpInside)
-        contentStack.addArrangedSubview(done)
     }
 
     private func renderError(_ message: String) {
@@ -639,11 +633,30 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
-    @objc private func advanceTapped() { advanceToNextInputMode() }
-    @objc private func spaceTapped() { insertIntoActiveField(" ") }
     @objc private func backspaceTapped() { deleteFromActiveField() }
     @objc private func returnTapped() { insertIntoActiveField("\n") }
-    @objc private func numbersHintTapped() { insertIntoActiveField("123") }
+
+    /// Commit the filled reply: best-effort host send, then dismiss the keyboard.
+    /// iOS does not allow a keyboard extension to silently tap Messages/WeChat Send;
+    /// when the host return key is Send/Go we insert `\n`, otherwise we dismiss so
+    /// the host Send control is immediately tappable.
+    @objc private func sendInsertedReply() {
+        if lastInsertedBody.isEmpty, let body = currentReply()?.body, !body.isEmpty {
+            insertBody(body)
+        }
+        attemptHostSend()
+        lastInsertedBody = ""
+        dismissKeyboard()
+    }
+
+    private func attemptHostSend() {
+        switch textDocumentProxy.returnKeyType {
+        case .send, .go:
+            textDocumentProxy.insertText("\n")
+        default:
+            break
+        }
+    }
 
     /// While editing a draft, chrome keys target the TextView — not WeChat.
     private func insertIntoActiveField(_ text: String) {
@@ -1019,16 +1032,26 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func cycleAndReinsert() {
         guard !replies.isEmpty else { return }
-        undoLastInsert()
+        clearLastInsertFromHost()
         replyIndex = (replyIndex + 1) % replies.count
         if let body = currentReply()?.body, !body.isEmpty {
             insertBody(body)
         }
         phase = .success
+        statusBanner = nil
         render()
     }
 
     @objc private func undoLastInsert() {
+        guard !lastInsertedBody.isEmpty else { return }
+        clearLastInsertFromHost()
+        if case .success = phase {
+            statusBanner = "已撤销填入"
+            render()
+        }
+    }
+
+    private func clearLastInsertFromHost() {
         let n = lastInsertedBody.count
         guard n > 0 else { return }
         for _ in 0..<n {

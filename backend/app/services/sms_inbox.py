@@ -29,23 +29,51 @@ _PHONE_RE = re.compile(r"[\d+()\-\s]+")
 
 
 def ensure_sms_forward_token(user: User) -> str:
-    """Return a per-user token the iOS Shortcut sends in X-Sms-Token."""
+    """Return a per-user token the iOS Shortcut sends in X-Sms-Token.
+
+    Prefers the indexed ``users.sms_forward_token`` column. Falls back to (and
+    migrates from) the legacy preferences JSON key for rows that predate the column.
+    """
+    if isinstance(user.sms_forward_token, str) and len(user.sms_forward_token) >= 16:
+        return user.sms_forward_token
+
     prefs = dict(user.preferences or {})
-    token = prefs.get(_SMS_TOKEN_KEY)
-    if not isinstance(token, str) or len(token) < 16:
-        token = secrets.token_urlsafe(32)
-        prefs[_SMS_TOKEN_KEY] = token
-        user.preferences = prefs
-        flag_modified(user, "preferences")
+    legacy = prefs.get(_SMS_TOKEN_KEY)
+    if isinstance(legacy, str) and len(legacy) >= 16:
+        user.sms_forward_token = legacy
+        return legacy
+
+    token = secrets.token_urlsafe(32)
+    user.sms_forward_token = token
+    # Keep preferences in sync so older clients / docs that read prefs still work.
+    prefs[_SMS_TOKEN_KEY] = token
+    user.preferences = prefs
+    flag_modified(user, "preferences")
+    return token
+
+
+def rotate_sms_forward_token(user: User) -> str:
+    """Issue a new SMS webhook token (invalidates the previous one immediately)."""
+    token = secrets.token_urlsafe(32)
+    user.sms_forward_token = token
+    prefs = dict(user.preferences or {})
+    prefs[_SMS_TOKEN_KEY] = token
+    user.preferences = prefs
+    flag_modified(user, "preferences")
     return token
 
 
 def find_user_by_sms_token(db: Session, token: str) -> User | None:
     if not token or len(token) < 16:
         return None
-    for user in db.scalars(select(User)):
-        if (user.preferences or {}).get(_SMS_TOKEN_KEY) == token:
-            return user
+    user = db.scalar(select(User).where(User.sms_forward_token == token))
+    if user is not None:
+        return user
+    # Legacy rows: token only in preferences until ensure_sms_forward_token runs.
+    for candidate in db.scalars(select(User).where(User.sms_forward_token.is_(None))):
+        if (candidate.preferences or {}).get(_SMS_TOKEN_KEY) == token:
+            candidate.sms_forward_token = token
+            return candidate
     return None
 
 

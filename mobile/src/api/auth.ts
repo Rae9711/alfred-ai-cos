@@ -6,6 +6,7 @@
 // Alfred Keyboard extension can call the API.
 
 import {
+  AFTER_FIRST_UNLOCK_OPTS,
   deleteSecureItem,
   readSecureItem,
   writeSecureItem,
@@ -13,17 +14,26 @@ import {
 import { syncAuthToAppGroup } from "@/lib/appGroupHandoff";
 
 const TOKEN_KEY = "albert.session_token";
+const KEYCHAIN_OPTS = AFTER_FIRST_UNLOCK_OPTS;
+
+/** In-memory cache so startup storms don't hit Keychain on every request. */
+let cachedToken: string | null | undefined;
 
 export async function getToken(): Promise<string | null> {
-  return readSecureItem(TOKEN_KEY);
+  if (cachedToken !== undefined) return cachedToken;
+  const token = await readSecureItem(TOKEN_KEY, KEYCHAIN_OPTS);
+  cachedToken = token;
+  return token;
 }
 
 export async function setToken(token: string): Promise<void> {
-  await writeSecureItem(TOKEN_KEY, token);
+  cachedToken = token;
+  await writeSecureItem(TOKEN_KEY, token, KEYCHAIN_OPTS);
   await syncAuthToAppGroup(token);
 }
 
 export async function clearToken(): Promise<void> {
+  cachedToken = null;
   await deleteSecureItem(TOKEN_KEY);
   await syncAuthToAppGroup(null);
 }

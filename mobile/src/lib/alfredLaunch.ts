@@ -10,7 +10,7 @@ export type AlfredLaunchOpts = {
   capture?: boolean;
   /** Prefill for capture auto-submit, or a free-chat message to send. */
   text?: string;
-  mode?: "schedule" | "sms" | "reminder" | "capture";
+  mode?: "schedule" | "email" | "sms" | "reminder" | "capture";
   /** Prefill composer without sending (e.g. "Remind me "). */
   seed?: string;
 };

@@ -15,6 +15,7 @@ import { api, setOnAuthExpired } from "@/api/client";
 import { clearToken, getToken } from "@/api/auth";
 import { syncAuthToAppGroup } from "@/lib/appGroupHandoff";
 import { clearFreeChatHistory } from "@/lib/freeChatHistory";
+import { clearOnboardedCache } from "@/lib/onboardingCache";
 
 type AuthState = {
   authed: boolean | null; // null = still loading
@@ -45,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await clearToken();
     await clearFreeChatHistory();
+    await clearOnboardedCache();
     setAuthed(false);
   }, []);
 

@@ -1,4 +1,4 @@
-# Albert app: EAS build + update (laptop-independent app)
+# Albert app: EAS build + TestFlight
 
 The app's JS is currently served from a Mac (Metro tunnel/LAN). EAS makes it a real
 installable app that pulls JS updates from Expo's cloud — friends install once, then get
@@ -18,26 +18,53 @@ bunx eas init                        # creates the EAS project, writes the real
                                      # projectId into app.json updates.url
 ```
 
-## Build for friends (TestFlight-style, no App Store review)
+## Fast friend installs (EAS internal — not App Store Connect)
 
 ```
 bunx eas build --profile preview --platform ios
 ```
 
 - EAS asks to log in to your Apple Developer account and handles certs/provisioning.
-- Produces an installable build; distribute via the EAS link or TestFlight.
-- Android (free, no Apple): `bunx eas build --profile preview --platform android` → APK.
+- Produces an **ad-hoc / internal** IPA; friends install via the EAS link (device UDIDs
+  registered). This is **not** TestFlight.
+- Android: `bunx eas build --profile preview --platform android` → APK.
 
-## Ship JS updates after the first build (no rebuild, instant)
+## Real TestFlight (App Store Connect)
 
-After any JS change (screens, fixes):
+1. **Apple Developer**  
+   - App ID `com.haoruiwang.alfred` with **Sign In with Apple** enabled.  
+   - Refresh provisioning profiles (`eas credentials` / next EAS build).
+
+2. **Prod API** (before testers open the app)  
+   - `APPLE_CLIENT_ID=com.haoruiwang.alfred`  
+   - Run migrations through `c5d6e7f8a9b0` (`users.apple_sub`, `users.sms_forward_token`)  
+   - Confirm `https://alfredaitech.com/api/v1/integrations/ios/Albert-SMS-Forward.shortcut` serves 200
+
+3. **Store build + submit**
 
 ```
-bunx eas update --branch preview -m "what changed"
+bunx eas build --profile production --platform ios
+bunx eas submit --platform ios --latest
 ```
 
-Installed apps pick it up on next launch. This is the durable loop: rebuild only when
-native deps change; otherwise `eas update` and everyone has it in seconds.
+- `production` uses App Store distribution (required for TestFlight).  
+- After upload, enable the build in App Store Connect → TestFlight → Internal Testing.  
+- Add internal testers (same Apple team) or external testers (may need Beta App Review).
+
+4. **Native rebuild required** when entitlements change (SIWA, keyboard, contacts,
+   calendar, microphone). JS-only `eas update` cannot add those.
+
+## Ship JS updates after the first build (no rebuild)
+
+After any JS change (screens, fixes) that does **not** need new native code:
+
+```
+bunx eas update --branch preview -m "what changed"      # internal/preview installs
+bunx eas update --branch production -m "what changed"  # TestFlight / store builds
+```
+
+Installed apps pick it up on next launch. Rebuild only when native deps or iOS
+capabilities change. See `docs/integrations/sign-in-with-apple.md`.
 
 ## Notes
 
@@ -47,3 +74,5 @@ native deps change; otherwise `eas update` and everyone has it in seconds.
   Bump `version` in app.json when native changes require a fresh build.
 - The OAuth deep link is `albert://auth`; in a standalone build the albert:// scheme is
   registered natively, so Google sign-in returns into the app cleanly (unlike Expo Go).
+- Prefer **Sign in with Apple** for testers who need durable identity without Gmail.
+  “Continue without Gmail” mints a new anonymous user if the local JWT is lost.

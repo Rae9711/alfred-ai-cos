@@ -1,5 +1,5 @@
 // Cross-tab workflow: Inbox → Chats (task thread) with real drafts + send.
-// Center Alfred hub = free chat / schedule / SMS / reminder / capture.
+// Center Alfred hub = free chat / schedule / email / SMS / reminder (+ capture deep link).
 // Chats tab ("ask") = WeChat paste-import (ImportConversationScreen) when idle;
 // Inbox reply/delegate still mounts AskScreen while `thread` is set.
 

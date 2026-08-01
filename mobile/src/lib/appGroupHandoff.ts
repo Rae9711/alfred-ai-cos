@@ -31,11 +31,8 @@ export async function syncAuthToAppGroup(token: string | null): Promise<SyncAuth
       setSharedApiBaseUrl,
       setSharedAuthToken,
     } = await import("alfred-shared-storage");
-    const Constants = (await import("expo-constants")).default;
-    const base =
-      (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
-      "https://alfredaitech.com";
-    await setSharedApiBaseUrl(base);
+    const { resolveApiBaseUrl } = await import("@/api/apiBaseUrl");
+    await setSharedApiBaseUrl(resolveApiBaseUrl());
     await setSharedAuthToken(token);
     return { ok: true };
   } catch (e) {

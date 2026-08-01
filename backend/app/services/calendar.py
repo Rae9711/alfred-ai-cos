@@ -37,13 +37,17 @@ def _sync_window_utc(timezone: str | None) -> tuple[datetime, datetime]:
     return month_start.astimezone(UTC), window_end.astimezone(UTC)
 
 
-def _account(db: Session, user_id: str) -> ConnectedAccount:
-    account = db.scalar(
+def _account(db: Session, user_id: str) -> ConnectedAccount | None:
+    return db.scalar(
         select(ConnectedAccount).where(
             ConnectedAccount.user_id == user_id,
             ConnectedAccount.provider == Provider.google,
         )
     )
+
+
+def _require_account(db: Session, user_id: str) -> ConnectedAccount:
+    account = _account(db, user_id)
     if account is None:
         raise ValueError("No connected Google account for user")
     return account
@@ -65,6 +69,8 @@ def get_event(db: Session, user_id: str, event_id: str) -> CalendarEvent:
 def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[CalendarEvent]:
     """Fetch events for the user's local month window, upsert, and prune stale rows."""
     account = _account(db, user_id)
+    if account is None:
+        return []
     user = db.get(User, user_id)
     user_email = user.email if user else ""
     _creds, token = refresh_google_token(db, account)
@@ -107,7 +113,7 @@ def book_event(
     location: str | None = None,
 ) -> CalendarEvent:
     """Create a calendar event on the user's primary calendar and persist it locally."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     user = db.get(User, user_id)
     user_email = user.email if user else ""
     creds, token = refresh_google_token(db, account)
@@ -138,7 +144,7 @@ def update_event(
     location: str | None = None,
 ) -> CalendarEvent:
     """Update an event on Google Calendar and refresh the local row."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     user = db.get(User, user_id)
     user_email = user.email if user else ""
     event = get_event(db, user_id, event_id)
@@ -162,7 +168,7 @@ def update_event(
 
 def delete_event(db: Session, user_id: str, event_id: str) -> None:
     """Delete an event from Google Calendar and remove the local row."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     event = get_event(db, user_id, event_id)
     creds, token = refresh_google_token(db, account)
 

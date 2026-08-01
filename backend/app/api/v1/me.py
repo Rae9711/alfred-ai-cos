@@ -85,12 +85,20 @@ def _me(db: Session, user: User) -> MeOut:
         for a in list_google_accounts(db, user.id)
         if a.provider_account_email
     ]
+    prefs = dict(user.preferences)
+    display_email = user.email
+    # Synthetic Apple / anonymous addresses are not useful in Settings — prefer
+    # the contact email Apple shared, or a short label.
+    if user.email.endswith("@signin.apple.alfred"):
+        display_email = str(prefs.get("apple_email") or "Apple ID")
+    elif user.email.endswith("@local.alfred"):
+        display_email = str(prefs.get("display_email") or "Alfred account")
     return MeOut(
         id=user.id,
-        email=user.email,
+        email=display_email,
         name=user.name,
         timezone=user.timezone,
-        preferences=dict(user.preferences),
+        preferences=prefs,
         onboarded=_is_onboarded(user),
         connected_mailboxes=mailboxes,
     )
@@ -196,6 +204,19 @@ def test_sms_forwarding(
         deduped=result.deduped,
         draft_created=result.draft_created,
     )
+
+
+@router.post("/me/sms-forwarding/rotate", response_model=SmsForwardingOut)
+def rotate_sms_forwarding(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsForwardingOut:
+    """Invalidate the current SMS webhook token and mint a new one."""
+    token = sms_inbox.rotate_sms_forward_token(user)
+    db.commit()
+    settings = get_settings()
+    base = settings.app_base_url.rstrip("/")
+    return SmsForwardingOut(webhook_url=f"{base}/api/v1/inbox/sms", token=token)
 
 
 @router.post("/onboarding", response_model=MeOut)

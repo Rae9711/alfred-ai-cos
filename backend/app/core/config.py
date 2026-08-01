@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_oauth_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
 
+    # Sign in with Apple. For native iOS SIWA this is the app's bundle ID
+    # (com.haoruiwang.alfred). Empty disables POST /auth/apple (returns 503).
+    apple_client_id: str = ""
+
     # LLM
     llm_provider: Literal["anthropic"] = "anthropic"
     anthropic_api_key: str = ""

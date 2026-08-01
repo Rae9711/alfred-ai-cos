@@ -11,7 +11,7 @@ the user only taps the host app's Send.
 3. Keyboard auto-picks the newest screenshot (last ~45s) → Vision OCR →
    `/conversations/analyze` → **auto `insertText`**.
 4. Screenshot asset is **deleted from Photos** after OCR.
-5. User taps the host **Send** button. Optional: 换一个 / 撤销.
+5. User taps **发送** on the Alfred keyboard (best-effort host submit + dismiss), or the host Send. Optional: 换一个 / 撤销.
 
 ## Fallback (WeChat multi-select)
 
@@ -149,9 +149,14 @@ no token). Suite failure surfaces as「未发现共享容器」in the keyboard.
 - **IDLE:** screenshot / clipboard detection + [识别截图] [用剪贴板]
 - **IMPORTING / GENERATING:** progress, then auto-insert
 - **PICKING_SELF:** one-time speaker chips when identity is ambiguous
-- **SUCCESS:** 「已填入，点发送即可」+ 换一个 / 撤销 + optional follow-up cards
+- **SUCCESS:** 「回复已填入」+ bottom chrome **换一个 / 撤销 / 发送** + optional follow-up cards
 
-Bottom chrome: 🌐 123 空格 ⌫ blue ↵ (no full QWERTY).
+Bottom chrome:
+- Idle / generating: empty (no 🌐 / 123 / 空格)
+- Editing draft: ⌫ + ↵ only
+- After insert (SUCCESS): **换一个** · **撤销** · primary **发送**
+
+**发送** best-effort: if the host `returnKeyType` is `.send` / `.go`, inserts `\n` then dismisses the keyboard; otherwise dismisses so the host app’s Send is immediately tappable. Custom keyboards **cannot** silently press Messages/WeChat’s Send button via public API.
 
 **展开** / **打开 Alfred** use `albert://…`. Host apps (esp. WeChat) often block
 extension `openURL`; fallback copies the deep link to the pasteboard.

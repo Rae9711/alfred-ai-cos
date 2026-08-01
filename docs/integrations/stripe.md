@@ -13,7 +13,7 @@ enabled only when both env vars below are set on the server.
 
 ```
 STRIPE_SECRET_KEY=sk_test_...           # or sk_live_ with ALLOW_LIVE_PAYMENTS=true
-STRIPE_SUBSCRIPTION_PRICE_ID=price_...  # recurring Price id from Stripe Dashboard
+STRIPE_SUBSCRIPTION_PRICE_ID=price_1Tzf13345UyfMaHjzDMkL3oX  # Alfred Pro $17/mo
 ALLOW_LIVE_PAYMENTS=false               # never true without compliance steps below
 ```
 
@@ -22,7 +22,10 @@ Also documented in `.env.example` and `.env.production.example`.
 ### Stripe Dashboard setup (checklist)
 
 1. **Products** → Create product **Albert Pro** (or reuse an existing product).
-2. **Add price** → Recurring, monthly (catalog shows $12/mo; set your amount), save.
+2. **Add price** → Recurring, monthly **$17/mo** (matches app catalog `price_label`), save.
+   Current Price id used by the app: `price_1Tzf13345UyfMaHjzDMkL3oX`.
+   If you already have a $12 Price, create a new $17 Price and point
+   `STRIPE_SUBSCRIPTION_PRICE_ID` at the new id (do not edit a live Price amount).
 3. Copy the **Price ID** (`price_…`) → set `STRIPE_SUBSCRIPTION_PRICE_ID` in server `.env`.
 4. **Developers → API keys** → copy **Secret key** → set `STRIPE_SECRET_KEY` in server `.env`.
 5. Restart API after env change: `systemctl restart albert-web` (systemd) or
@@ -35,6 +38,12 @@ Also documented in `.env.example` and `.env.production.example`.
    wait for the webhook PR.
 7. **Test checkout:** open mobile **Settings → Subscription → Subscribe**. Success/cancel
    URLs are `albert://settings?billing=success|cancel`. Use Stripe test card `4242…`.
+
+App checkout uses **Stripe Checkout Sessions** (`POST /v1/checkout/sessions` in
+`billing.create_checkout_session`), not a direct `POST /v1/subscriptions` call. The
+Dashboard “create subscription” curl (off-session + existing `customer`) is for
+server-side renewals after a Customer + PaymentMethod already exist; mobile Subscribe
+opens hosted Checkout instead.
 
 ### API routes
 
