@@ -1,18 +1,31 @@
-// On-device speech recognition (iOS SFSpeechRecognizer / Android SpeechRecognizer).
-// Audio never leaves the device for Alfred's servers — only the transcript text is
-// sent to the API (captureText for tasks, or a local callback for dictation).
+// On-device speech recognition when the native module is linked (new builds).
+// Older preview binaries (runtime 0.1.0 without expo-speech-recognition) must
+// not import the package at module scope — requireNativeModule throws and
+// crashes the app. We lazy-require and degrade to a clear error instead.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import type { CaptureResponse } from "@albert/shared-types";
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from "expo-speech-recognition";
 
 import { api } from "@/api/client";
 
 export type VoiceState = "idle" | "recording" | "uploading";
+
+type SpeechModule = typeof import("expo-speech-recognition");
+
+let cachedSpeech: SpeechModule | null | undefined;
+
+function loadSpeechModule(): SpeechModule | null {
+  if (cachedSpeech !== undefined) return cachedSpeech;
+  try {
+    // Dynamic require so missing native code does not crash app startup.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedSpeech = require("expo-speech-recognition") as SpeechModule;
+  } catch {
+    cachedSpeech = null;
+  }
+  return cachedSpeech;
+}
 
 function speechLang(): string {
   try {
@@ -26,21 +39,8 @@ function speechLang(): string {
   }
 }
 
-async function ensureSpeechReady(): Promise<string | null> {
-  try {
-    const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!result.granted) {
-      return "Microphone permission is required for voice input.";
-    }
-    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-      return "Speech recognition is not available on this device.";
-    }
-  } catch {
-    // Native module missing (old binary before expo-speech-recognition was linked).
-    return "Voice needs the latest Alfred build — reinstall from TestFlight, then try again.";
-  }
-  return null;
-}
+const NEED_BUILD_MSG =
+  "Voice needs the latest Alfred build — reinstall from the install link, then try again.";
 
 function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
   const [state, setState] = useState<VoiceState>("idle");
@@ -51,48 +51,54 @@ function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
     resolve: (text: string) => void;
     reject: (err: Error) => void;
   } | null>(null);
+  const onTranscriptRef = useRef(onTranscript);
+  onTranscriptRef.current = onTranscript;
   stateRef.current = state;
 
-  useSpeechRecognitionEvent("result", (event) => {
-    const top = event.results[0]?.transcript?.trim();
-    if (top) transcriptRef.current = top;
-  });
+  useEffect(() => {
+    const speech = loadSpeechModule();
+    if (!speech) return;
 
-  useSpeechRecognitionEvent("error", (event) => {
-    // "aborted" / "no-speech" while stopping is benign.
-    const code = String(event.error ?? "");
-    if (code === "aborted" || code === "no-speech") {
+    const mod = speech.ExpoSpeechRecognitionModule;
+    const subResult = mod.addListener("result", (event) => {
+      const top = event.results?.[0]?.transcript?.trim();
+      if (top) transcriptRef.current = top;
+    });
+    const subError = mod.addListener("error", (event) => {
+      const code = String(event.error ?? "");
+      if (code === "aborted" || code === "no-speech") {
+        if (pendingStop.current) {
+          const { resolve } = pendingStop.current;
+          pendingStop.current = null;
+          resolve(transcriptRef.current);
+        }
+        return;
+      }
+      if (pendingStop.current) {
+        const { reject } = pendingStop.current;
+        pendingStop.current = null;
+        reject(new Error(event.message || code || "Speech recognition failed"));
+        return;
+      }
+      setState("idle");
+      setError(event.message || code || "Speech recognition failed");
+    });
+    const subEnd = mod.addListener("end", () => {
       if (pendingStop.current) {
         const { resolve } = pendingStop.current;
         pendingStop.current = null;
         resolve(transcriptRef.current);
       }
-      return;
-    }
-    if (pendingStop.current) {
-      const { reject } = pendingStop.current;
-      pendingStop.current = null;
-      reject(new Error(event.message || code || "Speech recognition failed"));
-      return;
-    }
-    setState("idle");
-    setError(event.message || code || "Speech recognition failed");
-  });
+    });
 
-  useSpeechRecognitionEvent("end", () => {
-    if (pendingStop.current) {
-      const { resolve } = pendingStop.current;
-      pendingStop.current = null;
-      resolve(transcriptRef.current);
-    }
-  });
-
-  useEffect(() => {
     return () => {
+      subResult.remove();
+      subError.remove();
+      subEnd.remove();
       try {
-        ExpoSpeechRecognitionModule.abort();
+        mod.abort();
       } catch {
-        // ignore teardown errors
+        // ignore
       }
     };
   }, []);
@@ -101,22 +107,27 @@ function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
     if (stateRef.current !== "idle") return;
     setError(null);
     transcriptRef.current = "";
+
+    const speech = loadSpeechModule();
+    if (!speech) {
+      setError(NEED_BUILD_MSG);
+      return;
+    }
+
     try {
-      const permError = await ensureSpeechReady();
-      if (permError) {
-        setError(permError);
+      const result = await speech.ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!result.granted) {
+        setError("Microphone permission is required for voice input.");
+        return;
+      }
+      if (!speech.ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        setError("Speech recognition is not available on this device.");
         return;
       }
       const preferOnDevice =
         Platform.OS === "ios" &&
-        (() => {
-          try {
-            return ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
-          } catch {
-            return false;
-          }
-        })();
-      ExpoSpeechRecognitionModule.start({
+        speech.ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+      speech.ExpoSpeechRecognitionModule.start({
         lang: speechLang(),
         interimResults: true,
         continuous: false,
@@ -128,9 +139,7 @@ function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
       setState("idle");
       const msg = e instanceof Error ? e.message : "Could not start recording";
       setError(
-        /native module|expo-speech-recognition/i.test(msg)
-          ? "Voice needs the latest Alfred build — reinstall from TestFlight, then try again."
-          : msg,
+        /native module|ExpoSpeechRecognition/i.test(msg) ? NEED_BUILD_MSG : msg,
       );
     }
   }, []);
@@ -138,17 +147,20 @@ function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
   const stop = useCallback(async () => {
     if (stateRef.current !== "recording") return;
     setState("uploading");
+    const speech = loadSpeechModule();
     try {
+      if (!speech) {
+        throw new Error(NEED_BUILD_MSG);
+      }
       const text = await new Promise<string>((resolve, reject) => {
         pendingStop.current = { resolve, reject };
         try {
-          ExpoSpeechRecognitionModule.stop();
+          speech.ExpoSpeechRecognitionModule.stop();
         } catch (e) {
           pendingStop.current = null;
           reject(e instanceof Error ? e : new Error("Could not stop recording"));
           return;
         }
-        // If the native stack never fires end/result, don't hang forever.
         setTimeout(() => {
           if (pendingStop.current) {
             const { resolve: done } = pendingStop.current;
@@ -161,13 +173,13 @@ function useOnDeviceSpeech(onTranscript: (text: string) => Promise<void>) {
       if (!trimmed) {
         throw new Error("No speech detected — try again.");
       }
-      await onTranscript(trimmed);
+      await onTranscriptRef.current(trimmed);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Voice capture failed");
     } finally {
       setState("idle");
     }
-  }, [onTranscript]);
+  }, []);
 
   const clearError = useCallback(() => setError(null), []);
 
