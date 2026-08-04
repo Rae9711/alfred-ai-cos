@@ -60,6 +60,66 @@ def test_chat_with_context_no_context_returns_empty_state(
     assert "not sure" not in outcome.reply.lower()
 
 
+def test_chat_with_context_empty_state_is_chinese_for_zh_input(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM(chat_has_context=False)
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    outcome = chat_with_context(db, user, text="有什么要我注意的吗", tz="America/New_York")
+    assert "还没有" in outcome.reply or "目前" in outcome.reply
+    assert "Nothing" not in outcome.reply
+
+
+def test_chat_books_chinese_go_to_place(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: 「明天十一点要去 X」 must book calendar, not empty-inbox English."""
+    from app.schemas.llm import AssistantInterpretation
+
+    fake = FakeLLM(
+        interpretation=AssistantInterpretation(intent="none", reply=""),
+        chat_has_context=False,
+    )
+    monkeypatch.setattr("app.services.assistant.get_llm", lambda: fake)
+    monkeypatch.setattr(
+        "app.services.calendar_write.should_write_apple", lambda _user: True
+    )
+    outcome = chat_with_context(
+        db, user, text="明天十一点要去sommerset", tz="America/New_York"
+    )
+    assert outcome.action == "device_book"
+    assert outcome.device_calendar_title and "sommerset" in outcome.device_calendar_title.lower()
+    assert outcome.device_calendar_start is not None
+    assert "11" in (outcome.device_calendar_start or "") or "T11:" in (
+        outcome.device_calendar_start or ""
+    )
+    assert "Nothing" not in outcome.reply
+    assert fake.chat_calls == []  # must not fall through to empty inbox chat
+
+
+def test_fallback_book_parser_chinese_and_english() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.services.assistant import _fallback_book_calendar_from_text
+
+    now = datetime(2026, 8, 4, 15, 0, tzinfo=ZoneInfo("America/New_York"))
+    booked = _fallback_book_calendar_from_text(
+        "明天十一点要去sommerset", now=now, tz="America/New_York"
+    )
+    assert booked is not None
+    title, start, end, location = booked
+    assert "sommerset" in title.lower()
+    assert start.hour == 11
+    assert (end - start).total_seconds() == 3600
+    assert location == "sommerset"
+
+    meeting = _fallback_book_calendar_from_text(
+        "明天三点开会讨论项目", now=now, tz="America/New_York"
+    )
+    assert meeting is not None
+    assert meeting[1].hour == 15
+
 def test_chat_with_context_rejects_hallucinated_citation(
     db: Session, user: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:

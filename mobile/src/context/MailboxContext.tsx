@@ -28,12 +28,27 @@ import { enrichInboxMessages } from "@/lib/smsSenderDisplay";
 export type InboxScope = InboxApiScope | "today";
 export type InboxFilter = InboxTabId | "email" | string;
 
+export type InboxChipCounts = {
+  all: number;
+  needs_action: number;
+  unread: number;
+  sms: number;
+};
+
+const EMPTY_COUNTS: InboxChipCounts = {
+  all: 0,
+  needs_action: 0,
+  unread: 0,
+  sms: 0,
+};
+
 type MailboxState = {
   items: AppInboxItem[];
   mailboxes: string[];
   inboxScope: InboxApiScope;
   inboxFilter: InboxTabId;
   inboxMailbox: string | undefined;
+  counts: InboxChipCounts;
   loading: boolean;
   tabLoading: boolean;
   syncing: boolean;
@@ -50,6 +65,15 @@ type MailboxState = {
 
 const MailboxContext = createContext<MailboxState | null>(null);
 
+async function fetchScopeCount(scope: InboxApiScope): Promise<number> {
+  try {
+    const view = await api.getInbox({ scope });
+    return view.messages.length;
+  } catch {
+    return 0;
+  }
+}
+
 export function MailboxProvider({ children }: { children: ReactNode }) {
   const { authed } = useAuth();
   const [items, setItems] = useState<AppInboxItem[]>([]);
@@ -57,6 +81,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
   const [inboxScope, setInboxScope] = useState<InboxApiScope>("needs_action");
   const [inboxFilter, setInboxFilterState] = useState<InboxTabId>("needs_action");
   const [inboxMailbox, setInboxMailbox] = useState<string | undefined>();
+  const [counts, setCounts] = useState<InboxChipCounts>(EMPTY_COUNTS);
   const [loading, setLoading] = useState(true);
   const [tabLoading, setTabLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -66,6 +91,19 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     scope: "needs_action",
   });
   const loadSeqRef = useRef(0);
+  const countsSeqRef = useRef(0);
+
+  const refreshCounts = useCallback(async () => {
+    const seq = ++countsSeqRef.current;
+    const [all, needs_action, unread, sms] = await Promise.all([
+      fetchScopeCount("synced"),
+      fetchScopeCount("needs_action"),
+      fetchScopeCount("unread"),
+      fetchScopeCount("sms"),
+    ]);
+    if (seq !== countsSeqRef.current) return;
+    setCounts({ all, needs_action, unread, sms });
+  }, []);
 
   const loadInbox = useCallback(
     async (scope: InboxApiScope, mailbox?: string) => {
@@ -88,8 +126,15 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       setInboxScope(scope);
       setInboxFilterState(scopeToTab(scope));
       setInboxMailbox(mailbox);
+
+      // Keep the active chip count in sync immediately; refresh the rest in background.
+      setCounts((prev) => ({
+        ...prev,
+        [scope === "synced" ? "all" : scope]: enriched.length,
+      }));
+      void refreshCounts();
     },
-    [],
+    [refreshCounts],
   );
 
   const setInboxFilter = useCallback(
@@ -191,7 +236,12 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
           : m,
       );
     });
-  }, []);
+    setCounts((prev) => ({
+      ...prev,
+      needs_action: Math.max(0, prev.needs_action - 1),
+    }));
+    void refreshCounts();
+  }, [refreshCounts]);
 
   const markUndecided = useCallback(async (id: string) => {
     await api.markMessageUndecided(id);
@@ -203,7 +253,8 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
     setItems((prev) =>
       prev.map((m) => (m.id === id ? { ...m, userDecided: false } : m)),
     );
-  }, [loadInbox]);
+    void refreshCounts();
+  }, [loadInbox, refreshCounts]);
 
   const markRead = useCallback(async (id: string) => {
     const result = await api.markMessageRead(id);
@@ -213,8 +264,13 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       }
       return prev.map((m) => (m.id === id ? { ...m, isUnread: false } : m));
     });
+    setCounts((prev) => ({
+      ...prev,
+      unread: Math.max(0, prev.unread - 1),
+    }));
+    void refreshCounts();
     return result.gmail_synced;
-  }, []);
+  }, [refreshCounts]);
 
   useEffect(() => {
     if (authed !== true) return;
@@ -261,6 +317,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       inboxScope,
       inboxFilter,
       inboxMailbox,
+      counts,
       loading,
       tabLoading,
       syncing,
@@ -280,6 +337,7 @@ export function MailboxProvider({ children }: { children: ReactNode }) {
       inboxScope,
       inboxFilter,
       inboxMailbox,
+      counts,
       loading,
       tabLoading,
       syncing,

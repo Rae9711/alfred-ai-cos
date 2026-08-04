@@ -3,7 +3,7 @@
     "name": "Alfred",
     "slug": "albert",
     "scheme": "albert",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,16 +12,26 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/45e050ed-fd8c-494a-8173-821548b192f5",
+      "url": "https://u.expo.dev/61d66a0b-618f-41f7-9db6-2c64ac190a8a",
       "fallbackToCacheTimeout": 0
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.haoruiwang.alfred",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["shortcuts"],
-        "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name."
+        "LSApplicationQueriesSchemes": [
+          "shortcuts"
+        ],
+        "NSContactsUsageDescription": "Alfred looks up contacts when you ask to text someone by name.",
+        "NSCalendarsUsageDescription": "Alfred adds events you confirm to your iPhone Calendar.",
+        "NSCalendarsFullAccessUsageDescription": "Alfred adds events you confirm to your iPhone Calendar.",
+        "NSRemindersUsageDescription": "Alfred may use Reminders only when calendar access requires it.",
+        "NSRemindersFullAccessUsageDescription": "Alfred may use Reminders only when calendar access requires it.",
+        "NSMicrophoneUsageDescription": "Alfred uses the microphone when you dictate a voice note or capture.",
+        "NSSpeechRecognitionUsageDescription": "Alfred turns your speech into text on this iPhone so it can create tasks and drafts. Audio is not uploaded for transcription.",
+        "NSPhotoLibraryUsageDescription": "Alfred reads a recent chat screenshot to draft a reply, then deletes that screenshot."
       },
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -41,17 +51,28 @@
       "package": "com.haoruiwang.alfred",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ],
       "intentFilters": [
         {
           "action": "SEND",
-          "category": ["DEFAULT"],
-          "data": [{ "mimeType": "text/plain" }]
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "mimeType": "text/plain"
+            }
+          ]
         },
         {
           "action": "VIEW",
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "data": {
             "scheme": "albert",
             "host": "share"
@@ -67,25 +88,63 @@
       "expo-web-browser",
       "expo-font",
       "expo-updates",
+      "expo-apple-authentication",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Alfred uses the microphone when you dictate a voice note or capture.",
+          "speechRecognitionPermission": "Alfred turns your speech into text on this iPhone so it can create tasks and drafts. Audio is not uploaded for transcription.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
       [
         "expo-contacts",
         {
           "contactsPermission": "Alfred looks up contacts when you ask to text someone by name."
         }
       ],
-      "./plugins/withAlfredKeyboard.js"
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Alfred adds events you confirm to your iPhone Calendar.",
+          "remindersPermission": "Alfred may use Reminders only when calendar access requires it."
+        }
+      ],
+      "./plugins/withAlfredKeyboard.js",
+      "./plugins/withFmtXcode26Fix.js"
     ],
     "extra": {
       "apiBaseUrl": "https://alfredaitech.com",
       "sentryDsn": "",
       "router": {},
       "eas": {
-        "projectId": "45e050ed-fd8c-494a-8173-821548b192f5"
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "AlfredKeyboard",
+                  "bundleIdentifier": "com.haoruiwang.alfred.AlfredKeyboard",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.haoruiwang.alfred"
+                    ],
+                    "keychain-access-groups": [
+                      "$(AppIdentifierPrefix)com.haoruiwang.alfred",
+                      "$(AppIdentifierPrefix)com.haoruiwang.alfred.shared"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "61d66a0b-618f-41f7-9db6-2c64ac190a8a"
       }
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "owner": "slurpdurp"
+    "owner": "whruiray123"
   }
 }

@@ -11,11 +11,27 @@ from app.core.security import get_current_user
 from app.db.base import get_db
 from app.db.enums import SourceType
 from app.db.models import User
-from app.schemas.api import CaptureRequest, CaptureResponse, TaskOut
+from app.schemas.api import (
+    CaptureRequest,
+    CaptureResponse,
+    TaskOut,
+    TranscribeResponse,
+)
 from app.services import capture as capture_service
 from app.transcription import get_transcriber
+from app.transcription.base import Transcriber
 
 router = APIRouter(prefix="/capture", tags=["capture"])
+
+
+def _require_transcriber() -> Transcriber:
+    transcriber = get_transcriber()
+    if transcriber is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Voice capture is not configured. Set a transcription provider.",
+        )
+    return transcriber
 
 
 @router.post("", response_model=CaptureResponse)
@@ -36,6 +52,22 @@ def capture(
     )
 
 
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_voice(
+    audio: UploadFile = File(...),
+    _user: User = Depends(get_current_user),
+) -> TranscribeResponse:
+    """Speech-to-text only — for composer dictation. Does not create tasks."""
+    transcriber = _require_transcriber()
+    data = await audio.read()
+    transcript = transcriber.transcribe(
+        audio=data,
+        filename=audio.filename or "note.m4a",
+        content_type=audio.content_type or "audio/m4a",
+    )
+    return TranscribeResponse(transcript=(transcript or "").strip())
+
+
 @router.post("/voice", response_model=CaptureResponse)
 async def capture_voice(
     audio: UploadFile = File(...),
@@ -44,12 +76,7 @@ async def capture_voice(
 ) -> CaptureResponse:
     """Transcribe an audio note then parse it into tasks. Returns 501 when no
     transcription provider is configured (audio is processed in-process, not stored)."""
-    transcriber = get_transcriber()
-    if transcriber is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Voice capture is not configured. Set a transcription provider.",
-        )
+    transcriber = _require_transcriber()
     data = await audio.read()
     transcript = transcriber.transcribe(
         audio=data,
@@ -65,5 +92,7 @@ async def capture_voice(
         timezone=user.timezone,
     )
     return CaptureResponse(
-        tasks=[TaskOut.model_validate(t) for t in tasks], detected_project=project
+        tasks=[TaskOut.model_validate(t) for t in tasks],
+        detected_project=project,
+        transcript=(transcript or "").strip() or None,
     )

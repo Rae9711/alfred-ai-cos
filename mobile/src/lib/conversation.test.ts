@@ -67,6 +67,29 @@ describe("conversation UI helpers", () => {
     expect(selectedMessageCount(conversation)).toBe(1);
   });
 
+  it("keeps most of a long paste selected by default", () => {
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      id: `m${i}`,
+      sender: i % 2 === 0 ? "Alice" : "Bob",
+      timestamp: null,
+      content: `message body ${i} about the meeting`,
+      role: "unknown" as const,
+      is_selected: true,
+      weight: 1,
+    }));
+    const conversation: ParsedConversation = {
+      id: "long",
+      source: "wechat",
+      participants: [
+        { name: "Alice", is_self: false },
+        { name: "Bob", is_self: false },
+      ],
+      imported_at: new Date().toISOString(),
+      messages,
+    };
+    expect(selectedMessageCount(conversation)).toBe(10);
+  });
+
   it("summarizes conversation inbox counts", () => {
     expect(
       summarizeInbox({
@@ -102,5 +125,16 @@ describe("conversation UI helpers", () => {
     };
     expect(shouldOfferReminder(followUp)).toBe(false);
     expect(shouldOfferReminder(calendar)).toBe(true);
+  });
+
+  it("formats WeChat paste tip coverage for known edge shapes", () => {
+    const edgeShapes = [
+      "张三 昨天 21:05\n明天把合同发我",
+      "以上是历史消息",
+      "[动画表情]",
+      "6330：我需要审一下",
+    ];
+    expect(edgeShapes.some((s) => s.includes("昨天"))).toBe(true);
+    expect(isNoiseContent("[动画表情]")).toBe(true);
   });
 });

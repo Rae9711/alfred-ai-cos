@@ -39,6 +39,32 @@ SAMPLE_WITH_MEETING = """Alex
 好的，会议室见
 """
 
+SAMPLE_WITH_YESTERDAY_TS = """张三 昨天 21:05
+明天把合同发我
+
+李四 今天 09:30
+好，上午发给你
+"""
+
+SAMPLE_WITH_SYSTEM_NOISE = """— 昨天 —
+
+6330
+我需要审一下
+
+以上是历史消息
+
+Rui🌞
+[动画表情]
+
+Rui🌞
+一吃一堆
+"""
+
+SAMPLE_INLINE_COLON = """6330：我需要审一下
+Rui🌞：一吃一堆
+6330：昨晚的感觉还没消化
+"""
+
 
 @pytest.fixture
 def user(db: Session) -> User:
@@ -60,6 +86,346 @@ def test_parse_wechat_deterministic_extracts_messages() -> None:
     eaten = next(m for m in parsed.messages if m.content == "已吃")
     assert eaten.weight < 1.0
     assert eaten.is_selected is False
+
+
+def test_parse_yesterday_today_timestamps() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_YESTERDAY_TS)
+    assert parsed is not None
+    assert len(parsed.messages) == 2
+    assert parsed.messages[0].timestamp is not None
+    assert parsed.messages[1].timestamp is not None
+    # 昨天 should be earlier than 今天
+    assert parsed.messages[0].timestamp < parsed.messages[1].timestamp
+
+
+def test_parse_skips_system_and_media_placeholders() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_SYSTEM_NOISE)
+    assert parsed is not None
+    contents = [m.content for m in parsed.messages]
+    assert "我需要审一下" in contents
+    assert "一吃一堆" in contents
+    assert "以上是历史消息" not in contents
+    assert "[动画表情]" not in contents
+
+
+def test_parse_inline_colon_export_style() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_INLINE_COLON)
+    assert parsed is not None
+    assert len(parsed.messages) == 3
+    assert parsed.messages[0].sender == "6330"
+    assert parsed.messages[0].content == "我需要审一下"
+
+
+SAMPLE_DENSE_GROUP = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+[图片]
+Rae
+我再试一下导入
+"""
+
+SAMPLE_DENSE_WITH_TS = """张三 12:43
+合同发我一下
+李四 昨天 21:05
+好，晚上发你
+王五
+收到
+"""
+
+
+def test_parse_dense_group_chat_no_blank_lines() -> None:
+    """WeChat multi-select often omits blank lines between bubbles."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_DENSE_GROUP)
+    assert parsed is not None
+    assert len(parsed.messages) >= 4
+    senders = [m.sender for m in parsed.messages]
+    assert "Charlie 孙嘉谦 0608" in senders
+    assert "Rae" in senders
+    assert "Alex" in senders
+    contents = [m.content for m in parsed.messages]
+    assert "感觉很牛逼诶" in contents
+    assert "布局压缩之后还能编辑吗" in contents
+    assert "[图片]" not in contents
+
+
+def test_parse_dense_with_timestamps() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_DENSE_WITH_TS)
+    assert parsed is not None
+    assert len(parsed.messages) == 3
+    assert parsed.messages[0].sender == "张三"
+    assert parsed.messages[0].timestamp is not None
+    assert parsed.messages[1].sender == "李四"
+    assert parsed.messages[2].content == "收到"
+
+
+SAMPLE_LONG_THREAD = """Alice
+早上好呀
+Bob
+今天开会吗
+Alice
+下午三点吧
+Bob
+会议室定了吗
+Alice
+A栋302可以
+Bob
+好的我带电脑
+Alice
+记得带充电器
+Bob
+投影怎么连
+Alice
+HDMI线在桌子抽屉里
+Bob
+收到谢谢
+Charlie
+我也去旁听
+Alice
+那就下午见
+"""
+
+SAMPLE_TEN_GROUP = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+再发一个版本
+Rae
+我再试一下导入
+Alex
+好的可以继续
+Bob
+我也看看这个
+Charlie 孙嘉谦 0608
+晚上九点同步一下
+Rae
+收到了吗那边
+Alex
+没问题可以开
+"""
+
+SAMPLE_MIXED_BLANK = """Charlie 孙嘉谦 0608
+感觉很牛逼诶
+Rae
+晚上一起看看这个界面
+
+Alex
+布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608
+再发一个版本
+Rae
+我再试一下导入
+Alex
+好的可以继续
+Bob
+我也看看这个
+Charlie 孙嘉谦 0608
+晚上九点同步一下
+Rae
+收到了吗那边
+Alex
+没问题可以开
+"""
+
+SAMPLE_CONTENT_ONLY_BLANK = """感觉很牛逼诶
+
+晚上一起看看这个界面
+
+布局压缩之后还能编辑吗
+
+再发一个版本
+
+我再试一下导入
+
+好的可以继续
+
+我也看看这个
+
+晚上九点同步一下
+
+收到了吗那边
+
+没问题可以开
+"""
+
+SAMPLE_TAB_INLINE = """Charlie 孙嘉谦 0608\t感觉很牛逼诶
+Rae\t晚上一起看看这个界面
+Alex\t布局压缩之后还能编辑吗
+Charlie 孙嘉谦 0608\t再发一个版本
+Rae\t我再试一下导入
+Alex\t好的可以继续
+Bob\t我也看看这个
+Charlie 孙嘉谦 0608\t晚上九点同步一下
+Rae\t收到了吗那边
+Alex\t没问题可以开
+"""
+
+
+def test_long_paste_selects_nearly_all_messages() -> None:
+    """~12-message multi-select should keep almost all bubbles selected by default."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_LONG_THREAD)
+    assert parsed is not None
+    assert len(parsed.messages) >= 10
+    selected = [m for m in parsed.messages if m.is_selected]
+    # Only exact noise acks (e.g. bare 收到) are deselected — contentful lines stay on.
+    assert len(selected) >= 10
+    assert len(selected) == sum(1 for m in parsed.messages if m.weight >= 1.0)
+
+
+def test_ten_line_group_chat_selected_count_at_least_eight() -> None:
+    """Realistic group paste must yield selected_count >= 8 (keyboard 「已选 N 条」)."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_TEN_GROUP)
+    assert parsed is not None
+    assert len(parsed.messages) >= 8
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert selected >= 8
+    assert "Charlie 孙嘉谦 0608" in {m.sender for m in parsed.messages}
+
+
+def test_mixed_blank_line_does_not_collapse_thread() -> None:
+    """A single stray blank line must not merge the rest into 1–2 blobs."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_MIXED_BLANK)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+
+
+def test_content_only_blank_separated_bodies() -> None:
+    """WeChat sometimes copies message bodies without sender names."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_CONTENT_ONLY_BLANK)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+
+
+def test_tab_separated_inline_export() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_TAB_INLINE)
+    assert parsed is not None
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert len(parsed.messages) >= 8
+    assert selected >= 8
+    assert parsed.messages[0].sender == "Charlie 孙嘉谦 0608"
+    assert parsed.messages[0].content == "感觉很牛逼诶"
+
+
+# Real WeChat iOS multi-select Copy format (production collapse root cause):
+# Nickname → YYYY/MM/DD HH:MM → Content → repeat. Timestamps were previously
+# misread as senders ("2026/07/21" + ts "23:14"), scrambling or collapsing.
+SAMPLE_WECHAT_IOS_MULTISELECT = """哪个方面 automate
+Leo
+2026/07/21 23:14
+就是自动 select previous x number of messages
+Leo
+2026/07/21 23:14
+不用用户去一个一个点
+Rui ☀️
+2026/07/21 23:14
+[Video] Weixin video_20260721233539_1913.mp4
+Rui ☀️
+2026/07/21 23:15
+这个微信自己就可以
+Rui ☀️
+2026/07/21 23:15
+你滑到那 左上角 有个 select 一键全选
+"""
+
+
+def test_wechat_ios_multiselect_sender_timestamp_content() -> None:
+    """Production clipboard: Sender → YYYY/MM/DD HH:MM → body (≥5 msgs)."""
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT_IOS_MULTISELECT)
+    assert parsed is not None
+    assert len(parsed.messages) >= 5
+    selected = sum(1 for m in parsed.messages if m.is_selected)
+    assert selected >= 5
+    senders = {m.sender for m in parsed.messages}
+    assert "Leo" in senders
+    assert "Rui ☀️" in senders
+    contents = [m.content for m in parsed.messages]
+    assert any("就是自动 select previous x number of messages" in c for c in contents)
+    assert any("不用用户去一个一个点" in c for c in contents)
+    assert any("这个微信自己就可以" in c for c in contents)
+    assert any("一键全选" in c for c in contents)
+    # Timestamps must not appear as senders or as message bodies.
+    assert not any(m.sender.startswith("2026") for m in parsed.messages)
+    assert not any("2026/07/21" in m.content for m in parsed.messages)
+    # Media-only bubble dropped.
+    assert not any("[Video]" in c for c in contents)
+    # Strategy should be the iOS multiselect path.
+    assert getattr(conversation_service.parse_wechat_deterministic, "last_strategy", "") == (
+        "ios_multiselect"
+    )
+
+
+def test_wechat_ios_single_bubble_strips_timestamp_from_content() -> None:
+    """3-line first pasteboard item must not keep the date line inside content."""
+    raw = """Rui ☀️
+2026/07/21 23:08
+我想的是比如我选十条 比如我有十条未读消息"""
+    parsed = conversation_service.parse_wechat_deterministic(raw)
+    assert parsed is not None
+    assert len(parsed.messages) == 1
+    assert parsed.messages[0].sender == "Rui ☀️"
+    assert parsed.messages[0].content == "我想的是比如我选十条 比如我有十条未读消息"
+    assert "2026" not in parsed.messages[0].content
+    assert parsed.messages[0].timestamp is not None
+
+
+def test_collapsed_blob_with_embedded_ios_turns_resplits() -> None:
+    """One logical paste containing many Sender/TS/Content turns must split ≥5."""
+    # Same bytes as multi-select; ensures we never return a single merged blob.
+    parsed = conversation_service.parse_conversation(
+        SAMPLE_WECHAT_IOS_MULTISELECT, use_llm_fallback=False
+    )
+    assert len(parsed.messages) >= 5
+    assert sum(1 for m in parsed.messages if m.is_selected) >= 5
+
+
+def test_analyze_context_includes_full_selected_thread(
+    monkeypatch: pytest.MonkeyPatch, user: User
+) -> None:
+    """Analyze must send the whole selected set into the reply LLM, not one cherry-pick."""
+    fake = FakeLLM(
+        conversation_replies=[
+            ReplySuggestion(tone="natural", body="好，下午见。"),
+            ReplySuggestion(tone="caring", body="到时候见，我带好充电器。"),
+            ReplySuggestion(tone="brief", body="下午见。"),
+        ],
+        conversation_actions=[],
+    )
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_conversation(SAMPLE_LONG_THREAD, use_llm_fallback=False)
+    selected = [m for m in parsed.messages if m.is_selected]
+    assert len(selected) >= 10
+
+    result = conversation_service.analyze_conversation(
+        parsed, goal="confirm", user=user, timezone="America/New_York"
+    )
+    assert result.reply_suggestions
+    assert fake.conversation_reply_calls
+    context = fake.conversation_reply_calls[0]["context"]
+    # Numbered indexes for each selected message should appear.
+    for i in range(min(len(selected), 10)):
+        assert f"[{i}]" in context
+    assert "下午三点吧" in context
+    assert "HDMI线在桌子抽屉里" in context
+    assert "那就下午见" in context
+    # Insight should acknowledge the multi-message thread, not only the last bubble.
+    assert result.insight
+    assert "条" in result.insight or len(selected) == 1
+
+
+def test_parse_meeting_sample() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WITH_MEETING)
+    assert parsed is not None
+    assert any("明天下午三点见" in m.content for m in parsed.messages)
 
 
 def test_parse_conversation_uses_deterministic_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,6 +542,29 @@ def test_confirm_follow_up_creates_commitment(db: Session, user: User) -> None:
     assert c.evidence == "我之后再告诉你"
 
 
+def test_confirm_follow_up_with_reminder_creates_task(db: Session, user: User) -> None:
+    res = conversation_service.confirm_action(
+        db,
+        user,
+        ConversationConfirmRequest(
+            type=ConversationActionKind.follow_up,
+            title="今晚询问对方状态",
+            conversation_id="conv-2b",
+            evidence="我之后再告诉你",
+            confidence=0.7,
+            set_reminder=True,
+            suggested_time="tonight",
+        ),
+        timezone="America/New_York",
+    )
+    assert res.kind == "task"
+    assert res.remind_at is not None
+    task = db.get(Task, res.id)
+    assert task is not None
+    assert task.evidence == "我之后再告诉你"
+    assert task.remind_at is not None
+
+
 def test_conversation_inbox_lists_open_items(db: Session, user: User) -> None:
     conversation_service.confirm_action(
         db,
@@ -217,3 +606,187 @@ def test_create_task_with_evidence_column(db: Session, user: User) -> None:
     assert task.evidence == "明天下午三点见"
     assert task.status == TaskStatus.open
     assert task.due_date is None or isinstance(task.due_date, date)
+
+
+def test_conversation_replies_result_coerces_json_string() -> None:
+    """Anthropic occasionally returns `replies` as a JSON-encoded string."""
+    from app.schemas.llm import ConversationRepliesResult
+
+    raw = {
+        "replies": '[\n  {"tone": "natural", "body": "那你先慢慢来"},\n'
+        '  {"tone": "brief", "body": "好的"}\n]'
+    }
+    result = ConversationRepliesResult.model_validate(raw)
+    assert len(result.replies) == 2
+    assert result.replies[0].tone == "natural"
+    assert result.replies[1].body == "好的"
+
+
+def test_conversation_actions_result_coerces_json_string() -> None:
+    from app.schemas.llm import ConversationActionsResult
+
+    raw = {
+        "actions": '[{"type": "task", "title": "发合同", "confidence": 0.8, '
+        '"evidence": "合同发我", "evidence_message_indexes": [0]}]'
+    }
+    result = ConversationActionsResult.model_validate(raw)
+    assert len(result.actions) == 1
+    assert result.actions[0].title == "发合同"
+
+
+def test_apply_self_identity_marks_matching_sender() -> None:
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    marked = conversation_service.apply_self_identity(parsed, self_names=["Rui"])
+    assert any(p.is_self and p.name.startswith("Rui") for p in marked.participants)
+    self_msgs = [m for m in marked.messages if m.role.value == "self"]
+    other_msgs = [m for m in marked.messages if m.role.value == "other"]
+    assert self_msgs
+    assert other_msgs
+    assert all(m.sender.startswith("Rui") for m in self_msgs)
+    ctx = conversation_service._format_context(  # noqa: SLF001
+        [m for m in marked.messages if m.is_selected]
+    )
+    assert "我:" in ctx or "我 (" in ctx or "] 我" in ctx
+    assert "对方" in ctx
+
+
+def test_apply_self_identity_preserves_ocr_roles() -> None:
+    from app.schemas.api import ConversationMessageOut, ParsedConversationOut, ParticipantOut
+    from app.schemas.llm import ConversationSource, MessageRole
+    from datetime import UTC, datetime
+
+    conversation = ParsedConversationOut(
+        id="c1",
+        source=ConversationSource.unknown,
+        participants=[
+            ParticipantOut(name="对方", is_self=False),
+            ParticipantOut(name="我", is_self=True),
+        ],
+        messages=[
+            ConversationMessageOut(
+                id="1",
+                sender="对方",
+                content="今晚见吗",
+                role=MessageRole.other,
+            ),
+            ConversationMessageOut(
+                id="2",
+                sender="我",
+                content="好啊",
+                role=MessageRole.self,
+            ),
+        ],
+        imported_at=datetime.now(UTC),
+    )
+    marked = conversation_service.apply_self_identity(conversation, self_names=[])
+    assert marked.messages[0].role == MessageRole.other
+    assert marked.messages[1].role == MessageRole.self
+    assert conversation_service.self_identity_ambiguous(marked) is False
+
+
+def test_analyze_formats_self_as_wo_and_passes_style_samples(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    conversation_service.analyze_conversation(
+        parsed, user=user, self_aliases=["Rui🌞"]
+    )
+    assert fake.conversation_reply_calls
+    call = fake.conversation_reply_calls[0]
+    assert "我" in call["context"]
+    assert "对方" in call["context"]
+    assert call["style_samples"]
+    assert "一吃一堆" in call["style_samples"] or "已吃" in (call["style_samples"] or "")
+    assert call["reply_language"] == "zh"
+
+
+def test_analyze_does_not_pass_email_writing_style(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sent-mail style must not leak into chat drafts (wrong names/greetings)."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    prefs = dict(user.preferences or {})
+    prefs["writing_style"] = {
+        "greeting": "Hi Mr. Fortino",
+        "tone": "formal",
+        "length": "medium",
+        "avg_length_chars": 120,
+        "emoji_usage": "rare",
+        "sample_phrases": ["Hi Mr. Fortino,", "Best regards"],
+    }
+    user.preferences = prefs
+    flag_modified(user, "preferences")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    parsed = conversation_service.parse_wechat_deterministic(SAMPLE_WECHAT)
+    assert parsed is not None
+    conversation_service.analyze_conversation(parsed, user=user, self_aliases=["Rui🌞"])
+    call = fake.conversation_reply_calls[0]
+    assert call.get("writing_style_prompt") in (None, "")
+    assert "Fortino" not in (call.get("style_samples") or "")
+    assert "Fortino" not in call["context"]
+
+
+def test_detect_reply_language_english_vs_chinese() -> None:
+    from app.schemas.api import ConversationMessageOut
+
+    en = [
+        ConversationMessageOut(
+            id="1", sender="A", content="Hey, are we still on for dinner tonight?"
+        ),
+        ConversationMessageOut(
+            id="2", sender="B", content="Yes, see you at 7pm near the station."
+        ),
+    ]
+    zh = [
+        ConversationMessageOut(id="1", sender="A", content="今晚还吃饭吗"),
+        ConversationMessageOut(id="2", sender="B", content="好，七点见"),
+    ]
+    assert conversation_service.detect_reply_language(en) == "en"
+    assert conversation_service.detect_reply_language(zh) == "zh"
+
+
+def test_analyze_english_thread_sets_reply_language_en(
+    db: Session, user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.schemas.api import ConversationMessageOut, ParsedConversationOut, ParticipantOut
+    from app.schemas.llm import ConversationSource, MessageRole
+
+    fake = FakeLLM()
+    monkeypatch.setattr(conversation_service, "get_llm", lambda: fake)
+    conversation = ParsedConversationOut(
+        id="c-en",
+        source=ConversationSource.unknown,
+        participants=[
+            ParticipantOut(name="Alex", is_self=False),
+            ParticipantOut(name="Rui", is_self=True),
+        ],
+        messages=[
+            ConversationMessageOut(
+                id="1",
+                sender="Alex",
+                content="Can you send the deck before the meeting?",
+                role=MessageRole.other,
+            ),
+            ConversationMessageOut(
+                id="2",
+                sender="Rui",
+                content="Sure, I'll polish it and send it over this afternoon.",
+                role=MessageRole.self,
+            ),
+        ],
+        imported_at=datetime.now(UTC),
+    )
+    conversation_service.analyze_conversation(conversation, user=user)
+    assert fake.conversation_reply_calls[0]["reply_language"] == "en"

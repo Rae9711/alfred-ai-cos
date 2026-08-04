@@ -16,6 +16,7 @@ from app.db.models.compose_draft import ComposeDraft
 from app.db.models.connected_account import ConnectedAccount
 from app.db.models.draft_reply import DraftReply
 from app.db.models.message import Message
+from app.db.models.llm_usage import LlmUsagePeriod
 from app.db.models.notification import Device, Notification
 from app.db.models.outbound_reply import OutboundReply
 from app.db.models.schedule_proposal import ScheduleProposal
@@ -34,6 +35,7 @@ __all__ = [
     "Device",
     "DraftReply",
     "ExecutionLog",
+    "LlmUsagePeriod",
     "Message",
     "Notification",
     "OutboundReply",

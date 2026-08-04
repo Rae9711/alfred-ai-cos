@@ -27,7 +27,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.redis import get_redis
 from app.db.base import get_db
-from app.db.models import User
+from app.db.models.user import User
+from app.services.llm_quota import bind_llm_db, bind_llm_user
 
 settings = get_settings()
 _bearer = HTTPBearer(auto_error=True)
@@ -100,4 +101,7 @@ def get_current_user(
     user = db.get(User, payload.get("sub"))
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unknown user")
+    # Attribute Anthropic spend to this session for the rest of the request.
+    bind_llm_user(user.id)
+    bind_llm_db(db)
     return user

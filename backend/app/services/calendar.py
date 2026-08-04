@@ -13,9 +13,8 @@ from sqlalchemy.orm import Session
 from app.db.enums import Provider
 from app.db.models import CalendarEvent, ConnectedAccount, User
 from app.services import gcal
-from app.services.crypto import decrypt_token, encrypt_token
+from app.services.connected_accounts import refresh_google_token
 from app.services.gmail import use_gmail_credentials
-from app.services.google_oauth import fresh_credentials
 
 
 def _local_tz(timezone: str | None):
@@ -38,22 +37,20 @@ def _sync_window_utc(timezone: str | None) -> tuple[datetime, datetime]:
     return month_start.astimezone(UTC), window_end.astimezone(UTC)
 
 
-def _account(db: Session, user_id: str) -> ConnectedAccount:
-    account = db.scalar(
+def _account(db: Session, user_id: str) -> ConnectedAccount | None:
+    return db.scalar(
         select(ConnectedAccount).where(
             ConnectedAccount.user_id == user_id,
             ConnectedAccount.provider == Provider.google,
         )
     )
+
+
+def _require_account(db: Session, user_id: str) -> ConnectedAccount:
+    account = _account(db, user_id)
     if account is None:
         raise ValueError("No connected Google account for user")
     return account
-
-
-def _token_for_account(account: ConnectedAccount) -> dict:
-    stored = decrypt_token(account.token_ciphertext)
-    _creds, token = fresh_credentials(stored)
-    return token
 
 
 def _prep_required(event: dict, user_email: str) -> bool:
@@ -72,9 +69,11 @@ def get_event(db: Session, user_id: str, event_id: str) -> CalendarEvent:
 def sync_calendar(db: Session, user_id: str, *, days_ahead: int = 14) -> list[CalendarEvent]:
     """Fetch events for the user's local month window, upsert, and prune stale rows."""
     account = _account(db, user_id)
+    if account is None:
+        return []
     user = db.get(User, user_id)
     user_email = user.email if user else ""
-    token = _token_for_account(account)
+    _creds, token = refresh_google_token(db, account)
 
     touched: list[CalendarEvent] = []
     seen_external: set[str] = set()
@@ -114,11 +113,10 @@ def book_event(
     location: str | None = None,
 ) -> CalendarEvent:
     """Create a calendar event on the user's primary calendar and persist it locally."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     user = db.get(User, user_id)
     user_email = user.email if user else ""
-    stored = decrypt_token(account.token_ciphertext)
-    creds, token = fresh_credentials(stored)
+    creds, token = refresh_google_token(db, account)
 
     with use_gmail_credentials(creds):
         raw = gcal.create_event(
@@ -129,8 +127,6 @@ def book_event(
             description=description,
             location=location,
         )
-    if token != stored:
-        account.token_ciphertext = encrypt_token(token)
     event = _upsert_event(db, user_id, raw, user_email)
     db.commit()
     return event
@@ -148,12 +144,11 @@ def update_event(
     location: str | None = None,
 ) -> CalendarEvent:
     """Update an event on Google Calendar and refresh the local row."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     user = db.get(User, user_id)
     user_email = user.email if user else ""
     event = get_event(db, user_id, event_id)
-    stored = decrypt_token(account.token_ciphertext)
-    creds, token = fresh_credentials(stored)
+    creds, token = refresh_google_token(db, account)
 
     with use_gmail_credentials(creds):
         raw = gcal.update_event(
@@ -165,8 +160,6 @@ def update_event(
             description=description,
             location=location,
         )
-    if token != stored:
-        account.token_ciphertext = encrypt_token(token)
     _apply_raw(event, raw, user_email)
     db.commit()
     db.refresh(event)
@@ -175,15 +168,12 @@ def update_event(
 
 def delete_event(db: Session, user_id: str, event_id: str) -> None:
     """Delete an event from Google Calendar and remove the local row."""
-    account = _account(db, user_id)
+    account = _require_account(db, user_id)
     event = get_event(db, user_id, event_id)
-    stored = decrypt_token(account.token_ciphertext)
-    creds, token = fresh_credentials(stored)
+    creds, token = refresh_google_token(db, account)
 
     with use_gmail_credentials(creds):
         gcal.delete_event(token, event.external_id)
-    if token != stored:
-        account.token_ciphertext = encrypt_token(token)
     db.execute(delete(CalendarEvent).where(CalendarEvent.id == event_id))
     db.commit()
 

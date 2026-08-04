@@ -1,32 +1,33 @@
 // The tab container, built from plain primitives. No native navigator.
 //
-// Custom bottom bar: Today · Inbox · (center cloud cottage → Capture) · Ask · You.
-// MailboxProvider + WorkflowProvider wire Inbox → Chat with live Gmail data.
+// Edge-to-edge bottom nav (alfred-ui-system `.bottom-nav`):
+// Home · Inbox · (elevated tuxedo mascot → Alfred hub) · Chats (WeChat paste) · You.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 
-import { CompanionAvatarHome } from "@/components/CompanionAvatar";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
 import { Ic } from "@/components/icons";
 import { ShellProvider } from "@/components/Shell";
 import { useCompanionAvatar } from "@/context/CompanionAvatarContext";
 import { LocaleProvider, useLocale } from "@/context/LocaleContext";
-import { MailboxProvider } from "@/context/MailboxContext";
+import { MailboxProvider, useMailbox } from "@/context/MailboxContext";
 import {
   WorkflowProvider,
-  useWorkflow,
   type TabKey,
 } from "@/context/WorkflowContext";
-import { AskScreen } from "@/screens/AskScreen";
+import {
+  consumeAlfredTabRequest,
+  subscribeAlfredLaunch,
+} from "@/lib/alfredLaunch";
+import { AlfredHubScreen } from "@/screens/AlfredHubScreen";
+import { ChatsScreen } from "@/screens/ChatsScreen";
 import { HomeScreen } from "@/screens/HomeScreen";
 import { InboxScreen } from "@/screens/InboxScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { colors, fonts, layout } from "@/theme/theme";
 
-// CompanionAvatarProvider now lives in the root layout (app/_layout.tsx), not
-// here — see T4 in docs/designs/2026-07-02-avatar-interaction-space.md.
 export default function TabsHome() {
   return (
     <LocaleProvider>
@@ -36,14 +37,13 @@ export default function TabsHome() {
 }
 
 function TabsHomeInner() {
-  const router = useRouter();
   const [tab, setTab] = useState<TabKey>("today");
   const setTabStable = useCallback((t: TabKey) => setTab(t), []);
 
   return (
     <MailboxProvider>
       <WorkflowProvider setTab={setTabStable}>
-        <TabsChrome tab={tab} setTab={setTab} router={router} />
+        <TabsChrome tab={tab} setTab={setTab} />
       </WorkflowProvider>
     </MailboxProvider>
   );
@@ -52,22 +52,29 @@ function TabsHomeInner() {
 function TabsChrome({
   tab,
   setTab,
-  router,
 }: {
   tab: TabKey;
   setTab: (t: TabKey) => void;
-  router: ReturnType<typeof useRouter>;
 }) {
-  const { meta, state, setPlacement } = useCompanionAvatar();
+  const { setPlacement } = useCompanionAvatar();
   const { t } = useLocale();
-  const { openFreeChat } = useWorkflow();
-  const atHome = tab === "inbox" || tab === "settings";
+  const { counts } = useMailbox();
+  const badgeCount = counts.needs_action;
+  const atHome = tab === "inbox" || tab === "settings" || tab === "alfred";
 
   useEffect(() => {
     if (tab === "today") setPlacement("today");
     else if (tab === "ask") setPlacement("ask");
     else setPlacement("home");
   }, [tab, setPlacement]);
+
+  useEffect(() => {
+    const openAlfredIfRequested = () => {
+      if (consumeAlfredTabRequest()) setTab("alfred");
+    };
+    openAlfredIfRequested();
+    return subscribeAlfredLaunch(openAlfredIfRequested);
+  }, [setTab]);
 
   useEffect(() => {
     const openFromPush = (data: unknown) => {
@@ -95,46 +102,47 @@ function TabsChrome({
         <View style={styles.content}>
           {tab === "today" ? <HomeScreen /> : null}
           {tab === "inbox" ? <InboxScreen /> : null}
-          {tab === "ask" ? <AskScreen /> : null}
+          {tab === "alfred" ? <AlfredHubScreen /> : null}
+          {tab === "ask" ? <ChatsScreen /> : null}
           {tab === "settings" ? <SettingsScreen /> : null}
         </View>
 
-        <View style={styles.bar}>
+        <View style={styles.bar} pointerEvents="box-none">
           <Tab
             label={t.tabs.today}
             active={tab === "today"}
             onPress={() => setTab("today")}
-            icon={(c) => <Ic.Today size={22} color={c} stroke={1.5} />}
+            icon={Ic.Calendar}
           />
           <Tab
             label={t.tabs.inbox}
             active={tab === "inbox"}
             onPress={() => setTab("inbox")}
-            icon={(c) => <Ic.Inbox size={22} color={c} stroke={1.5} />}
+            icon={Ic.Inbox}
+            badge={badgeCount > 0 ? badgeCount : undefined}
           />
           <View style={styles.capture}>
-            <CompanionAvatarHome
-              size={54}
-              color={meta.color}
-              state={state}
+            <AlfredMiniAvatar
+              size={70}
+              compact
               occupied={atHome}
-              onPress={() => router.push("/capture")}
+              onPress={() => setTab("alfred")}
               accessibilityLabel={
-                atHome ? t.a11y.captureHome : t.a11y.captureAway
+                atHome ? t.a11y.alfredHome : t.a11y.alfredAway
               }
             />
           </View>
           <Tab
             label={t.tabs.ask}
             active={tab === "ask"}
-            onPress={() => openFreeChat()}
-            icon={(c) => <Ic.Stack size={22} color={c} stroke={1.5} />}
+            onPress={() => setTab("ask")}
+            icon={Ic.Chat}
           />
           <Tab
             label={t.tabs.you}
             active={tab === "settings"}
             onPress={() => setTab("settings")}
-            icon={(c) => <Ic.User size={22} color={c} stroke={1.5} />}
+            icon={Ic.User}
           />
         </View>
       </View>
@@ -146,53 +154,96 @@ function Tab({
   label,
   active,
   onPress,
-  icon,
+  icon: Icon,
+  badge,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
-  icon: (color: string) => React.ReactNode;
+  icon: ComponentType<{ size?: number; color?: string; stroke?: number }>;
+  badge?: number;
 }) {
-  const color = active ? colors.accent : colors.ink4;
+  const color = active ? colors.accent : "#8D8B85";
   return (
-    <Pressable style={styles.tab} onPress={onPress}>
-      {icon(color)}
+    <Pressable
+      style={({ pressed }) => [styles.tab, pressed && styles.tabPressed]}
+      onPress={onPress}
+    >
+      <View>
+        <Icon size={21} color={color} stroke={2} />
+        {badge != null ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {badge > 99 ? "99+" : String(badge)}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.label, { color }]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.washBottom },
   content: { flex: 1 },
   bar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: layout.tabBarHeight,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.hair,
-    backgroundColor: colors.paper,
-    paddingBottom: layout.padX + 4,
-    paddingTop: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
+    paddingBottom: layout.homeIndicator,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(150,140,120,0.14)",
+    backgroundColor: "rgba(250,247,241,0.96)",
   },
   tab: {
-    alignItems: "center",
-    gap: 3,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  label: {
-    fontFamily: fonts.mono,
-    fontSize: 9,
-    letterSpacing: 0.9,
-    textTransform: "uppercase",
-  },
-  capture: {
-    width: 58,
-    height: 54,
-    marginTop: -10,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
+    height: 56,
+  },
+  tabPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.96 }],
+  },
+  label: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    letterSpacing: 0.1,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -10,
+    minWidth: 15,
+    height: 15,
+    paddingHorizontal: 3,
+    borderRadius: 999,
+    backgroundColor: "#EF5D69",
+    borderWidth: 2,
+    borderColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 7,
+    color: "#FFFFFF",
+    lineHeight: 9,
+  },
+  capture: {
+    width: 70,
+    height: 70,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -34,
   },
 });

@@ -39,6 +39,20 @@ def _assistant_response(outcome: AssistantOutcome) -> AssistantAskResponse:
             remind = datetime.fromisoformat(outcome.remind_at)
         except ValueError:
             remind = None
+    device = None
+    if (
+        outcome.device_calendar_title
+        and outcome.device_calendar_start
+        and outcome.device_calendar_end
+    ):
+        from app.schemas.api import DeviceCalendarEventOut
+
+        device = DeviceCalendarEventOut(
+            title=outcome.device_calendar_title,
+            start=outcome.device_calendar_start,
+            end=outcome.device_calendar_end,
+            location=outcome.device_calendar_location,
+        )
     return AssistantAskResponse(
         reply=outcome.reply,
         action=outcome.action,
@@ -46,6 +60,7 @@ def _assistant_response(outcome: AssistantOutcome) -> AssistantAskResponse:
         task_id=outcome.task_id,
         task_title=outcome.task_title,
         remind_at=remind,
+        device_calendar=device,
     )
 
 

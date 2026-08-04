@@ -95,3 +95,18 @@ def test_mark_message_read_is_idempotent(db: Session, user: User, monkeypatch) -
     )
     mark_message_read(db, user, message)
     assert calls == []
+
+
+def test_mark_message_read_gmail_failure_updates_local_only(
+    db: Session, user: User, monkeypatch
+) -> None:
+    """Transient Gmail errors must not 502 mark-read — local labels still clear."""
+    message = _message(db, user)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("Gmail unreachable")
+
+    monkeypatch.setattr(gmail, "modify_message_labels", boom)
+    message, gmail_synced = mark_message_read(db, user, message)
+    assert gmail_synced is False
+    assert "UNREAD" not in (message.gmail_labels or [])

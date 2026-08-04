@@ -1,5 +1,7 @@
-// Cross-tab workflow: Inbox → Chat (task thread) with real drafts + send.
-// Free chat stays on AskScreen; task threads load LLM drafts from the API.
+// Cross-tab workflow: Inbox → Chats (task thread) with real drafts + send.
+// Center Alfred hub = free chat / schedule / email / SMS / reminder (+ capture deep link).
+// Chats tab ("ask") = WeChat paste-import (ImportConversationScreen) when idle;
+// Inbox reply/delegate still mounts AskScreen while `thread` is set.
 
 import {
   createContext,
@@ -18,9 +20,16 @@ import {
   getWorkflowProactive,
   type WorkflowDraft,
 } from "@/data/workflowDemo";
+import {
+  setPendingAlfredLaunch,
+  type AlfredLaunchOpts,
+} from "@/lib/alfredLaunch";
 import { enrichSmsDetailFields } from "@/lib/smsSenderDisplay";
 
-export type TabKey = "today" | "inbox" | "ask" | "settings";
+export type { AlfredLaunchOpts };
+
+/** Tab bar keys. `"ask"` is Chats (paste import / reply thread); `"alfred"` is the center hub. */
+export type TabKey = "today" | "inbox" | "alfred" | "ask" | "settings";
 
 export type ChatMode = "free" | "reply" | "delegate" | "proactive";
 
@@ -42,14 +51,33 @@ export type WorkflowThread = {
   revisionHistory: string[];
 };
 
+export type OpenChatSeed = {
+  source?: "email" | "sms";
+  replyPhone?: string | null;
+  sender?: string;
+  title?: string;
+  take?: string;
+};
+
 type WorkflowApi = {
   thread: WorkflowThread | null;
-  openChatFromInbox: (messageId: string, mode: "reply" | "delegate") => void;
-  /** Opens Ask with a pre-filled short confirmation reply to an email thread. */
+  openChatFromInbox: (
+    messageId: string,
+    mode: "reply" | "delegate",
+    seed?: OpenChatSeed,
+  ) => void;
+  /** Opens Chats with a pre-filled short confirmation reply to an email thread. */
   openConfirmReply: (messageId: string, draftBody: string) => void;
   openChatFromHome: () => void;
-  /** Opens Ask free chat; optional message is sent once the screen mounts. */
+  /**
+   * Opens the Chats tab as the WeChat paste workstation (clears any inbox thread).
+   * Tab-bar taps should use `setTab("ask")` instead so an open Inbox reply is preserved.
+   * If `initialMessage` is set, routes to Alfred hub free chat (not paste import).
+   */
   openFreeChat: (initialMessage?: string) => void;
+  /** Opens the Alfred hub tab (free chat / schedule / SMS / reminder / capture). */
+  openAlfred: (opts?: AlfredLaunchOpts) => void;
+  /** @deprecated Prefer Alfred launch opts; free-chat seeds now go through `openAlfred`. */
   consumePendingFreeChatMessage: () => string | null;
   completeChat: () => void;
   cancelChat: () => void;
@@ -75,7 +103,12 @@ export function WorkflowProvider({
   const { itemById } = useMailbox();
 
   const loadDraft = useCallback(
-    async (messageId: string, mode: "reply" | "delegate", tone = "concise") => {
+    async (
+      messageId: string,
+      mode: "reply" | "delegate",
+      tone = "concise",
+      seed?: OpenChatSeed,
+    ) => {
       const instruction =
         mode === "delegate"
           ? "Draft a clear, polite reply on my behalf."
@@ -88,8 +121,8 @@ export function WorkflowProvider({
       const item = itemById(messageId);
       return {
         draft: {
-          to: item?.sender ?? "Contact",
-          subject: d.subject ?? `Re: ${item?.title ?? ""}`,
+          to: seed?.sender ?? item?.sender ?? "Contact",
+          subject: d.subject ?? `Re: ${seed?.title ?? item?.title ?? ""}`,
           body: d.body,
         },
         draftId: d.id,
@@ -99,20 +132,25 @@ export function WorkflowProvider({
   );
 
   const openChatFromInbox = useCallback(
-    (messageId: string, mode: "reply" | "delegate") => {
+    (messageId: string, mode: "reply" | "delegate", seed?: OpenChatSeed) => {
       const item = itemById(messageId);
+      const sender = seed?.sender ?? item?.sender ?? "Contact";
+      const title = seed?.title ?? item?.title ?? "Message";
+      const take = seed?.take ?? item?.take ?? null;
+      const source = seed?.source ?? item?.source ?? "email";
+      const replyPhone = seed?.replyPhone ?? item?.replyPhone ?? null;
       setThread({
         messageId,
-        source: item?.source ?? "email",
-        replyPhone: item?.replyPhone ?? null,
-        sender: item?.sender ?? "Contact",
-        subject: item?.title ?? "Message",
-        summary: item?.take || null,
+        source,
+        replyPhone,
+        sender,
+        subject: title,
+        summary: take || null,
         body: "",
         bodyLoading: true,
         bodyError: null,
         mode,
-        draft: { to: item?.sender ?? "", subject: "", body: "" },
+        draft: { to: sender, subject: "", body: "" },
         draftId: null,
         draftLoading: true,
         draftError: null,
@@ -121,7 +159,7 @@ export function WorkflowProvider({
       setTab("ask");
       void (async () => {
         const detailPromise = api.getMessage(messageId);
-        const draftPromise = loadDraft(messageId, mode);
+        const draftPromise = loadDraft(messageId, mode, "concise", seed);
 
         const [detailResult, draftResult] = await Promise.allSettled([
           detailPromise,
@@ -131,7 +169,7 @@ export function WorkflowProvider({
         if (detailResult.status === "fulfilled") {
           const detail = detailResult.value;
           const enriched = await enrichSmsDetailFields(detail, {
-            preferSender: item?.sender,
+            preferSender: sender,
           });
           setThread((current) =>
             current?.messageId === messageId
@@ -271,15 +309,28 @@ export function WorkflowProvider({
     setTab("ask");
   }, [setTab, locale]);
 
-  const openFreeChat = useCallback(
-    (initialMessage?: string) => {
-      setThread(null);
-      if (initialMessage?.trim()) {
-        setPendingFreeChatMessage(initialMessage.trim());
+  const openAlfred = useCallback(
+    (opts?: AlfredLaunchOpts) => {
+      if (opts && (opts.capture || opts.text || opts.mode || opts.seed)) {
+        setPendingAlfredLaunch(opts);
       }
-      setTab("ask");
+      setTab("alfred");
     },
     [setTab],
+  );
+
+  const openFreeChat = useCallback(
+    (initialMessage?: string) => {
+      // Named historically; free chat lives on Alfred. Plain call → paste Chats.
+      if (initialMessage?.trim()) {
+        openAlfred({ text: initialMessage.trim() });
+        return;
+      }
+      setThread(null);
+      setPendingFreeChatMessage(null);
+      setTab("ask");
+    },
+    [setTab, openAlfred],
   );
 
   const consumePendingFreeChatMessage = useCallback(() => {
@@ -355,6 +406,7 @@ export function WorkflowProvider({
       openConfirmReply,
       openChatFromHome,
       openFreeChat,
+      openAlfred,
       consumePendingFreeChatMessage,
       completeChat,
       cancelChat,
@@ -367,6 +419,7 @@ export function WorkflowProvider({
       openConfirmReply,
       openChatFromHome,
       openFreeChat,
+      openAlfred,
       consumePendingFreeChatMessage,
       completeChat,
       cancelChat,

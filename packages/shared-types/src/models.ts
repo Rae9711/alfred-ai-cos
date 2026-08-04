@@ -113,6 +113,8 @@ export interface UpcomingMeeting {
   attendees: string[];
   prep_required: boolean;
   html_link?: string | null;
+  /** Origin calendar when known. Alfred merges google + apple reads. */
+  source?: "google" | "apple" | string | null;
 }
 
 export interface MeetingPrep {
@@ -154,6 +156,13 @@ export interface TaskCreateRequest {
 export interface CaptureResponse {
   tasks: Task[];
   detected_project: string | null;
+  /** Present when the note was transcribed from audio. */
+  transcript?: string | null;
+}
+
+/** Speech-to-text only (composer dictation — no task persistence). */
+export interface TranscribeResponse {
+  transcript: string;
 }
 
 export interface WaitingEntry {
@@ -194,6 +203,15 @@ export interface MessageReadResult {
   category?: InboxMessage["category"] | string | null;
 }
 
+export interface LlmQuota {
+  period: string;
+  cap_usd: number;
+  used_usd: number;
+  remaining_usd: number;
+  used_pct: number;
+  capped: boolean;
+}
+
 export interface Me {
   id: string;
   email: string;
@@ -202,6 +220,7 @@ export interface Me {
   preferences: Record<string, unknown>;
   onboarded: boolean;
   connected_mailboxes: ConnectedMailbox[];
+  llm_quota?: LlmQuota | null;
 }
 
 export interface AppNotification {
@@ -295,14 +314,22 @@ export interface BookMessageResponse {
 }
 
 // Response from the Ask screen's free-text request. `action` is "booked" when a
-// calendar event was created, "none" otherwise; `reply` is the line to show.
+// calendar event was created, "device_book" when the client should write to Apple
+// Calendar, "none" otherwise; `reply` is the line to show.
 export interface AssistantAskResponse {
   reply: string;
-  action: "booked" | "updated" | "cancelled" | "created" | "none";
+  action: "booked" | "updated" | "cancelled" | "created" | "device_book" | "none";
   detail: string | null;
   task_id?: string | null;
   task_title?: string | null;
   remind_at?: string | null;
+  /** Present when action is device_book — mobile writes via EventKit. */
+  device_calendar?: {
+    title: string;
+    start: string;
+    end: string;
+    location?: string | null;
+  } | null;
 }
 
 export type AssistantChatResponse = AssistantAskResponse;
@@ -474,6 +501,8 @@ export interface ConversationAction {
 export interface ConversationAnalyzeResponse {
   reply_suggestions: ReplySuggestion[];
   actions: ConversationAction[];
+  /** Short one-line understanding; optional for older backends. */
+  insight?: string | null;
 }
 
 export interface ConversationConfirmRequest {

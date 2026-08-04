@@ -27,11 +27,22 @@ def parse_conversation(
     payload: ConversationParseRequest,
     user: User = Depends(get_current_user),
 ) -> ParsedConversationOut:
-    del user  # auth only — parse is stateless and does not persist
     text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Clipboard text is empty")
-    return conversation_service.parse_conversation(text)
+    parsed = conversation_service.parse_conversation(text)
+    names: list[str] = []
+    if user.name:
+        names.append(user.name)
+    if payload.self_aliases:
+        names.extend(payload.self_aliases)
+    if isinstance(user.preferences, dict):
+        alias = user.preferences.get("wechat_display_name") or user.preferences.get(
+            "chat_self_name"
+        )
+        if isinstance(alias, str) and alias.strip():
+            names.append(alias.strip())
+    return conversation_service.apply_self_identity(parsed, self_names=names)
 
 
 @router.post("/analyze", response_model=ConversationAnalyzeResponse)
@@ -42,13 +53,20 @@ def analyze_conversation(
     if not payload.conversation.messages:
         raise HTTPException(status_code=400, detail="Conversation has no messages")
     tz = payload.timezone or user.timezone or "UTC"
-    return conversation_service.analyze_conversation(
-        payload.conversation,
-        goal=payload.goal or "custom",
-        tones=payload.tones,
-        user=user,
-        timezone=tz,
-    )
+    try:
+        return conversation_service.analyze_conversation(
+            payload.conversation,
+            goal=payload.goal or "custom",
+            tones=payload.tones,
+            user=user,
+            timezone=tz,
+            self_aliases=payload.self_aliases,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface LLM/validation failures cleanly
+        raise HTTPException(
+            status_code=502,
+            detail=f"Analyze failed: {exc.__class__.__name__}",
+        ) from exc
 
 
 @router.post("/actions/confirm", response_model=ConversationConfirmResponse)

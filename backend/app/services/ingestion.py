@@ -429,7 +429,8 @@ def sync_messages(db: Session, user_id: str, *, incremental: bool = True) -> Syn
     """Ingest new Gmail messages for every connected Google mailbox."""
     accounts = list_google_accounts(db, user_id)
     if not accounts:
-        raise ValueError("No connected Google account for user")
+        # Apple / anonymous sessions have no Gmail yet — sync is a no-op, not an error.
+        return SyncIngestResult(new_messages=[], initial_backfill=False)
 
     all_new: list[Message] = []
     any_initial = False

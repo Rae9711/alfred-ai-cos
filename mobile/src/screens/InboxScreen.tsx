@@ -1,4 +1,4 @@
-// Inbox — live Gmail messages from Albert's classification pipeline.
+// Inbox — live Gmail messages, pixel-matched to alfred-ui-system InboxPage.
 
 import { useMemo } from "react";
 import {
@@ -15,16 +15,21 @@ import {
 } from "react-native";
 
 import { api } from "@/api/client";
-import { Btn, FooterStamp, Pill, Serif, SerifEm } from "@/components/ui";
+import { AlfredIcon } from "@/components/AlfredIcon";
+import { Ic } from "@/components/icons";
+import { ScreenWash } from "@/components/ScreenWash";
 import { useShell } from "@/components/Shell";
+import { Serif } from "@/components/ui";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import { useWorkflow } from "@/context/WorkflowContext";
 import { useSmsShareTip } from "@/hooks/useSmsShareTip";
 import type { AppInboxItem } from "@/lib/inbox";
+import { statusPillFor } from "@/lib/inbox";
 import { MessageLinks } from "@/components/MessageLinks";
 import { MessageDetailSheet } from "@/screens/sheets/MessageDetailSheet";
 import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
 
 if (
   Platform.OS === "android" &&
@@ -50,6 +55,7 @@ export function InboxScreen() {
     mailboxes,
     inboxScope,
     inboxFilter,
+    counts,
     loading,
     tabLoading,
     syncing,
@@ -66,12 +72,20 @@ export function InboxScreen() {
 
   const mailboxTabs = useMemo(
     () => [
-      { id: "needs_action", label: t.inbox.filters.needsAction },
-      { id: "unread", label: t.inbox.filters.unread },
-      { id: "all", label: t.inbox.filters.all },
-      { id: "sms", label: t.inbox.filters.sms },
+      { id: "all" as const, label: t.inbox.filters.all, count: counts.all },
+      {
+        id: "needs_action" as const,
+        label: t.inbox.filters.needsAction,
+        count: counts.needs_action,
+      },
+      { id: "unread" as const, label: t.inbox.filters.unread, count: counts.unread },
+      { id: "sms" as const, label: t.inbox.filters.sms, count: counts.sms },
     ],
     [
+      counts.all,
+      counts.needs_action,
+      counts.sms,
+      counts.unread,
       t.inbox.filters.needsAction,
       t.inbox.filters.unread,
       t.inbox.filters.all,
@@ -80,12 +94,7 @@ export function InboxScreen() {
   );
 
   const live = tabLoading ? [] : items;
-
   const filtered = live;
-  const replyItems = filtered.filter((m) => m.section === "reply");
-  const decisionItems = filtered.filter((m) => m.section === "decision");
-  const fyiItems = filtered.filter((m) => m.section === "fyi");
-  const unreadCount = live.filter((m) => m.isUnread).length;
   const showMailboxChip =
     inboxFilter === "all" && inboxScope === "synced" && mailboxes.length > 1;
 
@@ -101,9 +110,7 @@ export function InboxScreen() {
         await api.remindMessageLater(id);
         showToast(t.inbox.laterDone);
       } catch (e) {
-        showToast(
-          e instanceof Error ? e.message : t.inbox.laterFailed,
-        );
+        showToast(e instanceof Error ? e.message : t.inbox.laterFailed);
       }
     })();
   };
@@ -118,9 +125,7 @@ export function InboxScreen() {
           { duration: gmailSynced ? 2200 : 4500 },
         );
       } catch (e) {
-        showToast(
-          e instanceof Error ? e.message : t.inbox.markReadFailed,
-        );
+        showToast(e instanceof Error ? e.message : t.inbox.markReadFailed);
       }
     })();
   };
@@ -132,9 +137,7 @@ export function InboxScreen() {
         await markDecided(id);
         showToast(t.inbox.markDecidedDone);
       } catch (e) {
-        showToast(
-          e instanceof Error ? e.message : t.inbox.markReadFailed,
-        );
+        showToast(e instanceof Error ? e.message : t.inbox.markReadFailed);
       }
     })();
   };
@@ -204,79 +207,86 @@ export function InboxScreen() {
     />
   );
 
-  const syncFooter = lastSyncedAt
-    ? t.inbox.syncedJustNow
-    : t.inbox.pullToSync;
-
   if (loading && items.length === 0) {
     return (
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={styles.scrollFill}
-        alwaysBounceVertical
-        refreshControl={refreshControl}
-      >
-        <View style={styles.centeredFill}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
-        </View>
-      </ScrollView>
+      <View style={styles.screen}>
+        <ScreenWash />
+        <ScrollView
+          style={styles.scrollTransparent}
+          contentContainerStyle={styles.scrollFill}
+          alwaysBounceVertical
+          refreshControl={refreshControl}
+        >
+          <View style={styles.centeredFill}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      alwaysBounceVertical
-      refreshControl={refreshControl}
-    >
-      <View style={styles.header}>
-        <Serif size={28}>
-          {t.inbox.titlePlain} <SerifEm>{t.inbox.titleEm}</SerifEm>
-        </Serif>
-        {unreadCount > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{t.inbox.unread(unreadCount)}</Text>
+    <View style={styles.screen}>
+      <ScreenWash />
+      <ScrollView
+        style={styles.scrollTransparent}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        refreshControl={refreshControl}
+      >
+        <View style={styles.header}>
+          <Serif size={28} display>
+            {t.tabs.inbox}
+          </Serif>
+        </View>
+
+        {error ? (
+          <Pressable
+            style={styles.errorBanner}
+            onPress={() => void onPullRefresh()}
+          >
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorRetry}>{t.inbox.retry}</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.filters}>
+          {mailboxTabs.map((f) => {
+            const active = inboxFilter === f.id;
+            return (
+              <Pressable
+                key={f.id}
+                onPress={() => onSelectFilter(f.id)}
+                style={[
+                  surfaces.filterChip,
+                  active && surfaces.filterChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    surfaces.filterChipText,
+                    active && surfaces.filterChipTextActive,
+                  ]}
+                >
+                  {f.label}
+                  {f.count > 0 ? ` ${f.count}` : ""}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {tabLoading ? (
+          <View style={styles.tabLoading}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
           </View>
         ) : null}
-      </View>
 
-      {error ? (
-        <Pressable style={styles.errorBanner} onPress={() => void onPullRefresh()}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorRetry}>{t.inbox.retry}</Text>
-        </Pressable>
-      ) : null}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filters}
-      >
-        {mailboxTabs.map((f) => (
-          <Pill
-            key={f.id}
-            label={f.label}
-            kind={inboxFilter === f.id ? "accent" : "muted"}
-            mono={false}
-            onPress={() => onSelectFilter(f.id)}
-            style={styles.filterPill}
-          />
-        ))}
-      </ScrollView>
-
-      {tabLoading ? (
-        <View style={styles.tabLoading}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>{t.inbox.syncing}</Text>
-        </View>
-      ) : null}
-
-      {replyItems.length > 0 ? (
-        <Section title={t.inbox.sectionReply}>
-          {replyItems.map((m) => (
+        <View style={styles.list}>
+          {filtered.map((m) => (
             <InboxCard
               key={m.id}
               item={m}
@@ -285,169 +295,69 @@ export function InboxScreen() {
                   ? mailboxTabLabel(m.mailboxEmail)
                   : null
               }
-              onHandToAlfredReply={() => openMessage(m.id, "delegate")}
-              onLater={() => snoozeReminder(m.id)}
-              onProcessed={() => markAsProcessed(m.id)}
-              onMarkRead={() => markAsRead(m.id)}
-              onOpen={() => openMessage(m.id, "delegate")}
-              openLinkLabel={t.inbox.openLink}
               labels={{
-                handToAlfredReply: t.inbox.handToAlfredReply,
+                quickReply: t.inbox.handToAlfredReply,
                 later: t.inbox.later,
                 processedAction: t.inbox.markProcessed,
                 markRead: t.inbox.markReadAction,
-                read: t.inbox.readLabel,
-                unread: t.inbox.unreadLabel,
-                replied: t.inbox.replied,
-                processed: t.inbox.processed,
-                alfredTake: t.inbox.alfredTake,
-              }}
-            />
-          ))}
-        </Section>
-      ) : null}
-
-      {decisionItems.length > 0 ? (
-        <Section title={t.inbox.sectionDecision}>
-          {decisionItems.map((m) => (
-            <DecisionCard
-              key={m.id}
-              item={m}
-              mailboxLabel={
-                showMailboxChip && m.mailboxEmail
-                  ? mailboxTabLabel(m.mailboxEmail)
-                  : null
-              }
-              onDecided={() => markAsDecided(m.id)}
-              onLater={() => snoozeReminder(m.id)}
-              onOpen={() => openMessage(m.id, "reply")}
-              openLinkLabel={t.inbox.openLink}
-              labels={{
+                view: t.inbox.view,
+                dismiss: t.inbox.dismiss,
                 decided: t.inbox.markDecided,
-                later: t.inbox.later,
-                read: t.inbox.readLabel,
+                openLink: t.inbox.openLink,
+                needsAction: t.home.statusNeedsAction,
+                done: t.home.statusDone,
+                fyi: t.inbox.statusFyi,
                 unread: t.inbox.unreadLabel,
-                replied: t.inbox.replied,
-                processed: t.inbox.processed,
-                alfredTake: t.inbox.alfredTake,
               }}
-            />
-          ))}
-        </Section>
-      ) : null}
-
-      {fyiItems.length > 0 ? (
-        <Section title={t.inbox.sectionFyi}>
-          {fyiItems.map((m) => (
-            <FyiCard
-              key={m.id}
-              item={m}
-              mailboxLabel={
-                showMailboxChip && m.mailboxEmail
-                  ? mailboxTabLabel(m.mailboxEmail)
-                  : null
+              onOpen={() =>
+                openMessage(
+                  m.id,
+                  m.section === "reply" ? "delegate" : "reply",
+                )
               }
-              onDismiss={() => markAsRead(m.id)}
+              onQuickReply={() => openMessage(m.id, "delegate")}
+              onProcessed={() =>
+                m.section === "decision"
+                  ? markAsDecided(m.id)
+                  : markAsProcessed(m.id)
+              }
+              onLater={() => snoozeReminder(m.id)}
               onMarkRead={() => markAsRead(m.id)}
+              onDismiss={() => markAsRead(m.id)}
               onUnprocess={
                 m.userDecided ? () => markAsUnprocessed(m.id) : undefined
               }
-              onView={() => openMessage(m.id, "reply")}
-              labels={{
-                view: t.inbox.view,
-                dismiss: t.inbox.dismiss,
-                markRead: t.inbox.markReadAction,
-                processed: t.inbox.markProcessed,
-                read: t.inbox.readLabel,
-                unread: t.inbox.unreadLabel,
-                replied: t.inbox.replied,
-              }}
             />
           ))}
-        </Section>
-      ) : null}
-
-      {!tabLoading && filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Serif size={17} italic color={colors.ink3}>
-            {inboxFilter === "sms"
-              ? t.inbox.smsEmpty
-              : inboxFilter === "needs_action"
-                ? t.inbox.needsActionEmpty
-                : inboxFilter === "unread"
-                  ? t.inbox.unreadEmpty
-                  : t.inbox.inboxZero}
-          </Serif>
-          <Text style={styles.pullHint}>
-            {inboxFilter === "sms"
-              ? t.inbox.smsEmptySub
-              : inboxFilter === "needs_action"
-                ? t.inbox.needsActionEmptySub
-                : inboxFilter === "unread"
-                  ? t.inbox.unreadEmptySub
-                  : t.inbox.pullToSync}
-          </Text>
         </View>
-      ) : null}
 
-      <FooterStamp text={syncFooter} />
-    </ScrollView>
-  );
-}
+        {!tabLoading && filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <Serif size={17} italic color={colors.ink3}>
+              {inboxFilter === "sms"
+                ? t.inbox.smsEmpty
+                : inboxFilter === "needs_action"
+                  ? t.inbox.needsActionEmpty
+                  : inboxFilter === "unread"
+                    ? t.inbox.unreadEmpty
+                    : t.inbox.inboxZero}
+            </Serif>
+            <Text style={styles.pullHint}>
+              {inboxFilter === "sms"
+                ? t.inbox.smsEmptySub
+                : inboxFilter === "needs_action"
+                  ? t.inbox.needsActionEmptySub
+                  : inboxFilter === "unread"
+                    ? t.inbox.unreadEmptySub
+                    : t.inbox.pullToSync}
+            </Text>
+          </View>
+        ) : null}
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function ReadStatus({
-  item,
-  labels,
-}: {
-  item: AppInboxItem;
-  labels: { read: string; unread: string; replied: string; processed: string };
-}) {
-  if (item.userDecided) {
-    return (
-      <View style={[styles.statusChip, styles.statusProcessed]}>
-        <Text style={[styles.statusChipText, styles.statusProcessedText]}>
-          {labels.processed}
+        <Text style={styles.syncFooter}>
+          {lastSyncedAt ? t.inbox.syncedJustNow : t.inbox.pullToSync}
         </Text>
-      </View>
-    );
-  }
-  if (item.userReplied) {
-    return (
-      <View style={[styles.statusChip, styles.statusReplied]}>
-        <Text style={[styles.statusChipText, styles.statusRepliedText]}>
-          {labels.replied}
-        </Text>
-      </View>
-    );
-  }
-  if (item.isUnread) {
-    return (
-      <View style={[styles.statusChip, styles.statusUnread]}>
-        <View style={styles.unreadDot} />
-        <Text style={[styles.statusChipText, styles.statusUnreadText]}>
-          {labels.unread}
-        </Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.statusChip}>
-      <Text style={styles.statusChipText}>{labels.read}</Text>
+      </ScrollView>
     </View>
   );
 }
@@ -455,243 +365,198 @@ function ReadStatus({
 function InboxCard({
   item,
   mailboxLabel,
-  onHandToAlfredReply,
-  onLater,
-  onProcessed,
-  onMarkRead,
-  onOpen,
-  openLinkLabel,
   labels,
+  onOpen,
+  onQuickReply,
+  onProcessed,
+  onLater,
+  onMarkRead,
+  onDismiss,
+  onUnprocess,
 }: {
   item: AppInboxItem;
   mailboxLabel: string | null;
-  onHandToAlfredReply: () => void;
-  onLater: () => void;
-  onProcessed: () => void;
-  onMarkRead: () => void;
-  onOpen: () => void;
-  openLinkLabel: string;
   labels: {
-    handToAlfredReply: string;
+    quickReply: string;
     later: string;
     processedAction: string;
     markRead: string;
-    read: string;
+    view: string;
+    dismiss: string;
+    decided: string;
+    openLink: string;
+    needsAction: string;
+    done: string;
+    fyi: string;
     unread: string;
-    replied: string;
-    processed: string;
-    alfredTake: string;
   };
+  onOpen: () => void;
+  onQuickReply: () => void;
+  onProcessed: () => void;
+  onLater: () => void;
+  onMarkRead: () => void;
+  onDismiss: () => void;
+  onUnprocess?: () => void;
 }) {
+  const status = statusPillFor(item, {
+    needsAction: labels.needsAction,
+    done: labels.done,
+    fyi: labels.fyi,
+    unread: labels.unread,
+  });
+  const tone =
+    status.kind === "needs"
+      ? ("blue" as const)
+      : status.kind === "done"
+        ? ("green" as const)
+        : ("neutral" as const);
+  const showActions =
+    item.showReplyActions ||
+    item.section === "decision" ||
+    item.isUnread ||
+    item.section === "fyi";
+  const subjectTone =
+    status.kind === "needs"
+      ? styles.subjectNeeds
+      : status.kind === "fyi" || status.kind === "unread"
+        ? styles.subjectFyi
+        : null;
+
+  const isNeeds = status.kind === "needs";
+
   return (
-    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
-      <Pressable onPress={onOpen}>
-        <View style={styles.cardBody}>
-          <View style={styles.cardTop}>
-            <ReadStatus item={item} labels={labels} />
-            {mailboxLabel ? (
-              <View style={styles.sourceChip}>
-                <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
-              </View>
-            ) : null}
-            <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
+    <View style={[styles.card, isNeeds && styles.cardNeeds]}>
+      {isNeeds ? <View style={styles.needsAccent} /> : null}
+      <Pressable onPress={onOpen} style={styles.cardMain}>
+        <AlfredIcon
+          icon={item.source === "sms" ? Ic.Chat : Ic.Mail}
+          tone={tone}
+          size="medium"
+        />
+        <View style={styles.cardCopy}>
+          <View style={styles.cardMeta}>
+            <Text
+              style={[styles.sender, isNeeds && styles.senderNeeds]}
+              numberOfLines={1}
+            >
               {item.sender}
+              {mailboxLabel ? ` · ${mailboxLabel}` : ""}
             </Text>
           </View>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          {item.take ? (
-            <Text style={styles.summaryLabel}>{labels.alfredTake}</Text>
-          ) : null}
-          <Text style={styles.summary}>{item.summary}</Text>
+          <Text style={[styles.subject, subjectTone]} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.preview} numberOfLines={2}>
+            {item.summary || item.take}
+          </Text>
           <MessageLinks
             parts={[item.take, item.summary, item.title]}
-            label={openLinkLabel}
+            label={labels.openLink}
           />
-          <View style={styles.tags}>
-            {item.tags.map((tag) => (
-              <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
-            ))}
+        </View>
+        <View style={styles.cardEnd}>
+          {item.isUnread ? (
+            <View
+              style={styles.unreadDot}
+              accessibilityLabel={labels.unread}
+            />
+          ) : null}
+          <View
+            style={[
+              surfaces.statusPill,
+              status.done && surfaces.statusPillDone,
+              isNeeds && styles.statusNeedsPill,
+              (status.kind === "fyi" || status.kind === "unread") &&
+                styles.statusFyiPill,
+              styles.statusChip,
+            ]}
+          >
+            <Text
+              style={[
+                surfaces.statusPillText,
+                status.done && surfaces.statusPillDoneText,
+                isNeeds && styles.statusNeedsText,
+                (status.kind === "fyi" || status.kind === "unread") &&
+                  styles.statusFyiText,
+              ]}
+            >
+              {status.text}
+            </Text>
           </View>
         </View>
       </Pressable>
-      {item.showReplyActions || item.isUnread ? (
-        <View style={styles.actions}>
+
+      {showActions ? (
+        <View style={styles.quickActions}>
           {item.showReplyActions ? (
-            <>
-              <Btn
-                label={labels.handToAlfredReply}
-                onPress={onHandToAlfredReply}
-                style={styles.actionPrimary}
-              />
-              <Pressable style={styles.actionGhost} onPress={onProcessed}>
-                <Text style={styles.actionGhostText}>{labels.processedAction}</Text>
-              </Pressable>
-              <Pressable style={styles.actionGhost} onPress={onLater}>
-                <Text style={styles.actionGhostText}>{labels.later}</Text>
-              </Pressable>
-            </>
-          ) : null}
-          {item.isUnread ? (
-            <Pressable style={styles.actionGhost} onPress={onMarkRead}>
-              <Text style={styles.actionGhostText}>{labels.markRead}</Text>
+            <Pressable style={styles.quickBtn} onPress={onQuickReply}>
+              <Ic.Mail size={12} color="#5F6470" stroke={2} />
+              <Text style={styles.quickBtnText}>{labels.quickReply}</Text>
             </Pressable>
           ) : null}
+          {item.section === "decision" || item.showReplyActions ? (
+            <Pressable style={styles.quickBtn} onPress={onProcessed}>
+              <Ic.Check size={12} color="#5F6470" stroke={2} />
+              <Text style={styles.quickBtnText}>
+                {item.section === "decision"
+                  ? labels.decided
+                  : labels.processedAction}
+              </Text>
+            </Pressable>
+          ) : null}
+          {item.section === "reply" || item.section === "decision" ? (
+            <Pressable style={styles.quickBtn} onPress={onLater}>
+              <Ic.Clock size={12} color="#5F6470" stroke={2} />
+              <Text style={styles.quickBtnText}>{labels.later}</Text>
+            </Pressable>
+          ) : null}
+          {item.section === "fyi" ? (
+            <>
+              {onUnprocess ? (
+                <Pressable style={styles.quickBtn} onPress={onUnprocess}>
+                  <Ic.Refresh size={12} color="#5F6470" stroke={2} />
+                  <Text style={styles.quickBtnText}>{labels.processedAction}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.quickBtn} onPress={onOpen}>
+                <Text style={styles.quickBtnText}>{labels.view}</Text>
+              </Pressable>
+              {item.isUnread ? (
+                <Pressable style={styles.quickBtn} onPress={onMarkRead}>
+                  <Text style={styles.quickBtnText}>{labels.markRead}</Text>
+                </Pressable>
+              ) : null}
+              {!onUnprocess ? (
+                <Pressable style={styles.quickBtn} onPress={onDismiss}>
+                  <Text style={styles.quickBtnText}>{labels.dismiss}</Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : null}
+          {item.isUnread && item.section !== "fyi" ? (
+            <Pressable style={styles.quickBtn} onPress={onMarkRead}>
+              <Text style={styles.quickBtnText}>{labels.markRead}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.quickBtn} onPress={onOpen}>
+            <Ic.MoreHorizontal size={12} color="#5F6470" stroke={2} />
+          </Pressable>
         </View>
       ) : null}
     </View>
   );
 }
 
-function DecisionCard({
-  item,
-  mailboxLabel,
-  onDecided,
-  onLater,
-  onOpen,
-  openLinkLabel,
-  labels,
-}: {
-  item: AppInboxItem;
-  mailboxLabel: string | null;
-  onDecided: () => void;
-  onLater: () => void;
-  onOpen: () => void;
-  openLinkLabel: string;
-  labels: {
-    decided: string;
-    later: string;
-    read: string;
-    unread: string;
-    replied: string;
-    processed: string;
-    alfredTake: string;
-  };
-}) {
-  return (
-    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
-      <Pressable onPress={onOpen}>
-        <View style={styles.cardBody}>
-          <View style={styles.cardTop}>
-            <ReadStatus item={item} labels={labels} />
-            {mailboxLabel ? (
-              <View style={styles.sourceChip}>
-                <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
-              </View>
-            ) : null}
-            <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
-              {item.sender}
-            </Text>
-          </View>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          {item.take ? (
-            <Text style={styles.summaryLabel}>{labels.alfredTake}</Text>
-          ) : null}
-          <Text style={styles.summary}>{item.summary}</Text>
-          <MessageLinks
-            parts={[item.take, item.summary, item.title]}
-            label={openLinkLabel}
-          />
-          <View style={styles.tags}>
-            {item.tags.map((tag) => (
-              <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
-            ))}
-          </View>
-        </View>
-      </Pressable>
-      <View style={styles.actions}>
-        <Btn label={labels.decided} onPress={onDecided} style={styles.actionPrimary} />
-        <Pressable style={styles.actionGhost} onPress={onLater}>
-          <Text style={styles.actionGhostText}>{labels.later}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function FyiCard({
-  item,
-  mailboxLabel,
-  onDismiss,
-  onMarkRead,
-  onUnprocess,
-  onView,
-  labels,
-}: {
-  item: AppInboxItem;
-  mailboxLabel: string | null;
-  onDismiss: () => void;
-  onMarkRead: () => void;
-  onUnprocess?: () => void;
-  onView: () => void;
-  labels: {
-    view: string;
-    dismiss: string;
-    markRead: string;
-    processed: string;
-    read: string;
-    unread: string;
-    replied: string;
-  };
-}) {
-  return (
-    <View style={[styles.card, item.isUnread ? styles.cardUnread : styles.cardRead]}>
-      <Pressable onPress={onView}>
-        <View style={styles.cardBody}>
-          <View style={styles.cardTop}>
-            <ReadStatus
-              item={item}
-              labels={{
-                read: labels.read,
-                unread: labels.unread,
-                replied: labels.replied,
-                processed: labels.processed,
-              }}
-            />
-            {mailboxLabel ? (
-              <View style={styles.sourceChip}>
-                <Text style={styles.sourceChipText}>{mailboxLabel}</Text>
-              </View>
-            ) : null}
-            <Text style={[styles.sender, item.isUnread ? styles.senderUnread : styles.senderRead]}>
-              {item.sender}
-            </Text>
-          </View>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.summary}>{item.summary}</Text>
-          <View style={styles.tags}>
-            {item.tags.map((tag) => (
-              <Pill key={tag.label} label={tag.label} kind={tag.tone} mono />
-            ))}
-          </View>
-        </View>
-      </Pressable>
-      <View style={styles.actions}>
-        {onUnprocess ? (
-          <Pressable style={styles.actionGhost} onPress={onUnprocess}>
-            <Text style={styles.actionGhostText}>{labels.processed}</Text>
-          </Pressable>
-        ) : null}
-        <Pressable style={styles.actionGhost} onPress={onView}>
-          <Text style={styles.actionGhostText}>{labels.view}</Text>
-        </Pressable>
-        {item.isUnread ? (
-          <Pressable style={styles.actionGhost} onPress={onMarkRead}>
-            <Text style={styles.actionGhostText}>{labels.markRead}</Text>
-          </Pressable>
-        ) : null}
-        {!onUnprocess ? (
-          <Pressable style={styles.actionGhost} onPress={onDismiss}>
-            <Text style={styles.actionGhostText}>{labels.dismiss}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
-  content: { flexGrow: 1, paddingBottom: 32 },
+  screen: surfaces.screen,
+  scrollTransparent: { flex: 1, backgroundColor: "transparent" },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: layout.padX,
+    paddingTop: layout.topPad,
+    paddingBottom: layout.tabBarInset,
+    gap: layout.gapSection,
+  },
   scrollFill: { flexGrow: 1 },
   centeredFill: {
     flexGrow: 1,
@@ -700,157 +565,181 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
   },
-  loadingText: { fontSize: 14, color: colors.ink3 },
+  loadingText: {
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.ink3,
+  },
   tabLoading: {
     paddingVertical: 48,
     alignItems: "center",
     gap: 12,
   },
   header: {
-    paddingHorizontal: layout.padX,
-    paddingTop: layout.topPad,
-    paddingBottom: 8,
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
   },
-  badge: {
-    backgroundColor: colors.accentSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  badgeText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 0.6,
-    color: colors.accent,
-    textTransform: "uppercase",
-  },
   errorBanner: {
-    marginHorizontal: layout.padX,
-    marginBottom: 12,
     padding: 12,
     borderRadius: radius.sm,
     backgroundColor: colors.warnSoft,
   },
-  errorText: { fontSize: 13, color: colors.warn },
-  errorRetry: { fontSize: 12, color: colors.ink3, marginTop: 4 },
+  errorText: { fontFamily: fonts.sans, fontSize: 13, color: colors.warn },
+  errorRetry: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.ink3,
+    marginTop: 4,
+  },
   filters: {
-    paddingHorizontal: layout.padX,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    alignSelf: "stretch",
     gap: 8,
-    paddingBottom: spacing.md,
   },
-  filterPill: { marginRight: 0 },
-  section: {
-    paddingHorizontal: layout.padX,
-    marginTop: spacing.md,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.ink4,
-    marginBottom: 2,
+  list: {
+    gap: layout.gapCard,
   },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair2,
-    gap: 8,
+    ...surfaces.glassCard,
+    padding: layout.cardPad,
+    borderRadius: 20,
+    overflow: "hidden",
+    position: "relative",
   },
-  cardBody: { gap: 8 },
-  cardUnread: {
-    borderColor: colors.accentSoft,
-    backgroundColor: colors.card,
+  cardNeeds: {
+    backgroundColor: "#F3F7FF",
+    borderColor: "rgba(47,102,200,0.22)",
+    borderWidth: 1,
   },
-  cardRead: {
-    opacity: 0.88,
-    backgroundColor: colors.paper2,
-    borderColor: colors.hair,
+  needsAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: colors.blue700,
   },
-  cardTop: {
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.blue700,
+  },
+  cardMain: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  cardEnd: {
+    alignItems: "flex-end",
+    gap: 6,
+    flexShrink: 0,
+    paddingTop: 1,
+  },
+  cardCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  cardMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: 8,
-    flexWrap: "wrap",
   },
-  sourceChip: {
-    backgroundColor: colors.paper2,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.full,
+  sender: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: "#77756F",
+    flex: 1,
   },
-  sourceChipText: {
-    fontFamily: fonts.mono,
+  senderNeeds: {
+    color: colors.accentInk,
+    fontFamily: fonts.sansMedium,
+  },
+  subject: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 12,
+    color: colors.ink,
+    marginTop: 1,
+  },
+  subjectNeeds: {
+    color: colors.blue700,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    letterSpacing: -0.2,
+  },
+  subjectFyi: {
+    color: "#5F6470",
+  },
+  preview: {
+    fontFamily: fonts.sans,
     fontSize: 10,
-    color: colors.ink3,
+    lineHeight: 14,
+    color: "#77756F",
   },
   statusChip: {
-    backgroundColor: colors.paper,
+    alignSelf: "flex-end",
+    flexShrink: 0,
+  },
+  statusNeedsPill: {
+    backgroundColor: colors.blue700,
+    borderRadius: radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+  },
+  statusNeedsText: {
+    color: "#FFFFFF",
+    fontFamily: fonts.sansSemibold,
+    fontSize: 10,
+  },
+  statusFyiPill: {
+    backgroundColor: "#F0EEE9",
+  },
+  statusFyiText: {
+    color: "#5F6470",
+  },
+  quickActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  quickBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
+    borderRadius: radius.pill,
+    backgroundColor: "#FAF7F2",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
   },
-  statusUnread: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
+  quickBtnText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    color: "#5F6470",
   },
-  statusReplied: {
-    backgroundColor: colors.paper2,
-    borderColor: colors.hair2,
+  empty: {
+    paddingTop: 40,
+    alignItems: "center",
+    gap: 8,
   },
-  statusProcessed: {
-    backgroundColor: colors.paper2,
-    borderColor: colors.hair2,
-  },
-  statusChipText: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
+  pullHint: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
     color: colors.ink4,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    textAlign: "center",
   },
-  statusUnreadText: { color: colors.accent },
-  statusRepliedText: { color: colors.ink3 },
-  statusProcessedText: { color: colors.ink3 },
-  unreadDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accent,
-  },
-  sender: { fontSize: 13, fontWeight: "600", color: colors.ink2, flex: 1 },
-  senderUnread: { color: colors.ink },
-  senderRead: { fontWeight: "500", color: colors.ink3 },
-  cardTitle: { fontSize: 16, fontWeight: "600", color: colors.ink },
-  summaryLabel: {
-    fontFamily: fonts.mono,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
+  syncFooter: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
     color: colors.ink4,
+    textAlign: "center",
+    marginTop: spacing.sm,
   },
-  summary: { fontSize: 14, lineHeight: 20, color: colors.ink3 },
-  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
-  actionPrimary: { flexGrow: 1 },
-  actionGhost: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radius.sm,
-    backgroundColor: colors.paper2,
-  },
-  actionGhostText: { fontSize: 13, fontWeight: "500", color: colors.ink2 },
-  empty: { padding: layout.padX, paddingTop: 40, alignItems: "center", gap: 8 },
-  pullHint: { fontSize: 13, color: colors.ink4, textAlign: "center" },
 });

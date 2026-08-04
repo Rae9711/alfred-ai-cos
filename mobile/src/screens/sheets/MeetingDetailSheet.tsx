@@ -8,7 +8,11 @@ import { api } from "@/api/client";
 import { useShell } from "@/components/Shell";
 import { MeetingPrepSheet } from "@/screens/sheets/MeetingPrepSheet";
 import { Btn } from "@/components/ui";
-import { colors, fonts, radius, spacing } from "@/theme/theme";
+import {
+  deleteDeviceCalendarEvent,
+  isAppleEventId,
+} from "@/lib/appleCalendar";
+import { colors, fonts, spacing } from "@/theme/theme";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "—";
@@ -23,20 +27,30 @@ function formatWhen(iso: string | null): string {
 
 export function MeetingDetailSheet({
   eventId,
+  initialEvent,
   onChanged,
 }: {
   eventId: string;
+  /** Pass for Apple/device events — no Google API fetch. */
+  initialEvent?: UpcomingMeeting;
   onChanged?: () => void;
 }) {
   const { closeSheet, openSheet, showToast } = useShell();
-  const [event, setEvent] = useState<UpcomingMeeting | null>(null);
-  const [loading, setLoading] = useState(true);
+  const isApple = isAppleEventId(eventId) || initialEvent?.source === "apple";
+  const [event, setEvent] = useState<UpcomingMeeting | null>(
+    initialEvent ?? null,
+  );
+  const [loading, setLoading] = useState(!initialEvent && !isApple);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
+    if (isApple) {
+      if (initialEvent) setEvent(initialEvent);
+      return;
+    }
     const data = await api.getMeeting(eventId);
-    setEvent(data);
-  }, [eventId]);
+    setEvent({ ...data, source: data.source ?? "google" });
+  }, [eventId, initialEvent, isApple]);
 
   useEffect(() => {
     void (async () => {
@@ -55,7 +69,11 @@ export function MeetingDetailSheet({
     setBusy(true);
     void (async () => {
       try {
-        await api.deleteMeeting(eventId);
+        if (isApple) {
+          await deleteDeviceCalendarEvent(eventId);
+        } else {
+          await api.deleteMeeting(eventId);
+        }
         showToast("Event cancelled");
         onChanged?.();
         closeSheet();
@@ -83,10 +101,16 @@ export function MeetingDetailSheet({
     );
   }
 
+  const sourceLabel =
+    event.source === "apple" || isApple
+      ? "Apple Calendar"
+      : "Google Calendar";
+
   return (
     <View style={styles.root}>
       <Text style={styles.title}>{event.title ?? "Meeting"}</Text>
       <Text style={styles.when}>{formatWhen(event.start_time)}</Text>
+      <Text style={styles.source}>{sourceLabel}</Text>
       {event.location ? <Text style={styles.detail}>{event.location}</Text> : null}
       {event.attendees.length > 0 ? (
         <Text style={styles.detail}>{event.attendees.join(", ")}</Text>
@@ -102,7 +126,7 @@ export function MeetingDetailSheet({
       ) : null}
 
       <View style={styles.actions}>
-        {event.prep_required ? (
+        {!isApple && event.prep_required ? (
           <Btn
             label="Meeting prep"
             kind="ghost"
@@ -121,17 +145,22 @@ export function MeetingDetailSheet({
 }
 
 const styles = StyleSheet.create({
-  root: { padding: spacing.md, gap: spacing.sm },
-  centered: {
-    padding: spacing.xl,
-    alignItems: "center",
-    justifyContent: "center",
+  root: { padding: spacing.lg, gap: spacing.sm },
+  centered: { padding: spacing.xl, alignItems: "center" },
+  title: {
+    fontFamily: fonts.serifDisplay,
+    fontSize: 22,
+    color: colors.ink,
   },
-  title: { fontSize: 20, fontWeight: "600", color: colors.ink },
-  when: { fontFamily: fonts.mono, fontSize: 13, color: colors.ink3 },
-  detail: { fontSize: 14, color: colors.ink2, lineHeight: 20 },
-  muted: { color: colors.ink3 },
-  linkBtn: { marginTop: spacing.xs },
-  linkText: { color: colors.accent, fontSize: 14, fontWeight: "500" },
+  when: { fontFamily: fonts.sans, fontSize: 14, color: colors.ink2 },
+  source: { fontFamily: fonts.sans, fontSize: 12, color: colors.ink3 },
+  detail: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink2 },
+  muted: { fontFamily: fonts.sans, fontSize: 14, color: colors.ink3 },
+  linkBtn: { paddingVertical: 8 },
+  linkText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: colors.blue700,
+  },
   actions: { marginTop: spacing.md, gap: spacing.sm },
 });

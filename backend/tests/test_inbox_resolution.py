@@ -200,7 +200,7 @@ def test_build_assistant_context_excludes_handled_inbox_and_priorities(
     )
     db.commit()
 
-    ctx = build_assistant_context(db, user, tz="America/New_York")
+    ctx, _cited = build_assistant_context(db, user, tz="America/New_York")
     assert "Pay overdue invoice" not in ctx
     assert "Confirm RSVP" in ctx
     assert "Overdue invoice" not in ctx

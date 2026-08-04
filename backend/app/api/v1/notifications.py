@@ -92,5 +92,12 @@ def set_notification_prefs(
     merged = dict(user.preferences)
     if prefs.quiet_hours is not None:
         merged["quiet_hours"] = prefs.quiet_hours
+    if prefs.calendar_write_primary is not None:
+        if prefs.calendar_write_primary not in ("google", "apple"):
+            raise HTTPException(
+                status_code=400,
+                detail="calendar_write_primary must be 'google' or 'apple'",
+            )
+        merged["calendar_write_primary"] = prefs.calendar_write_primary
     user.preferences = merged
     db.commit()

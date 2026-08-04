@@ -3,10 +3,11 @@ shapes every provider implementation must produce (PRD 14.3)."""
 
 from __future__ import annotations
 
+import json
 from datetime import date, datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.enums import CommitmentOwner, MessageClassification, Priority
 
@@ -200,8 +201,25 @@ class ReplySuggestion(BaseModel):
     body: str = Field(description="The reply text ready to insert into the chat input.")
 
 
+def _coerce_json_list(value: object) -> object:
+    """Claude sometimes double-encodes list tool fields as a JSON string."""
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return value
+    return value
+
+
 class ConversationRepliesResult(BaseModel):
     replies: list[ReplySuggestion] = Field(default_factory=list)
+
+    @field_validator("replies", mode="before")
+    @classmethod
+    def _coerce_replies(cls, value: object) -> object:
+        return _coerce_json_list(value)
 
 
 class ExtractedConversationActionLLM(BaseModel):
@@ -228,3 +246,8 @@ class ExtractedConversationActionLLM(BaseModel):
 
 class ConversationActionsResult(BaseModel):
     actions: list[ExtractedConversationActionLLM] = Field(default_factory=list)
+
+    @field_validator("actions", mode="before")
+    @classmethod
+    def _coerce_actions(cls, value: object) -> object:
+        return _coerce_json_list(value)

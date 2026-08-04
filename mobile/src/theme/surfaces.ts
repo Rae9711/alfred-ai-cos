@@ -1,0 +1,157 @@
+// Shared warm-cream glass surfaces — Home / Inbox / Alfred / Chats / You.
+
+import { StyleSheet } from "react-native";
+
+import { colors, fonts, radius } from "@/theme/theme";
+
+export const surfaces = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.washBottom,
+  },
+  sectionLabel: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: "#7E7B75",
+  },
+  sectionKicker: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: "#7E7B75",
+  },
+  glassCard: {
+    backgroundColor: colors.glass,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.11,
+    shadowRadius: 19,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  glassRowGroup: {
+    backgroundColor: colors.glass,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.hair,
+    overflow: "hidden",
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  statusPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    borderRadius: radius.pill,
+    backgroundColor: "#EAF1FF",
+  },
+  statusPillText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 8,
+    color: colors.accent,
+  },
+  statusPillDone: {
+    backgroundColor: "#E8F7EE",
+  },
+  statusPillDoneText: {
+    color: "#3B9A61",
+  },
+  /** Soft raised squircle — prefer AlfredIcon with tone. */
+  embossWell: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(74,88,117,0.09)",
+    backgroundColor: "#E8F0FF",
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.12,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  embossWellQuiet: {
+    backgroundColor: "#EFEFED",
+  },
+  embossWellAccent: {
+    backgroundColor: colors.accentWell,
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  roundButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: "rgba(130,120,100,0.15)",
+    backgroundColor: "#FFFDF9",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 9 },
+    elevation: 3,
+  },
+  filterChip: {
+    alignSelf: "flex-start",
+    flexGrow: 0,
+    borderWidth: 1,
+    borderColor: "rgba(130,120,100,0.14)",
+    backgroundColor: "#FFFAF4",
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+  },
+  filterChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+    shadowColor: "#2F66C8",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  filterChipText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 10,
+    color: "#5E5A53",
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  primaryButton: {
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EFE9E1",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+  },
+  primaryButtonText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 13,
+    color: "#26446F",
+  },
+  aiPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    backgroundColor: "#F3EFFF",
+    borderWidth: 1,
+    borderColor: "#E4DDFF",
+  },
+  aiPillText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: 10,
+    color: "#5D55D8",
+  },
+});

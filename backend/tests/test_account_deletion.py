@@ -21,6 +21,7 @@ from app.db.models import (
     DailyBriefing,
     Device,
     DraftReply,
+    LlmUsagePeriod,
     Message,
     Notification,
     SpendLimit,
@@ -69,6 +70,15 @@ def populated_user(db: Session) -> User:
     db.add(Device(user_id=u.id, push_token="tok"))
     db.add(Notification(user_id=u.id, type=NotificationType.reminder, title="t", body="b"))
     db.add(SpendLimit(user_id=u.id, cap_minor=1000))
+    db.add(
+        LlmUsagePeriod(
+            user_id=u.id,
+            period="2026-08",
+            spend_minor=42,
+            input_tokens=100,
+            output_tokens=20,
+        )
+    )
     db.add(
         AuditLog(
             user_id=u.id,

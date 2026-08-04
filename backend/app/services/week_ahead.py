@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 from app.db.enums import CommitmentStatus, ScheduleProposalStatus
 from app.db.models import CalendarEvent, Commitment, ScheduleProposal, User
 from app.schemas.today import WeekAheadOut
-from app.services.inbox_resolution import filter_actionable_commitments, handled_message_ids
+from app.services.inbox_resolution import (
+    filter_actionable_commitments,
+    handled_message_ids,
+    user_message_ids,
+)
 
 _EN_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _ZH_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -100,6 +104,7 @@ def build_week_ahead(
             )
         ),
         handled_message_ids(db, user_id),
+        known_message_ids=user_message_ids(db, user_id),
     )
 
     if locale == "zh":

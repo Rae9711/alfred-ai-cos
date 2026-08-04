@@ -21,8 +21,8 @@ _PLAN_CATALOG: list[dict[str, Any]] = [
     {
         "id": "pro_monthly",
         "name": "Alfred Pro",
-        "price_label": "$12/mo",
-        "price_minor": 1200,
+        "price_label": "$17/mo",
+        "price_minor": 1700,
         "currency": "usd",
         "interval": "month",
         "features": [

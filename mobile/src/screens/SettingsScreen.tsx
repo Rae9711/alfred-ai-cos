@@ -1,8 +1,7 @@
-// Settings (You) — pixel-matched to the prototype's ScreenSettings. Eyebrow "You",
-// serif name, this-week stats, Integrations, Preferences, the L0–L4 approval ladder,
-// Memory, Account. Real wiring: name/email from getMe, quiet hours, push, disconnect
-// Google, sign out, delete account. Stats/memory are display-only until the backend
-// exposes them (shown from getMe.preferences where available, else sensible defaults).
+// Settings (You) — cream alfred-ui-system chrome. Four shortcut tiles act as
+// tabs (Personal / Preferences / Integrations / Security); only the selected
+// tab's rows render below. Subscription lives under Personal. Real wiring:
+// name/email from getMe, quiet hours, push, disconnect Google, sign out, delete.
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -21,24 +20,28 @@ import {
 import type { Me, Subscription, SubscriptionPlan } from "@albert/shared-types";
 import * as LinkingExpo from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
+import { useRouter } from "expo-router";
 
 import { api } from "@/api/client";
 import { useAuth } from "@/api/AuthContext";
 import { registerForPush } from "@/api/push";
+import AlfredMiniAvatar from "@/components/AlfredMiniAvatar";
+import { AlfredIcon } from "@/components/AlfredIcon";
 import { Ic } from "@/components/icons";
 import { useShell } from "@/components/Shell";
 import { useLocale } from "@/context/LocaleContext";
 import { useMailbox } from "@/context/MailboxContext";
 import {
   Btn,
-  Eyebrow,
   Meta,
   Pill,
   SectionTitle,
   Serif,
   SerifEm,
 } from "@/components/ui";
-import { colors, fonts, layout, spacing } from "@/theme/theme";
+import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
+import { surfaces } from "@/theme/surfaces";
+import { ScreenWash } from "@/components/ScreenWash";
 import { translations } from "@/i18n/locales";
 import { clearFreeChatHistory } from "@/lib/freeChatHistory";
 import {
@@ -47,27 +50,46 @@ import {
   requestContactsPermission,
   type ContactsPermissionStatus,
 } from "@/lib/contacts";
+import {
+  getAppleCalendarPermissionStatus,
+  isAppleCalendarNativeAvailable,
+  requestAppleCalendarPermission,
+  type AppleCalendarPermissionStatus,
+} from "@/lib/appleCalendar";
+import {
+  getStoredCalendarWritePrimary,
+  hydrateCalendarWritePrimaryFromMe,
+  setCalendarWritePrimary,
+  type CalendarWritePrimary,
+} from "@/lib/calendarWrite";
 import { SmsSetupGuideSheet } from "@/screens/sheets/SmsSetupGuideSheet";
 
-// Concierge-test pilot window: real billing isn't legally cleared yet
-// (KYC/compliance pending), so the Stripe subscribe entry point stays hidden
-// until that clears. Flip to false once billing is cleared for real users.
-// Plan: user-main-eng-review-test-plan-20260702-172820.md, T8.
-const PILOT_HIDE_BILLING = true;
+type SettingsTab = "personal" | "preferences" | "integrations" | "security";
 
 export function SettingsScreen() {
+  const router = useRouter();
   const { signOut } = useAuth();
   const { openSheet, closeSheet } = useShell();
   const { locale, setLocale, t } = useLocale();
   const s = t.settings ?? translations.en.settings;
   const { syncAndRefresh } = useMailbox();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("personal");
   const [me, setMe] = useState<Me | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [smsToken, setSmsToken] = useState<string | null>(null);
   const [smsWebhookUrl, setSmsWebhookUrl] = useState<string | null>(null);
   const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
+  const [smsShareShortcutUrl, setSmsShareShortcutUrl] = useState<string | null>(
+    null,
+  );
+  const [smsShareImportUrl, setSmsShareImportUrl] = useState<string | null>(null);
   const [contactsStatus, setContactsStatus] = useState<ContactsPermissionStatus | null>(
+    null,
+  );
+  const [appleCalendarStatus, setAppleCalendarStatus] =
+    useState<AppleCalendarPermissionStatus | null>(null);
+  const [writePrimary, setWritePrimary] = useState<CalendarWritePrimary | null>(
     null,
   );
   const [quietHoursDraft, setQuietHoursDraft] = useState("");
@@ -79,8 +101,13 @@ export function SettingsScreen() {
   useEffect(() => {
     api
       .getMe()
-      .then(setMe)
+      .then(async (profile) => {
+        setMe(profile);
+        const primary = await hydrateCalendarWritePrimaryFromMe(profile);
+        setWritePrimary(primary);
+      })
       .catch(() => setMe(null));
+    void getStoredCalendarWritePrimary().then(setWritePrimary);
     api
       .getSmsForwardingInstall()
       .then((cfg) => {
@@ -92,6 +119,16 @@ export function SettingsScreen() {
         setSmsToken(null);
         setSmsShortcutUrl(null);
         setSmsImportUrl(null);
+      });
+    api
+      .getSmsBackfillInstall()
+      .then((cfg) => {
+        setSmsShareShortcutUrl(cfg.shortcut_url);
+        setSmsShareImportUrl(cfg.import_url);
+      })
+      .catch(() => {
+        setSmsShareShortcutUrl(null);
+        setSmsShareImportUrl(null);
       });
     api
       .getSmsForwarding()
@@ -118,16 +155,28 @@ export function SettingsScreen() {
     }
   }, []);
 
+  const refreshAppleCalendarStatus = useCallback(async () => {
+    try {
+      setAppleCalendarStatus(await getAppleCalendarPermissionStatus());
+    } catch {
+      setAppleCalendarStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshContactsStatus();
-  }, [refreshContactsStatus]);
+    void refreshAppleCalendarStatus();
+  }, [refreshContactsStatus, refreshAppleCalendarStatus]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refreshContactsStatus();
+      if (state === "active") {
+        void refreshContactsStatus();
+        void refreshAppleCalendarStatus();
+      }
     });
     return () => sub.remove();
-  }, [refreshContactsStatus]);
+  }, [refreshContactsStatus, refreshAppleCalendarStatus]);
 
   const handleContactsPermission = useCallback(async () => {
     setNote(null);
@@ -152,6 +201,71 @@ export function SettingsScreen() {
     s.contactsDeniedToast,
     s.contactsGrantedToast,
   ]);
+
+  const handleAppleCalendarPermission = useCallback(async () => {
+    setNote(null);
+    if (appleCalendarStatus === "denied") {
+      try {
+        await Linking.openSettings();
+      } catch {
+        setNote(s.appleCalendarDeniedToast);
+      }
+      return;
+    }
+    try {
+      const granted = await requestAppleCalendarPermission();
+      await refreshAppleCalendarStatus();
+      setNote(granted ? s.appleCalendarGrantedToast : s.appleCalendarDeniedToast);
+      if (granted && !writePrimary) {
+        await setCalendarWritePrimary("apple");
+        setWritePrimary("apple");
+      }
+    } catch {
+      setNote(s.appleCalendarDeniedToast);
+    }
+  }, [
+    appleCalendarStatus,
+    refreshAppleCalendarStatus,
+    s.appleCalendarDeniedToast,
+    s.appleCalendarGrantedToast,
+    writePrimary,
+  ]);
+
+  const chooseWritePrimary = useCallback(
+    async (primary: CalendarWritePrimary) => {
+      setNote(null);
+      if (primary === "apple" && appleCalendarStatus !== "granted") {
+        setNote(s.calendarWritePrimaryNeedApple);
+        return;
+      }
+      if (primary === "google" && (me?.connected_mailboxes?.length ?? 0) === 0) {
+        setNote(s.calendarWritePrimaryNeedGoogle);
+        return;
+      }
+      try {
+        await setCalendarWritePrimary(primary);
+        setWritePrimary(primary);
+        setNote(
+          s.calendarWritePrimarySaved(
+            primary === "apple"
+              ? s.calendarWritePrimaryApple
+              : s.calendarWritePrimaryGoogle,
+          ),
+        );
+      } catch (e) {
+        setNote(e instanceof Error ? e.message : "Could not save");
+      }
+    },
+    [
+      appleCalendarStatus,
+      me?.connected_mailboxes?.length,
+      s.calendarWritePrimaryApple,
+      s.calendarWritePrimaryGoogle,
+      s.calendarWritePrimaryNeedApple,
+      s.calendarWritePrimaryNeedGoogle,
+      s.calendarWritePrimarySaved,
+    ],
+  );
 
   const editQuietHours = useCallback(() => {
     if (Alert.prompt) {
@@ -220,6 +334,37 @@ export function SettingsScreen() {
       setNote(s.smsInstallFailed);
     }
   }, [smsShortcutUrl, smsImportUrl, s.smsInstallFailed]);
+
+  const installSmsShareShortcut = useCallback(async () => {
+    const target = smsShareShortcutUrl ?? smsShareImportUrl;
+    if (!target) return;
+    setNote(null);
+    try {
+      await Linking.openURL(target);
+    } catch {
+      if (smsShareImportUrl && target !== smsShareImportUrl) {
+        try {
+          await Linking.openURL(smsShareImportUrl);
+          return;
+        } catch {
+          // fall through
+        }
+      }
+      setNote(s.smsInstallFailed);
+    }
+  }, [smsShareShortcutUrl, smsShareImportUrl, s.smsInstallFailed]);
+
+  const rotateSmsToken = useCallback(async () => {
+    setNote(null);
+    try {
+      const cfg = await api.rotateSmsForwarding();
+      setSmsToken(cfg.token);
+      setSmsWebhookUrl(cfg.webhook_url);
+      setNote(s.smsTokenRotated);
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : s.smsInstallFailed);
+    }
+  }, [s.smsTokenRotated, s.smsInstallFailed]);
 
   const openSmsSetupGuide = useCallback(() => {
     setNote(null);
@@ -383,7 +528,7 @@ export function SettingsScreen() {
   );
 
   const openBillingCheckout = useCallback(async () => {
-    if (PILOT_HIDE_BILLING || billingBusy) return;
+    if (billingBusy) return;
     setNote(null);
     setBillingBusy(true);
     try {
@@ -446,6 +591,19 @@ export function SettingsScreen() {
   const contactsActionLabel =
     contactsStatus === "denied" ? s.contactsOpenSettings : s.contactsAllow;
   const contactsNativeReady = isContactsNativeAvailable();
+  const appleCalendarStatusLabel =
+    appleCalendarStatus === "granted"
+      ? s.appleCalendarStatusGranted
+      : appleCalendarStatus === "denied"
+        ? s.appleCalendarStatusDenied
+        : appleCalendarStatus === "unavailable"
+          ? s.appleCalendarStatusUnavailable
+          : s.appleCalendarStatusUndetermined;
+  const appleCalendarActionLabel =
+    appleCalendarStatus === "denied"
+      ? s.appleCalendarOpenSettings
+      : s.appleCalendarConnect;
+  const appleCalendarNativeReady = isAppleCalendarNativeAvailable();
   const smsHint =
     Platform.OS === "ios" ? s.smsHintIos : s.smsHintAndroid;
   const proPlan = plans[0] ?? null;
@@ -459,342 +617,574 @@ export function SettingsScreen() {
         : null;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.screen}>
+      <ScreenWash />
+      <ScrollView
+        style={styles.scrollTransparent}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.header}>
-        <Eyebrow>{s.you}</Eyebrow>
-        <Serif size={32} style={styles.name}>
-          <SerifEm>{firstName}</SerifEm>
-          {rest}
-        </Serif>
-        <Meta>{me?.email ?? "Connected account"}</Meta>
+        <View style={styles.headerTitleRow}>
+          <Serif size={26} display>
+            {s.you}
+          </Serif>
+          <Pressable style={surfaces.roundButton}>
+            <Ic.Sliders size={18} color="#4B5C7C" stroke={2} />
+          </Pressable>
+        </View>
+        <View style={styles.profileHero}>
+          <AlfredMiniAvatar size={112} accessibilityLabel="Alfred" />
+          <View style={styles.profileCopy}>
+            <View style={styles.profileNameRow}>
+              <Serif size={22} display>
+                <SerifEm>{firstName}</SerifEm>
+                {rest}
+              </Serif>
+              {isSubscribed ? (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeText}>Pro</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.profileEmail}>
+              {me?.email?.endsWith("@deferred.alfred.local")
+                ? s.deferredAccount
+                : (me?.email ?? "Connected account")}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.shortcutGrid}>
+        {(
+          [
+            { id: "personal" as const, icon: Ic.User, label: s.personalInfo },
+            { id: "preferences" as const, icon: Ic.Sliders, label: s.preferences },
+            { id: "integrations" as const, icon: Ic.Bell, label: s.integrations },
+            { id: "security" as const, icon: Ic.Shield, label: s.securityCenter },
+          ] as const
+        ).map((item) => {
+          const selected = activeTab === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setActiveTab(item.id)}
+              style={[styles.shortcutCard, selected && styles.shortcutCardActive]}
+            >
+              <AlfredIcon icon={item.icon} tone="blue" size="small" />
+              <Text
+                style={[
+                  styles.shortcutLabel,
+                  selected && styles.shortcutLabelActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {note ? <Text style={styles.note}>{note}</Text> : null}
 
-      <SectionTitle label={s.language} />
-      <View style={styles.group}>
-        <LanguageRow
-          label={s.english}
-          selected={locale === "en"}
-          onPress={() => setLocale("en")}
-        />
-        <LanguageRow
-          label={s.chinese}
-          selected={locale === "zh"}
-          onPress={() => setLocale("zh")}
-          isLast
-        />
-      </View>
-      <Meta style={styles.langHint}>{s.languageDetail}</Meta>
-
-      <SectionTitle label={s.subscriptionTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
-        <View style={styles.subscriptionHead}>
-          <View style={styles.subscriptionPlanBlock}>
-            <Text style={styles.smsLabel}>{s.subscriptionCurrentPlan}</Text>
-            <Text style={styles.subscriptionPlanName}>
-              {subscription?.plan_name ?? s.subscriptionStatusInactive}
-            </Text>
-            {subscriptionDetail ? (
-              <Meta style={styles.subscriptionMeta}>{subscriptionDetail}</Meta>
-            ) : null}
+      {activeTab === "personal" ? (
+        <>
+          <SectionTitle label={s.personalInfo} />
+          <Meta style={styles.langHint}>{s.account}</Meta>
+          <View style={styles.group}>
+            <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
+            <Row label="Sign out" detail="" onPress={() => void signOut()} />
+            <Row
+              label="Delete account"
+              detail=""
+              warn
+              isLast
+              onPress={deleteAccount}
+            />
           </View>
-          <Pill
-            label={subscriptionStatusLabel(subscription?.status ?? "inactive")}
-            kind={
-              isSubscribed
-                ? "accent"
-                : subscription?.status === "past_due"
-                  ? "warn"
-                  : "muted"
-            }
-          />
-        </View>
-        {proPlan ? (
-          <>
-            <View style={styles.subscriptionDivider} />
-            <Text style={styles.subscriptionPlanName}>
-              {proPlan.name} · {proPlan.price_label}
-            </Text>
-            <Text style={styles.smsLabel}>{s.subscriptionIncludes}</Text>
-            {proPlan.features.map((feature) => (
-              <View key={feature} style={styles.subscriptionFeatureRow}>
-                <View style={styles.subscriptionBullet} />
-                <Text style={styles.subscriptionFeature}>{feature}</Text>
+
+          <SectionTitle label={s.aiAllowanceTitle} />
+          <View style={styles.smsCard}>
+            <View style={styles.subscriptionHead}>
+              <View style={styles.subscriptionPlanBlock}>
+                <Text style={styles.subscriptionPlanName}>
+                  {me?.llm_quota?.capped
+                    ? s.aiAllowanceUsedUp
+                    : s.aiAllowanceRemaining(
+                        `$${(me?.llm_quota?.remaining_usd ?? 8).toFixed(2)}`,
+                        `$${(me?.llm_quota?.cap_usd ?? 8).toFixed(2)}`,
+                      )}
+                </Text>
+                <Meta style={styles.subscriptionMeta}>
+                  {me?.llm_quota
+                    ? `${me.llm_quota.period} · ${me.llm_quota.used_pct}% used`
+                    : s.aiAllowanceLoading}
+                </Meta>
               </View>
-            ))}
-          </>
-        ) : null}
-        <View style={styles.smsActions}>
-          {isSubscribed ? (
-            <Btn
-              label={s.subscriptionManage}
-              kind="ghost"
-              tiny
-              onPress={() => void openBillingManage()}
-            />
-          ) : PILOT_HIDE_BILLING ? (
-            <Meta style={styles.smsHint}>{s.subscriptionComingSoon}</Meta>
-          ) : (
-            <Btn
-              label={
-                subscription?.checkout_available
-                  ? s.subscriptionSubscribe
-                  : s.subscriptionComingSoon
-              }
-              kind="accent"
-              tiny
-              onPress={() => void openBillingCheckout()}
-            />
-          )}
-        </View>
-      </View>
-
-      <SectionTitle label={s.smsTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{smsHint}</Text>
-        <View style={styles.smsActions}>
-          {Platform.OS === "ios" ? (
-            <Btn
-              label={s.smsInstallShortcut}
-              kind="accent"
-              tiny
-              onPress={() => void installSmsShortcut()}
-            />
-          ) : null}
-          {smsToken ? (
-            <Btn
-              label={s.smsCopyToken}
-              kind={Platform.OS === "ios" ? "ghost" : "accent"}
-              tiny
-              onPress={() => void copySmsToken()}
-            />
-          ) : null}
-          <Btn
-            label={s.smsSetupGuide}
-            kind="ghost"
-            tiny
-            onPress={openSmsSetupGuide}
-          />
-        </View>
-        {smsToken ? (
-          <>
-            <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
-            <Text selectable style={styles.smsMono}>
-              {smsToken}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
-        )}
-      </View>
-
-      <SectionTitle label={s.contactsTitle} />
-      <View style={styles.smsCard}>
-        <Text style={styles.smsHint}>{s.contactsHint}</Text>
-        {contactsNativeReady ? (
-          <>
-            <View style={styles.contactsStatusRow}>
+              <Pill
+                label={`${Math.min(100, Math.round(me?.llm_quota?.used_pct ?? 0))}%`}
+                kind={me?.llm_quota?.capped ? "warn" : "muted"}
+              />
+            </View>
+            <View style={styles.quotaTrack}>
               <View
                 style={[
-                  styles.contactsDot,
-                  contactsStatus === "granted" && styles.contactsDotGranted,
-                  contactsStatus === "denied" && styles.contactsDotDenied,
+                  styles.quotaFill,
+                  {
+                    width: `${Math.min(100, me?.llm_quota?.used_pct ?? 0)}%`,
+                    backgroundColor: me?.llm_quota?.capped
+                      ? colors.warn
+                      : colors.accent,
+                  },
                 ]}
               />
-              <Text style={styles.contactsStatusText}>{contactsStatusLabel}</Text>
             </View>
-            {contactsStatus !== "granted" ? (
-              <View style={styles.smsActions}>
+            <Meta style={styles.langHint}>{s.aiAllowanceHint}</Meta>
+          </View>
+
+          <SectionTitle label={s.subscriptionTitle} />
+          <View style={styles.smsCard}>
+            <Text style={styles.subscriptionValue}>{s.subscriptionValueProp}</Text>
+            <View style={styles.subscriptionHead}>
+              <View style={styles.subscriptionPlanBlock}>
+                <Text style={styles.smsLabel}>{s.subscriptionCurrentPlan}</Text>
+                <Text style={styles.subscriptionPlanName}>
+                  {subscription?.plan_name ?? s.subscriptionStatusInactive}
+                </Text>
+                {subscriptionDetail ? (
+                  <Meta style={styles.subscriptionMeta}>{subscriptionDetail}</Meta>
+                ) : null}
+              </View>
+              <Pill
+                label={subscriptionStatusLabel(subscription?.status ?? "inactive")}
+                kind={
+                  isSubscribed
+                    ? "accent"
+                    : subscription?.status === "past_due"
+                      ? "warn"
+                      : "muted"
+                }
+              />
+            </View>
+            {proPlan ? (
+              <>
+                <View style={styles.subscriptionDivider} />
+                <Text style={styles.subscriptionPlanName}>
+                  {proPlan.name} · {proPlan.price_label}
+                </Text>
+                <Text style={styles.smsLabel}>{s.subscriptionIncludes}</Text>
+                {proPlan.features.map((feature) => (
+                  <View key={feature} style={styles.subscriptionFeatureRow}>
+                    <View style={styles.subscriptionBullet} />
+                    <Text style={styles.subscriptionFeature}>{feature}</Text>
+                  </View>
+                ))}
+              </>
+            ) : null}
+            <View style={styles.smsActions}>
+              {isSubscribed ? (
                 <Btn
-                  label={contactsActionLabel}
+                  label={s.subscriptionManage}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void openBillingManage()}
+                />
+              ) : (
+                <Btn
+                  label={s.subscriptionSubscribe}
                   kind="accent"
                   tiny
-                  onPress={() => void handleContactsPermission()}
+                  onPress={() => void openBillingCheckout()}
                 />
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
-        )}
-      </View>
-
-      {/* Integrations */}
-      <SectionTitle label="Integrations" />
-      <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
-      <View style={styles.group}>
-        {connectedMailboxes.map((mailbox) => (
-          <Row
-            key={mailbox.id}
-            label={mailbox.email}
-            detail={
-              mailbox.gmail_modify
-                ? "Gmail · synced"
-                : s.reconnectForRead
-            }
-            onPress={() =>
-              mailbox.gmail_modify
-                ? disconnectMailbox(mailbox.id, mailbox.email)
-                : void linkGmail()
-            }
-          />
-        ))}
-        <Integration
-          name={s.addGmail}
-          detail="Link another inbox"
-          onConnect={() => void linkGmail()}
-        />
-        <Integration
-          name="Google Calendar"
-          detail="Primary calendar"
-          connected={connectedMailboxes.length > 0}
-        />
-        <Integration
-          name="Notion"
-          detail="Connect for class notes & projects"
-          onConnect={() => connectIntegration("Notion")}
-        />
-        <Integration
-          name="Todoist"
-          detail="Sync existing tasks"
-          isLast
-          onConnect={() => connectIntegration("Todoist")}
-        />
-      </View>
-
-      {/* Notifications */}
-      <SectionTitle label={s.notificationsTitle ?? "Notifications"} />
-      <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
-      <View style={styles.group}>
-        <Row label={s.enablePush ?? "Enable push"} detail="" onPress={() => void enablePush()} />
-        <Row
-          label={s.quietHours ?? "Quiet hours"}
-          detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
-          isLast={!editingQuietHours}
-          onPress={editQuietHours}
-        />
-      </View>
-      {editingQuietHours ? (
-        <View style={styles.quietEditor}>
-          <Text style={styles.quietHint}>
-            {s.quietHoursHint ??
-              "Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08)."}
-          </Text>
-          <TextInput
-            value={quietHoursDraft}
-            onChangeText={setQuietHoursDraft}
-            placeholder="22-08"
-            style={styles.quietInput}
-            autoCapitalize="none"
-          />
-          <View style={styles.quietActions}>
-            <Btn
-              label="Save"
-              kind="accent"
-              tiny
-              onPress={() => {
-                const v = quietHoursDraft.trim();
-                if (!v) return;
-                void api
-                  .setQuietHours(v)
-                  .then(() => api.getMe())
-                  .then((m) => {
-                    setMe(m);
-                    setEditingQuietHours(false);
-                    setNote(`Quiet hours set to ${v}.`);
-                  })
-                  .catch((e: unknown) =>
-                    setNote(e instanceof Error ? e.message : "Could not save"),
-                  );
-              }}
-            />
-            <Btn
-              label="Cancel"
-              kind="ghost"
-              tiny
-              onPress={() => setEditingQuietHours(false)}
-            />
+              )}
+            </View>
           </View>
-        </View>
+        </>
       ) : null}
 
-      {/* Approvals & safety */}
-      <SectionTitle label="Approvals & safety" />
-      <View style={styles.group}>
-        <ApprovalRow
-          level="L0 — Read"
-          desc="Summarize, classify, extract"
-          req="auto"
-        />
-        <ApprovalRow
-          level="L1 — Internal drafts"
-          desc="Create drafts, propose tasks"
-          req="auto"
-        />
-        <ApprovalRow
-          level="L2 — Internal writes"
-          desc="Create task, add calendar event"
-          req="optional"
-        />
-        <ApprovalRow
-          level="L3 — Send & invite"
-          desc="Email someone, message, schedule"
-          req="required"
-        />
-        <ApprovalRow
-          level="L4 — Money & legal"
-          desc="Purchase, payment, signed doc"
-          req="strong"
-          isLast
-        />
-      </View>
+      {activeTab === "preferences" ? (
+        <>
+          <SectionTitle label={s.preferences} />
+          <Meta style={styles.langHint}>{s.language}</Meta>
+          <View style={styles.group}>
+            <LanguageRow
+              label={s.english}
+              selected={locale === "en"}
+              onPress={() => setLocale("en")}
+            />
+            <LanguageRow
+              label={s.chinese}
+              selected={locale === "zh"}
+              onPress={() => setLocale("zh")}
+              isLast
+            />
+          </View>
+          <Meta style={styles.langHint}>{s.languageDetail}</Meta>
 
-      {/* Ask chat history */}
-      <SectionTitle label={s.askHistoryTitle} />
-      <View style={styles.group}>
-        <Row
-          label={s.askHistoryClear}
-          detail={s.askHistoryDetail}
-          isLast
-          onPress={() => {
-            Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: s.askHistoryClear,
-                style: "destructive",
-                onPress: () => {
-                  void clearFreeChatHistory().then(() =>
-                    setNote(s.askHistoryCleared),
-                  );
-                },
-              },
-            ]);
-          }}
-        />
-      </View>
+          <Meta style={styles.langHint}>{s.askHistoryTitle}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.askHistoryClear}
+              detail={s.askHistoryDetail}
+              isLast
+              onPress={() => {
+                Alert.alert(s.askHistoryClear, s.askHistoryDetail, [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: s.askHistoryClear,
+                    style: "destructive",
+                    onPress: () => {
+                      void clearFreeChatHistory().then(() =>
+                        setNote(s.askHistoryCleared),
+                      );
+                    },
+                  },
+                ]);
+              }}
+            />
+          </View>
 
-      {/* Account */}
-      <SectionTitle label="Account" />
-      <View style={styles.group}>
-        <Row label="Disconnect Google" detail="" onPress={disconnectGoogle} />
-        <Row label="Sign out" detail="" onPress={() => void signOut()} />
-        <Row
-          label="Delete account"
-          detail=""
-          warn
-          isLast
-          onPress={deleteAccount}
-        />
-      </View>
+          <Meta style={styles.langHint}>
+            {s.notificationsTitle ?? "Notifications"}
+          </Meta>
+          <Meta style={styles.langHint}>{s.notificationsPolicy}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.quietHours ?? "Quiet hours"}
+              detail={quietHours ?? s.quietHoursNotSet ?? "Not set"}
+              isLast={!editingQuietHours}
+              onPress={editQuietHours}
+            />
+          </View>
+          {editingQuietHours ? (
+            <View style={styles.quietEditor}>
+              <Text style={styles.quietHint}>
+                {s.quietHoursHint ??
+                  "Non-urgent alerts pause during these hours (format HH-HH, e.g. 22-08)."}
+              </Text>
+              <TextInput
+                value={quietHoursDraft}
+                onChangeText={setQuietHoursDraft}
+                placeholder="22-08"
+                style={styles.quietInput}
+                autoCapitalize="none"
+              />
+              <View style={styles.quietActions}>
+                <Btn
+                  label="Save"
+                  kind="accent"
+                  tiny
+                  onPress={() => {
+                    const v = quietHoursDraft.trim();
+                    if (!v) return;
+                    void api
+                      .setQuietHours(v)
+                      .then(() => api.getMe())
+                      .then((m) => {
+                        setMe(m);
+                        setEditingQuietHours(false);
+                        setNote(`Quiet hours set to ${v}.`);
+                      })
+                      .catch((e: unknown) =>
+                        setNote(
+                          e instanceof Error ? e.message : "Could not save",
+                        ),
+                      );
+                  }}
+                />
+                <Btn
+                  label="Cancel"
+                  kind="ghost"
+                  tiny
+                  onPress={() => setEditingQuietHours(false)}
+                />
+              </View>
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      {activeTab === "integrations" ? (
+        <>
+          <SectionTitle label={s.integrations} />
+
+          <Meta style={styles.langHint}>{s.contactsTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.contactsHint}</Text>
+            {contactsNativeReady ? (
+              <>
+                <View style={styles.contactsStatusRow}>
+                  <View
+                    style={[
+                      styles.contactsDot,
+                      contactsStatus === "granted" && styles.contactsDotGranted,
+                      contactsStatus === "denied" && styles.contactsDotDenied,
+                    ]}
+                  />
+                  <Text style={styles.contactsStatusText}>
+                    {contactsStatusLabel}
+                  </Text>
+                </View>
+                {contactsStatus !== "granted" ? (
+                  <View style={styles.smsActions}>
+                    <Btn
+                      label={contactsActionLabel}
+                      kind="accent"
+                      tiny
+                      onPress={() => void handleContactsPermission()}
+                    />
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.smsHint}>{s.contactsUnavailableHint}</Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.appleCalendarTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.appleCalendarHint}</Text>
+            {appleCalendarNativeReady ? (
+              <>
+                <View style={styles.contactsStatusRow}>
+                  <View
+                    style={[
+                      styles.contactsDot,
+                      appleCalendarStatus === "granted" &&
+                        styles.contactsDotGranted,
+                      appleCalendarStatus === "denied" &&
+                        styles.contactsDotDenied,
+                    ]}
+                  />
+                  <Text style={styles.contactsStatusText}>
+                    {appleCalendarStatusLabel}
+                  </Text>
+                </View>
+                {appleCalendarStatus !== "granted" ? (
+                  <View style={styles.smsActions}>
+                    <Btn
+                      label={appleCalendarActionLabel}
+                      kind="accent"
+                      tiny
+                      onPress={() => void handleAppleCalendarPermission()}
+                    />
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.smsHint}>
+                {s.appleCalendarUnavailableHint}
+              </Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.calendarWritePrimaryTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{s.calendarWritePrimaryHint}</Text>
+            <View style={styles.smsActions}>
+              <Btn
+                label={
+                  writePrimary === "google"
+                    ? `✓ ${s.calendarWritePrimaryGoogle}`
+                    : s.calendarWritePrimaryGoogle
+                }
+                kind={writePrimary === "google" ? "accent" : "ghost"}
+                tiny
+                onPress={() => void chooseWritePrimary("google")}
+              />
+              <Btn
+                label={
+                  writePrimary === "apple"
+                    ? `✓ ${s.calendarWritePrimaryApple}`
+                    : s.calendarWritePrimaryApple
+                }
+                kind={writePrimary === "apple" ? "accent" : "ghost"}
+                tiny
+                onPress={() => void chooseWritePrimary("apple")}
+              />
+            </View>
+          </View>
+
+          <Meta style={styles.langHint}>{s.smsTitle}</Meta>
+          <View style={styles.smsCard}>
+            <Text style={styles.smsHint}>{smsHint}</Text>
+            <View style={styles.smsActions}>
+              {Platform.OS === "ios" ? (
+                <Btn
+                  label={s.smsInstallShortcut}
+                  kind="accent"
+                  tiny
+                  onPress={() => void installSmsShortcut()}
+                />
+              ) : null}
+              {Platform.OS === "ios" ? (
+                <Btn
+                  label={s.smsInstallShareShortcut}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void installSmsShareShortcut()}
+                />
+              ) : null}
+              {smsToken ? (
+                <Btn
+                  label={s.smsCopyToken}
+                  kind={Platform.OS === "ios" ? "ghost" : "accent"}
+                  tiny
+                  onPress={() => void copySmsToken()}
+                />
+              ) : null}
+              {smsToken ? (
+                <Btn
+                  label={s.smsRotateToken}
+                  kind="ghost"
+                  tiny
+                  onPress={() => void rotateSmsToken()}
+                />
+              ) : null}
+              <Btn
+                label={s.smsSetupGuide}
+                kind="ghost"
+                tiny
+                onPress={openSmsSetupGuide}
+              />
+            </View>
+            {smsToken ? (
+              <>
+                <Text style={styles.smsLabel}>{s.smsTokenLabel}</Text>
+                <Text selectable style={styles.smsMono}>
+                  {smsToken}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.smsHint}>{s.smsTokenPending}</Text>
+            )}
+          </View>
+
+          <Meta style={styles.langHint}>{s.connectedMailboxes}</Meta>
+          <View style={styles.group}>
+            {connectedMailboxes.map((mailbox) => {
+              const needsReconnect = mailbox.sync_status === "error";
+              const detail = needsReconnect
+                ? s.reconnectGrant
+                : mailbox.gmail_modify
+                  ? "Gmail · synced"
+                  : s.reconnectForRead;
+              return (
+                <Row
+                  key={mailbox.id}
+                  label={mailbox.email}
+                  detail={detail}
+                  onPress={() =>
+                    needsReconnect || !mailbox.gmail_modify
+                      ? void linkGmail()
+                      : disconnectMailbox(mailbox.id, mailbox.email)
+                  }
+                />
+              );
+            })}
+            <Integration
+              name={s.addGmail}
+              detail={
+                connectedMailboxes.length === 0
+                  ? s.addGmailFirstDetail
+                  : s.addGmailDetail
+              }
+              onConnect={() => void linkGmail()}
+            />
+            <Integration
+              name="Google Calendar"
+              detail={s.googleCalendarDetail}
+              connected={connectedMailboxes.length > 0}
+            />
+            <Integration
+              name={s.appleCalendarTitle}
+              detail={s.appleCalendarIntegrationDetail}
+              connected={appleCalendarStatus === "granted"}
+              onConnect={
+                appleCalendarStatus === "granted"
+                  ? undefined
+                  : () => void handleAppleCalendarPermission()
+              }
+            />
+            <Integration
+              name="Notion"
+              detail="Connect for class notes & projects"
+              onConnect={() => connectIntegration("Notion")}
+            />
+            <Integration
+              name="Todoist"
+              detail="Sync existing tasks"
+              isLast
+              onConnect={() => connectIntegration("Todoist")}
+            />
+          </View>
+
+          <Meta style={styles.langHint}>{s.keyboardTitle}</Meta>
+          <Meta style={styles.langHint}>{s.keyboardDetail}</Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.keyboardDiagnostics}
+              detail={s.keyboardDiagnosticsDetail}
+              isLast
+              onPress={() => router.push("/keyboard-diagnostics" as never)}
+            />
+          </View>
+
+          <Meta style={styles.langHint}>
+            {s.notificationsTitle ?? "Notifications"}
+          </Meta>
+          <View style={styles.group}>
+            <Row
+              label={s.enablePush ?? "Enable push"}
+              detail=""
+              isLast
+              onPress={() => void enablePush()}
+            />
+          </View>
+        </>
+      ) : null}
+
+      {activeTab === "security" ? (
+        <>
+          <SectionTitle label={s.securityCenter} />
+          <Meta style={styles.langHint}>{s.approvalsTitle}</Meta>
+          <View style={styles.group}>
+            <ApprovalRow
+              level="L0 — Read"
+              desc="Summarize, classify, extract"
+              req="auto"
+            />
+            <ApprovalRow
+              level="L1 — Internal drafts"
+              desc="Create drafts, propose tasks"
+              req="auto"
+            />
+            <ApprovalRow
+              level="L2 — Internal writes"
+              desc="Create task, add calendar event"
+              req="optional"
+            />
+            <ApprovalRow
+              level="L3 — Send & invite"
+              desc="Email someone, message, schedule"
+              req="required"
+            />
+            <ApprovalRow
+              level="L4 — Money & legal"
+              desc="Purchase, payment, signed doc"
+              req="strong"
+              isLast
+            />
+          </View>
+        </>
+      ) : null}
 
       <Meta style={styles.version}>Alfred · 阿福 · made calmly</Meta>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -925,22 +1315,82 @@ function ApprovalRow({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: surfaces.screen,
+  scrollTransparent: { flex: 1, backgroundColor: "transparent" },
   content: {
     paddingHorizontal: layout.padX,
     paddingTop: layout.topPad,
-    paddingBottom: spacing.xl,
+    paddingBottom: layout.tabBarInset,
   },
-  header: { gap: 4, paddingBottom: 8 },
+  header: { gap: 14, paddingBottom: 8 },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  profileHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+  },
+  profileCopy: { flex: 1, minWidth: 0, gap: 6 },
+  profileNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  proBadge: {
+    borderWidth: 1,
+    borderColor: "#E0D7C8",
+    borderRadius: radius.pill,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  proBadgeText: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 9,
+    color: "#9B7A43",
+  },
+  profileEmail: {
+    fontFamily: fonts.sans,
+    fontSize: 11,
+    color: "#77756F",
+  },
+  shortcutGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
+  shortcutCard: {
+    flex: 1,
+    ...surfaces.glassCard,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    gap: 8,
+  },
+  shortcutCardActive: {
+    borderColor: colors.accent,
+    backgroundColor: "#F3F7FF",
+    shadowOpacity: 0.16,
+  },
+  shortcutLabel: {
+    fontFamily: fonts.sans,
+    fontSize: 9,
+    color: "#4D586D",
+    textAlign: "center",
+  },
+  shortcutLabelActive: {
+    fontFamily: fonts.sansMedium,
+    color: colors.accent,
+  },
   name: { marginTop: 2 },
   note: { color: colors.accentInk, fontSize: 13, marginTop: spacing.sm },
 
   group: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
-    overflow: "hidden",
+    ...surfaces.glassRowGroup,
   },
   row: {
     flexDirection: "row",
@@ -954,7 +1404,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.hair,
   },
   rowBody: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: "500", color: colors.ink },
+  rowLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    color: colors.ink,
+  },
   rowLabelFlex: { flex: 1 },
   rowDetail: { marginRight: 6 },
   warnText: { color: colors.warn },
@@ -962,8 +1416,8 @@ const styles = StyleSheet.create({
   intIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.paper2,
+    borderRadius: 12,
+    backgroundColor: colors.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -983,19 +1437,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   approvalLevel: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.sansSemibold,
     fontSize: 11,
-    color: colors.ink3,
-    letterSpacing: 0.4,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.ink4,
   },
   approvalDesc: { fontSize: 13, color: colors.ink2, marginTop: 4 },
 
   langHint: { marginTop: 8, marginBottom: 4 },
   smsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hair,
+    ...surfaces.glassCard,
     padding: 14,
     gap: 10,
     marginBottom: 8,
@@ -1037,6 +1489,17 @@ const styles = StyleSheet.create({
   subscriptionDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.hair,
+  },
+  quotaTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.hair,
+    overflow: "hidden",
+    marginTop: spacing.sm,
+  },
+  quotaFill: {
+    height: "100%",
+    borderRadius: 3,
   },
   subscriptionFeatureRow: {
     flexDirection: "row",

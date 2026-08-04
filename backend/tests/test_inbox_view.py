@@ -340,7 +340,8 @@ def test_needs_decision_from_automated_sender_qualifies() -> None:
     )
 
 
-def test_meeting_scheduling_needs_decision_category_stays_strict() -> None:
+def test_meeting_scheduling_qualifies_like_needs_decision() -> None:
+    """Dinner/meeting invites map to Needs Decision and must appear under 需处理."""
     from app.db.enums import Priority
     from app.db.models import Message
     from app.services.inbox_view import (
@@ -365,7 +366,36 @@ def test_meeting_scheduling_needs_decision_category_stays_strict() -> None:
         message_qualifies_for_needs_action_tab(
             m, category=category, user_replied=False
         )
-        is False
+        is True
+    )
+
+
+def test_deadline_qualifies_like_needs_decision() -> None:
+    from app.db.enums import Priority
+    from app.db.models import Message
+    from app.services.inbox_view import (
+        effective_inbox_category,
+        message_qualifies_for_needs_action_tab,
+    )
+
+    m = Message(
+        user_id="u",
+        source="gmail",
+        external_id="deadline",
+        sender="pm@corp.com",
+        recipients=[],
+        classification=MessageClassification.deadline,
+        action_required=False,
+        priority=Priority.medium,
+        sender_classification="person",
+    )
+    category = effective_inbox_category(m)
+    assert category == "Needs Decision"
+    assert (
+        message_qualifies_for_needs_action_tab(
+            m, category=category, user_replied=False
+        )
+        is True
     )
 
 

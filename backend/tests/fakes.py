@@ -203,6 +203,9 @@ class FakeLLM:
         goal: str,
         tone_options: list[str],
         user_name: str | None = None,
+        style_samples: str | None = None,
+        writing_style_prompt: str | None = None,
+        reply_language: str | None = None,
     ) -> ConversationRepliesResult:
         self.conversation_reply_calls.append(
             {
@@ -210,6 +213,9 @@ class FakeLLM:
                 "goal": goal,
                 "tone_options": tone_options,
                 "user_name": user_name,
+                "style_samples": style_samples,
+                "writing_style_prompt": writing_style_prompt,
+                "reply_language": reply_language,
             }
         )
         if self._conversation_replies is not None:

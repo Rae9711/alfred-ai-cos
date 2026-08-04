@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.rate_limit import allow_request
 from app.db.base import get_db
 from app.schemas.api import SmsIngestOut
 from app.services import forward_inbox, sms_inbox, whatsapp_inbox
@@ -270,6 +271,16 @@ async def sms_inbox_webhook(
 ) -> SmsIngestOut:
     if not x_sms_token:
         raise HTTPException(status_code=401, detail="Missing X-Sms-Token")
+    # Per-token + per-IP caps so a leaked shortcut token can't flood ingestion.
+    token_key = x_sms_token[:24]
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = (forwarded.split(",")[0].strip() if forwarded else None) or (
+        request.client.host if request.client else "unknown"
+    )
+    if not allow_request(f"rl:sms:tok:{token_key}", limit=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Too many SMS forwards")
+    if not allow_request(f"rl:sms:ip:{ip}", limit=120, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Too many SMS forwards")
     user = sms_inbox.find_user_by_sms_token(db, x_sms_token)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid SMS token")
@@ -297,11 +308,12 @@ async def sms_inbox_webhook(
     try:
         payload = SmsIn.model_validate(data)
     except Exception as exc:
+        # Do not log raw SMS body contents (PII).
         logger.warning(
-            "SMS inbox payload validation failed user=%s errors=%s raw=%r",
+            "SMS inbox payload validation failed user=%s errors=%s bytes=%s",
             user.id,
             exc,
-            raw_bytes[:500].decode("utf-8", errors="replace"),
+            len(raw_bytes),
         )
         raise
 

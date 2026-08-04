@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.core.metrics import LLM_LATENCY, LLM_TOKENS, record_llm_usage
+from app.services.llm_quota import assert_bound_user_quota, charge_bound_user_usage
 from app.schemas.llm import (
     AssistantChatReply,
     AssistantInterpretation,
@@ -154,7 +155,8 @@ _CAPTURE_SYSTEM = (
 )
 _INTERPRET_SYSTEM = (
     "You are Albert's assistant agent. Read one free-text request and decide what to do.\n"
-    "If the user asks to schedule, book, block, or hold time on their calendar, set "
+    "If the user asks to schedule, book, block, or hold time on their calendar — including "
+    "Chinese like '明天十一点要去机场', '周五下午3点开会', '明天去 Somerset' — set "
     "intent='book_calendar' and fill title, start, and end.\n"
     "If they ask to move, reschedule, or change the time of an existing event, set "
     "intent='reschedule_calendar', pick event_id from the upcoming-events list, and "
@@ -170,10 +172,11 @@ _INTERPRET_SYSTEM = (
     "set intent='create_task', title to the actionable task (e.g. 'Pay rent', not "
     "'Remind me to pay rent'), due_date as YYYY-MM-DD when a date is implied, and a "
     "short confirmation in reply. Resolve relative dates against the current local time.\n"
-    "Resolve relative phrasing ('tomorrow', 'this evening', '5 to 6pm', 'Friday morning') "
-    "against the given current local time, and return start/end as ISO 8601 WITH the "
-    "user's UTC offset (e.g. 2026-05-28T17:00:00+02:00). Default an event to 1 hour "
-    "if only a start is given. Put a short confirmation in reply.\n"
+    "Resolve relative phrasing ('tomorrow', 'this evening', '5 to 6pm', 'Friday morning', "
+    "'明天十一点', '下午三点') against the given current local time, and return start/end "
+    "as ISO 8601 WITH the user's UTC offset (e.g. 2026-05-28T17:00:00+02:00). Default an "
+    "event to 1 hour if only a start is given. Put a short confirmation in reply, matching "
+    "the user's language (English or Chinese).\n"
     "For texting/SMS (e.g. 'text Mom: hi', '给 Mom 发：明天见'): set intent='none' and "
     "tell them to phrase it that way — Albert drafts the text locally from contacts.\n"
     "For email or inbox-thread replies: set intent='none' and point them to Inbox.\n"
@@ -207,10 +210,28 @@ _NORMALIZE_CONVERSATION_SYSTEM = (
     "next line(s), keep that structure. Prefer source=wechat."
 )
 _CONVERSATION_REPLY_SYSTEM = (
-    "You are Alfred's reply agent for chat (WeChat/SMS-style). Write short replies that "
-    "match each requested tone. Stay grounded in the selected conversation context. "
-    "Never invent facts. Match the language of the conversation (Chinese or English). "
-    "Do not include a signature. Replies should be ready to paste into a chat input."
+    "You are Alfred's reply agent for chat (WeChat/SMS/WhatsApp/iMessage-style). "
+    "Write short chat bubbles that match each requested tone. "
+    "Lines labeled 我 are the USER; 对方 are others. Always write the USER's next "
+    "message in 我's voice — never speak as 对方. "
+    "GROUNDING (critical): Use ONLY people, names, facts, plans, and topics that "
+    "appear in the conversation thread below. Never invent or import names, "
+    "titles (Mr./Ms./Dr.), companies, or greetings from email habits or outside "
+    "knowledge. Do not open with email-style salutations like 'Hi Mr. …' or "
+    "'Dear …' unless that exact phrasing already appears in this chat and fits "
+    "as a natural continuation. Prefer continuing the latest turn the way a "
+    "messenger reply would — usually no formal greeting. "
+    "When style samples from the user's own bubbles in THIS thread are provided, "
+    "mimic only their length/wording/emoji — never copy names from those samples "
+    "if those names are not in the thread. "
+    "Read the FULL thread. Reply to the overall situation and the latest turn. "
+    "Never invent facts. "
+    "CRITICAL — reply language: follow the Language instruction in the user "
+    "message exactly. If the thread is English, write EVERY reply body fully in "
+    "English (no Chinese characters unless quoting the other person). If the "
+    "thread is Chinese, write in Chinese. Do not include a signature. Replies "
+    "must be ready to paste into a chat input. Always pass `replies` as a JSON "
+    "array of objects (not a stringified JSON array)."
 )
 _CONVERSATION_ACTIONS_SYSTEM = (
     "You are Alfred's action extractor for chat conversations. Find actionable items the "
@@ -235,10 +256,7 @@ class AnthropicLLMClient:
         self._client = Anthropic(api_key=settings.anthropic_api_key)
 
     def _meter_usage(self, model: str, usage: Any) -> None:
-        """Record token counts and stash the usage object as the single source of truth.
-
-        Later stages (e.g. per-call cost accounting) read this back via
-        ``metrics.last_llm_usage()`` rather than re-counting tokens themselves."""
+        """Record Prometheus tokens, stash usage, and debit the bound user's monthly cap."""
         if usage is None:
             return
         record_llm_usage(usage)
@@ -248,6 +266,7 @@ class AnthropicLLMClient:
             LLM_TOKENS.labels(model=model, kind="input").inc(input_tokens)
         if output_tokens is not None:
             LLM_TOKENS.labels(model=model, kind="output").inc(output_tokens)
+        charge_bound_user_usage(model=model, usage=usage)
 
     def _structured(
         self,
@@ -258,6 +277,7 @@ class AnthropicLLMClient:
         tool: ToolParam,
     ) -> dict[str, Any]:
         """Force a single tool and return its validated raw input dict."""
+        assert_bound_user_quota()
         with LLM_LATENCY.labels(method="structured", model=model).time():
             response = self._client.messages.create(
                 model=model,
@@ -401,6 +421,7 @@ class AnthropicLLMClient:
 
     def generate_daily_briefing(self, *, today_payload: dict[str, Any]) -> str:
         model = settings.llm_extract_model
+        assert_bound_user_quota()
         with LLM_LATENCY.labels(method="briefing", model=model).time():
             response = self._client.messages.create(
                 model=model,
@@ -525,16 +546,48 @@ class AnthropicLLMClient:
         goal: str,
         tone_options: list[str],
         user_name: str | None = None,
+        style_samples: str | None = None,
+        writing_style_prompt: str | None = None,
+        reply_language: str | None = None,
     ) -> ConversationRepliesResult:
         tones = ", ".join(tone_options) if tone_options else "natural, caring, brief"
         name_line = f"User display name: {user_name}\n" if user_name else ""
+        style_block = ""
+        if style_samples:
+            style_block += (
+                f"{style_samples}\n"
+                "(Match voice only from these THIS-thread bubbles; do not introduce "
+                "any name that is not already in the conversation thread.)\n\n"
+            )
+        # Intentionally ignore writing_style_prompt (email Sent-mail style). It
+        # leaks greetings like "Hi Mr. Fortino" into chat replies.
+        _ = writing_style_prompt
+        if reply_language == "en":
+            lang_line = (
+                "Language: ENGLISH. Write every reply body entirely in English. "
+                "Do not use Chinese characters except when quoting someone.\n"
+            )
+        elif reply_language == "zh":
+            lang_line = "Language: CHINESE. Write every reply body in Chinese.\n"
+        else:
+            lang_line = (
+                "Language: match the dominant language of the conversation thread "
+                "(English thread → English replies; Chinese thread → Chinese replies).\n"
+            )
         raw = self._structured(
             model=settings.llm_draft_model,
             system=_CONVERSATION_REPLY_SYSTEM,
             user_content=(
-                f"{name_line}Reply goal: {goal or 'natural continuation'}\n"
+                f"{name_line}{style_block}{lang_line}"
+                f"Reply goal: {goal or 'natural continuation'}\n"
                 f"Produce one reply for each tone: {tones}\n\n"
-                f"Conversation context:\n{context}"
+                "Grounding rules:\n"
+                "- Reply only about what is in the thread below.\n"
+                "- Do not address anyone by a name/title unless that name appears "
+                "in the thread as someone you are talking to.\n"
+                "- No email salutations or invented recipients.\n\n"
+                "Conversation thread (我 = user, 对方 = other; reply as 我):\n"
+                f"{context}"
             ),
             tool=_tool_for(
                 ConversationRepliesResult, "record_replies", "Record the reply suggestions."

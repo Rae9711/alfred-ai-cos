@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alfred — full UI preview (wechat-reply mascot)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f8f5ef;
+      --surface: #fffdf9;
+      --navy: #0b1d3f;
+      --blue: #2f66c8;
+      --muted: #7b7b77;
+      --line: #e8e2d8;
+      --shadow: 0 16px 38px rgba(45,61,90,.11), 0 3px 8px rgba(45,61,90,.06);
+      font-family: "DM Sans", "PingFang SC", -apple-system, sans-serif;
+      color: #0d1d3b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,.85), transparent 35%),
+        linear-gradient(180deg, #f5f2ec, #ece8df);
+      padding: 36px 24px 64px;
+    }
+    .page-title {
+      max-width: 1280px;
+      margin: 0 auto 28px;
+    }
+    .page-title h1 {
+      margin: 0 0 8px;
+      font-family: "Noto Serif SC", Georgia, serif;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+    .page-title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 640px;
+    }
+    .page-title code {
+      font-size: 12px;
+      background: rgba(255,253,249,.9);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      justify-content: center;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+    .phone {
+      width: 320px;
+      height: 680px;
+      position: relative;
+      overflow: hidden;
+      border-radius: 34px;
+      background: var(--bg);
+      border: 1px solid rgba(130,120,100,.12);
+      box-shadow: 0 30px 80px rgba(50,47,40,.18), inset 0 1px 0 rgba(255,255,255,.85);
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-label {
+      position: absolute;
+      top: -26px;
+      left: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #5e5a53;
+      letter-spacing: 0.02em;
+    }
+    .status {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .screen {
+      flex: 1;
+      overflow: hidden;
+      padding: 0 14px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .nav {
+      height: 68px;
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      padding: 4px 12px 8px;
+      background: rgba(250,247,241,.96);
+      border-top: 1px solid rgba(150,140,120,.14);
+    }
+    .nav button {
+      border: 0;
+      background: transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      color: #8d8b85;
+      font-size: 8px;
+      font-family: inherit;
+    }
+    .nav button.active { color: var(--blue); }
+    .nav .center {
+      transform: translateY(-14px);
+    }
+    .nav svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .mascot {
+      width: var(--s, 70px);
+      height: var(--s, 70px);
+      object-fit: contain;
+      filter: drop-shadow(0 8px 10px rgba(45,61,90,.16));
+      display: block;
+    }
+    .eyebrow { font-size: 10px; color: #7e7b75; }
+    h2 {
+      margin: 4px 0 0;
+      font-family: "Noto Serif SC", Georgia, serif;
+      font-size: 22px;
+      letter-spacing: -0.04em;
+      font-weight: 600;
+    }
+    h2 em { font-family: Georgia, serif; color: #17376d; font-style: normal; }
+    .lead { margin: 0; font-size: 11px; color: #74736f; line-height: 1.5; }
+    .surface {
+      background: rgba(255,253,249,.94);
+      border: 1px solid rgba(157,147,127,.13);
+      box-shadow: var(--shadow);
+      border-radius: 18px;
+    }
+    .tile {
+      width: 42px; height: 42px; border-radius: 14px;
+      display: grid; place-items: center;
+      border: 1px solid rgba(74,88,117,.09);
+      box-shadow: 0 6px 14px rgba(45,61,90,.1);
+      flex-shrink: 0;
+    }
+    .tile.blue { background: linear-gradient(145deg,#fff,#e8f0ff); color: #2f66c8; }
+    .tile.purple { background: linear-gradient(145deg,#fff,#eeeaff); color: #625ae6; }
+    .tile.green { background: linear-gradient(145deg,#fff,#e5f7ec); color: #36a565; }
+    .tile.yellow { background: linear-gradient(145deg,#fff,#fff3d5); color: #d49b1c; }
+    .tile svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.1; }
+    .row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 11px;
+    }
+    .row strong { display: block; font-size: 12px; }
+    .row span { font-size: 10px; color: var(--muted); }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid rgba(130,120,100,.14);
+      background: #fffaf4;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 9px;
+      color: #5e5a53;
+    }
+    .chip.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .card { padding: 12px; }
+    .card h3 { margin: 0 0 4px; font-size: 12px; }
+    .card p { margin: 0; font-size: 10px; color: var(--muted); line-height: 1.45; }
+    .cta {
+      width: 100%;
+      height: 36px;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg,#f6f2ec,#e8e1d8);
+      color: #26446f;
+      font-weight: 600;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: inherit;
+    }
+    .hub-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 8px;
+      padding-top: 8px;
+    }
+    .hub-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      text-align: center;
+      font-size: 9px;
+      color: #465574;
+    }
+    .hub-actions .tile { margin: 0 auto 4px; width: 36px; height: 36px; border-radius: 12px; }
+    .paste-area {
+      min-height: 110px;
+      padding: 12px;
+      font-size: 12px;
+      color: #8a867f;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr 32px;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      margin-top: auto;
+    }
+    .composer input {
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-size: 11px;
+      font-family: inherit;
+    }
+    .send {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue); color: #fff; border: 0;
+      display: grid; place-items: center;
+    }
+    .send svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .live-link {
+      display: inline-flex;
+      margin-top: 14px;
+      height: 38px;
+      padding: 0 16px;
+      align-items: center;
+      border-radius: 12px;
+      background: linear-gradient(180deg,#f6f2ec,#e8e1d8);
+      color: #26446f;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 13px;
+    }
+    .settings-list button {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      padding: 12px 0;
+      font-size: 11px;
+      color: #465574;
+      font-family: inherit;
+    }
+    .settings-list button:last-child { border-bottom: 0; }
+    .profile-hero {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .profile-hero h3 { margin: 0; font-size: 18px; font-family: "Noto Serif SC", serif; }
+    .profile-hero p { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="page-title">
+    <h1>Alfred · 全屏预览</h1>
+    <p>
+      Avatar: tuxedo robot from <code>cursor/wechat-reply-workflow-0b69</code>
+      → <code>mobile/assets/alfred-mascot.png</code>.
+      IA: center mascot = Alfred hub · 对话 = WeChat paste.
+    </p>
+    <a class="live-link" href="./alfred-ui-system/">Open interactive Vite preview</a>
+  </div>
+
+  <div class="gallery">
+    <!-- HOME -->
+    <div style="position:relative">
+      <div class="phone-label">首页 · Home</div>
+      <div class="phone" data-screen="home">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eyebrow">管家</div>
+              <h2>下午好，<em>管家</em></h2>
+              <p class="lead">安排日程、发短信、设提醒，或速记。</p>
+            </div>
+            <img class="mascot" style="--s:72px;width:72px;height:72px" src="./alfred-mascot.png" alt="Alfred" />
+          </div>
+          <div class="surface row">
+            <div class="tile blue"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+            <div><strong>今天暂无日程安排</strong><span>你有一段完整的专注时间块。</span></div>
+            <span>›</span>
+          </div>
+          <div class="surface card">
+            <div class="eyebrow">Alfred 建议</div>
+            <h3 style="font-family:Noto Serif SC,serif;font-size:16px;margin:6px 0">安排一个时间块</h3>
+            <p>Provide responses to the Inter-Document RFI.</p>
+            <button class="cta" style="margin-top:10px">加入日历</button>
+          </div>
+          <div class="surface composer">
+            <input placeholder="问管家…" readonly />
+            <button class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+        <nav class="nav" aria-label="tabs">
+          <button class="active"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- INBOX -->
+    <div style="position:relative">
+      <div class="phone-label">收件箱 · Inbox</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div>
+            <div class="eyebrow">需要你处理</div>
+            <h2>收件箱</h2>
+          </div>
+          <div class="chip-row">
+            <span class="chip on">待处理 8</span>
+            <span class="chip">未读</span>
+            <span class="chip">全部</span>
+            <span class="chip">短信</span>
+          </div>
+          <div class="surface card" style="display:grid;grid-template-columns:42px 1fr;gap:10px">
+            <div class="tile blue"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/></svg></div>
+            <div>
+              <h3>Leo · 明天一起吃饭？</h3>
+              <p>确认时间后我帮你回一封短信。</p>
+            </div>
+          </div>
+          <div class="surface card" style="display:grid;grid-template-columns:42px 1fr;gap:10px">
+            <div class="tile green"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+            <div>
+              <h3>Mom · 短信</h3>
+              <p>明天见 — 点开即可起草回复。</p>
+            </div>
+          </div>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ALFRED HUB -->
+    <div style="position:relative">
+      <div class="phone-label">中间 Avatar · Alfred hub</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div class="hub-hero">
+            <div class="eyebrow">管家</div>
+            <img class="mascot" style="--s:108px;width:108px;height:108px" src="./alfred-mascot.png" alt="Alfred" />
+            <h2>下午好，<em>管家</em></h2>
+            <p class="lead">查/订日历、按姓名起草短信、设置提醒。</p>
+          </div>
+          <div class="hub-actions">
+            <div><div class="tile blue"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>日程</div>
+            <div><div class="tile green"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>短信</div>
+            <div><div class="tile yellow"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>提醒</div>
+            <div><div class="tile purple"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg></div>速记</div>
+          </div>
+          <div class="surface card">
+            <p style="font-family:Noto Serif SC,serif;font-size:13px;color:#0d1d3b;line-height:1.5;margin:0">
+              我可以帮你查看或预订日历、按名字起草短信或邮件、设置提醒 — 发送前都会先请你确认。
+            </p>
+          </div>
+          <div class="surface composer">
+            <input placeholder="问管家…" readonly />
+            <button class="send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- CHATS / WECHAT PASTE -->
+    <div style="position:relative">
+      <div class="phone-label">对话 · WeChat paste</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eyebrow">对话</div>
+              <h2>对话</h2>
+            </div>
+            <div class="tile purple"><svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8H4l4.9 3.6L7 18l5-3.6L17 18l-1.9-5.6L20 8.8h-6.1z"/></svg></div>
+          </div>
+          <p class="lead">把对话变成 <em style="font-family:Georgia,serif;color:#17376d;font-style:normal">可执行行动</em>。粘贴微信多选复制内容。</p>
+          <div class="surface row">
+            <div class="tile purple"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
+            <div><strong>从剪贴板导入</strong><span>粘贴微信多选聊天，起草回复并提取跟进。</span></div>
+          </div>
+          <div style="text-align:center;font-size:9px;font-weight:600;letter-spacing:1px;color:#8a867f;text-transform:uppercase">或粘贴到下方</div>
+          <div class="surface paste-area">6330
+我需要审一下
+
+Rui
+一吃一堆</div>
+          <button class="cta">解析对话</button>
+          <p class="lead">也可以用 Alfred 键盘的「展开」把对话交到 App 里。</p>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div style="position:relative">
+      <div class="phone-label">我的 · Settings</div>
+      <div class="phone">
+        <div class="status"><span>9:41</span><span>▌▌▌ 🔋</span></div>
+        <div class="screen">
+          <h2>我的</h2>
+          <div class="profile-hero">
+            <img class="mascot" style="--s:96px;width:96px;height:96px" src="./alfred-mascot.png" alt="Alfred" />
+            <div>
+              <h3>Ray</h3>
+              <p>Pro · 管家在线</p>
+            </div>
+          </div>
+          <div class="surface card settings-list" style="padding:0 14px">
+            <button>我的计划 <span>›</span></button>
+            <button>快捷指令 <span>›</span></button>
+            <button>集成应用 <span>›</span></button>
+            <button>数据与隐私 <span>›</span></button>
+            <button>关于 Alfred <span>›</span></button>
+          </div>
+        </div>
+        <nav class="nav">
+          <button><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>首页</button>
+          <button><svg viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>收件箱</button>
+          <button class="center"><img class="mascot" style="--s:56px;width:56px;height:56px" src="./alfred-mascot.png" alt="" /></button>
+          <button><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</button>
+          <button class="active"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>我的</button>
+        </nav>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

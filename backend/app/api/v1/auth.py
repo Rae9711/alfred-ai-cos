@@ -1,24 +1,26 @@
-"""Google OAuth login + connection routes (PRD 9.1, 12.1, 12.2).
+"""Auth routes: Google OAuth, Sign in with Apple, and session minting.
 
-The same Google consent grants Gmail + Calendar and serves as Albert's login.
-On callback Albert upserts the User, stores encrypted tokens, and returns its own
-session JWT. State is signed into a short-lived JWT to bind the callback safely.
+Google OAuth still creates a User + ConnectedAccount in one consent. Apple and
+"continue without Gmail" mint an Albert JWT without a mailbox — Gmail can be
+linked later via /auth/google/link/start.
 """
 
 from __future__ import annotations
 
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.rate_limit import allow_request
 from app.core.security import (
     create_session_token,
     decode_session_token,
@@ -28,8 +30,8 @@ from app.core.security import (
 from app.db.base import get_db
 from app.db.enums import Provider, SyncStatus
 from app.db.models import ConnectedAccount, User
-from app.schemas.api import AuthStartResponse, SessionToken
-from app.services import google_oauth
+from app.schemas.api import AppleSignInRequest, AuthStartResponse, SessionToken
+from app.services import apple_auth, google_oauth
 from app.services.crypto import encrypt_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -38,6 +40,22 @@ _bearer = HTTPBearer(auto_error=True)
 
 # The native app deep link. Used when the app doesn't supply its own redirect.
 _DEFAULT_REDIRECT = "albert://auth"
+_ANON_EMAIL_DOMAIN = "local.alfred"
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or "unknown"
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _enforce_auth_rate(request: Request, bucket: str, *, limit: int, window: int) -> None:
+    ip = _client_ip(request)
+    if not allow_request(f"rl:auth:{bucket}:{ip}", limit=limit, window_seconds=window):
+        raise HTTPException(status_code=429, detail="Too many requests — try again shortly")
 
 
 def _validate_redirect(redirect: str | None) -> str:
@@ -136,6 +154,9 @@ def _upsert_google_account(
     else:
         account.token_ciphertext = ciphertext
         account.scopes = token_payload.get("scopes", [])
+        # Fresh grant — clear a prior reconnect/error so UI + sync can recover.
+        account.sync_status = SyncStatus.never
+        account.sync_error = None
     return account
 
 
@@ -187,6 +208,82 @@ def google_callback(
     # `?`/`&` join handles both albert://auth and exp://host/--/auth (which has a path).
     sep = "&" if "?" in redirect_target else "?"
     return RedirectResponse(url=f"{redirect_target}{sep}token={session}")
+
+
+@router.post("/apple", response_model=SessionToken)
+def apple_sign_in(
+    body: AppleSignInRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SessionToken:
+    """Verify Apple's identity token and mint an Albert session (no Gmail required)."""
+    _enforce_auth_rate(request, "apple", limit=20, window=60)
+    identity = apple_auth.verify_identity_token(body.identity_token)
+
+    user = db.scalar(select(User).where(User.apple_sub == identity.sub))
+    email_hint = None
+    if body.email and body.email.strip():
+        email_hint = body.email.strip().lower()
+    elif identity.email:
+        email_hint = identity.email
+
+    if user is None and email_hint:
+        # First Apple grant often includes email — merge onto an existing Google user.
+        user = db.scalar(select(User).where(User.email == email_hint))
+
+    if user is None:
+        # Prefer real email when Apple shares it; otherwise a stable synthetic address.
+        email = email_hint or apple_auth.apple_local_email(identity.sub)
+        # Collision: synthetic shouldn't collide; real email taken without apple_sub
+        # was handled above. If synthetic somehow exists, attach apple_sub.
+        existing = db.scalar(select(User).where(User.email == email))
+        if existing is not None:
+            user = existing
+        else:
+            user = User(
+                email=email,
+                name=(body.full_name.strip() if body.full_name else None) or None,
+                apple_sub=identity.sub,
+                preferences={"auth_provider": "apple"},
+            )
+            db.add(user)
+            db.flush()
+
+    if user.apple_sub is None:
+        user.apple_sub = identity.sub
+    prefs = dict(user.preferences or {})
+    prefs.setdefault("auth_provider", "apple")
+    if email_hint and apple_auth.is_apple_local_email(user.email):
+        prefs["apple_email"] = email_hint
+    if body.full_name and body.full_name.strip() and not user.name:
+        user.name = body.full_name.strip()
+    user.preferences = prefs
+    db.commit()
+
+    return SessionToken(access_token=create_session_token(user.id))
+
+
+@router.post("/continue-without-gmail", response_model=SessionToken)
+def continue_without_gmail(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SessionToken:
+    """Mint a session for a new user with no mailbox. Gmail can be linked in Settings.
+
+    Prefer Sign in with Apple when available — this path exists for regions where
+    Google/Apple identity is blocked or unavailable, so users can still use SMS,
+    Apple Calendar, capture, and Alfred chat.
+    """
+    # Stricter than SIWA: this mints anonymous accounts with no identity proof.
+    _enforce_auth_rate(request, "anon", limit=5, window=60)
+    email = f"anon.{uuid.uuid4().hex}@{_ANON_EMAIL_DOMAIN}"
+    user = User(
+        email=email,
+        preferences={"auth_provider": "anonymous"},
+    )
+    db.add(user)
+    db.commit()
+    return SessionToken(access_token=create_session_token(user.id))
 
 
 @router.post("/logout", status_code=204)

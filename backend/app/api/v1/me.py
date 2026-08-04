@@ -23,6 +23,7 @@ from app.db.models import (
     Device,
     DraftReply,
     ExecutionLog,
+    LlmUsagePeriod,
     Message,
     Notification,
     SpendLimit,
@@ -31,6 +32,7 @@ from app.db.models import (
 )
 from app.schemas.api import (
     ConnectedMailboxOut,
+    LlmQuotaOut,
     MeOut,
     OnboardingPrefs,
     SmsForwardingOut,
@@ -40,6 +42,7 @@ from app.schemas.api import (
 from app.services import google_oauth, learning, sms_inbox
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
+from app.services.llm_quota import get_quota_status
 from app.services.message_read import account_has_gmail_modify
 from app.services.sms_shortcut import build_sms_backfill_install_urls, build_sms_install_urls
 
@@ -55,6 +58,7 @@ _USER_SCOPED = (
     ExecutionLog,
     ActionProposal,
     SpendLimit,
+    LlmUsagePeriod,
     DraftReply,
     Notification,
     Device,
@@ -85,14 +89,31 @@ def _me(db: Session, user: User) -> MeOut:
         for a in list_google_accounts(db, user.id)
         if a.provider_account_email
     ]
+    prefs = dict(user.preferences)
+    display_email = user.email
+    # Synthetic Apple / anonymous addresses are not useful in Settings — prefer
+    # the contact email Apple shared, or a short label.
+    if user.email.endswith("@signin.apple.alfred"):
+        display_email = str(prefs.get("apple_email") or "Apple ID")
+    elif user.email.endswith("@local.alfred"):
+        display_email = str(prefs.get("display_email") or "Alfred account")
+    quota = get_quota_status(db, user.id)
     return MeOut(
         id=user.id,
-        email=user.email,
+        email=display_email,
         name=user.name,
         timezone=user.timezone,
-        preferences=dict(user.preferences),
+        preferences=prefs,
         onboarded=_is_onboarded(user),
         connected_mailboxes=mailboxes,
+        llm_quota=LlmQuotaOut(
+            period=quota.period,
+            cap_usd=quota.cap_usd,
+            used_usd=quota.used_usd,
+            remaining_usd=quota.remaining_usd,
+            used_pct=quota.used_pct,
+            capped=quota.capped,
+        ),
     )
 
 
@@ -196,6 +217,19 @@ def test_sms_forwarding(
         deduped=result.deduped,
         draft_created=result.draft_created,
     )
+
+
+@router.post("/me/sms-forwarding/rotate", response_model=SmsForwardingOut)
+def rotate_sms_forwarding(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SmsForwardingOut:
+    """Invalidate the current SMS webhook token and mint a new one."""
+    token = sms_inbox.rotate_sms_forward_token(user)
+    db.commit()
+    settings = get_settings()
+    base = settings.app_base_url.rstrip("/")
+    return SmsForwardingOut(webhook_url=f"{base}/api/v1/inbox/sms", token=token)
 
 
 @router.post("/onboarding", response_model=MeOut)

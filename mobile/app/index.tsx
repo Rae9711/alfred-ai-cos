@@ -7,6 +7,10 @@ import { ActivityIndicator, View } from "react-native";
 
 import { useAuth } from "@/api/AuthContext";
 import { api } from "@/api/client";
+import {
+  readOnboardedCache,
+  writeOnboardedCache,
+} from "@/lib/onboardingCache";
 import { colors } from "@/theme/theme";
 
 export default function Index() {
@@ -14,12 +18,24 @@ export default function Index() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (authed) {
-      api
-        .getMe()
-        .then((me) => setOnboarded(me.onboarded))
-        .catch(() => setOnboarded(true)); // on error, do not trap the user in onboarding
-    }
+    if (!authed) return;
+    let cancelled = false;
+    void (async () => {
+      // Prefer cached gate so tabs mount without a blocking /me round-trip.
+      const cached = await readOnboardedCache();
+      if (!cancelled && cached !== null) setOnboarded(cached);
+      try {
+        const me = await api.getMe();
+        if (cancelled) return;
+        setOnboarded(me.onboarded);
+        await writeOnboardedCache(me.onboarded);
+      } catch {
+        if (!cancelled && cached === null) setOnboarded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [authed]);
 
   if (authed === false) return <Redirect href="/connect" />;

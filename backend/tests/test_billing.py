@@ -26,6 +26,14 @@ def test_default_subscription_is_free_inactive(user: User) -> None:
     assert sub["checkout_available"] is False
 
 
+def test_plan_catalog_is_seventeen_monthly() -> None:
+    plans = billing.list_plans()
+    assert len(plans) == 1
+    assert plans[0]["price_label"] == "$17/mo"
+    assert plans[0]["price_minor"] == 1700
+    assert plans[0]["interval"] == "month"
+
+
 def test_subscription_reads_preferences(user: User) -> None:
     user.preferences = {
         "subscription_plan": "pro_monthly",

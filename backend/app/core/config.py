@@ -40,12 +40,20 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_oauth_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
 
+    # Sign in with Apple. For native iOS SIWA this is the app's bundle ID
+    # (com.haoruiwang.alfred). Empty disables POST /auth/apple (returns 503).
+    apple_client_id: str = ""
+
     # LLM
     llm_provider: Literal["anthropic"] = "anthropic"
     anthropic_api_key: str = ""
     llm_classify_model: str = "claude-haiku-4-5"
     llm_extract_model: str = "claude-sonnet-4-6"
     llm_draft_model: str = "claude-sonnet-4-6"
+    # Per-user monthly AI spend cap (USD). Metered from Anthropic token usage at
+    # published list prices. Default $8 ≈ profitable cushion vs $17 ARPU; set ~15
+    # for a hard break-even ceiling; 0 disables the cap (dev only).
+    llm_monthly_cap_usd: float = 8.0
 
     # Transcription (voice capture). Provider-agnostic; "none" disables voice and the
     # endpoint returns 501. "openai" uses the Whisper API when openai_api_key is set.

@@ -59,6 +59,32 @@ Rui🌞
 已吃
 """
 
+EDGE_CASES = {
+    "yesterday_ts": """张三 昨天 21:05
+明天把合同发我
+
+李四 今天 09:30
+好，上午发给你
+""",
+    "system_noise": """— 昨天 —
+
+6330
+我需要审一下
+
+以上是历史消息
+
+Rui🌞
+[动画表情]
+
+Rui🌞
+一吃一堆
+""",
+    "inline_colon": """6330：我需要审一下
+Rui🌞：一吃一堆
+6330：昨晚的感觉还没消化
+""",
+}
+
 
 def main() -> int:
     with engine.connect() as conn:
@@ -120,6 +146,11 @@ def main() -> int:
             f"{sum(1 for m in parsed.messages if m.is_selected)} selected"
         )
 
+        for name, raw in EDGE_CASES.items():
+            edge = conversation_service.parse_wechat_deterministic(raw)
+            assert edge is not None and len(edge.messages) >= 2, f"edge case {name} failed"
+            print(f"OK  edge[{name}]: {len(edge.messages)} messages")
+
         analyzed = conversation_service.analyze_conversation(
             parsed, goal="comfort", user=user, timezone="America/New_York"
         )
@@ -133,6 +164,7 @@ def main() -> int:
             print(f"     action[{a.type}/{a.tier}]: {a.title} ← «{a.evidence}»")
 
         for action in analyzed.actions:
+            set_reminder = action.type.value == "follow_up" and bool(action.suggested_time)
             res = conversation_service.confirm_action(
                 db,
                 user,
@@ -144,11 +176,14 @@ def main() -> int:
                     evidence_message_ids=action.evidence_message_ids,
                     confidence=action.confidence,
                     suggested_time=action.suggested_time,
-                    set_reminder=False,
+                    set_reminder=set_reminder,
                 ),
                 timezone="America/New_York",
             )
-            print(f"OK  confirm {res.kind}: id={res.id} evidence={res.evidence!r}")
+            print(
+                f"OK  confirm {res.kind}: id={res.id} "
+                f"remind_at={res.remind_at} evidence={res.evidence!r}"
+            )
 
         inbox = conversation_service.list_conversation_inbox(db, user.id)
         print(f"OK  inbox: counts={inbox.counts} items={len(inbox.items)}")

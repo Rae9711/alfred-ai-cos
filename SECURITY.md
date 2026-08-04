@@ -7,8 +7,10 @@ the foundation does today and what it owes before it touches real user data at s
 
 ### OAuth, not passwords
 
-Google OAuth is the only login. Albert never sees or stores a Google password. The same
-consent grants Gmail and Calendar and serves as Albert's sign-in.
+Google OAuth and Sign in with Apple mint Albert session JWTs. Albert never sees or
+stores a Google or Apple password. Google consent still grants Gmail and Calendar when
+the user connects a mailbox; Apple / “continue without Gmail” create a session with no
+`ConnectedAccount` until the user links Gmail from Settings.
 
 ### Token encryption at rest
 
@@ -113,21 +115,37 @@ can otherwise sync the same mailbox concurrently, doubling Gmail API traffic and
 the stored `gmail_history_id` cursor. The lock auto-expires (so a crashed worker can't wedge
 it) and fails open if Redis is unreachable.
 
+### Per-user monthly LLM spend cap
+
+Every Anthropic call is attributed to the authenticated (or sync) user and estimated in USD
+cents from published list prices (`app/services/llm_quota.py`). Spend accumulates in
+`llm_usage_periods` for the calendar month (`YYYY-MM`). When `LLM_MONTHLY_CAP_USD` is
+reached, further LLM calls raise `LlmQuotaExceeded` (HTTP 402 on interactive routes;
+background classification skips the message). `GET /me` returns remaining allowance for the
+Settings UI. Cap `0` disables enforcement (dev only). Default `$8` is a profitable cushion
+vs `$17` ARPU; ~`$15` is a hard break-even ceiling after Stripe fees.
+
 ## What this foundation does not yet do
 
 These are required before a real beta, tracked in TODO.md:
 
-- **Log redaction in app logs.** Audit-payload redaction exists; a structured app-logging
-  policy that scrubs email content, tokens, and PII does not yet (PRD 13.2).
-- **Rate limiting** on the API and on Gmail calls.
 - **Role-based backend access.**
 - **Multi-currency spend accounting.** The `SpendLimit` is a single-currency per-period cap,
-  not a ledger; cross-currency charges are not normalized against the cap.
+  not a ledger; cross-currency charges are not normalized against the cap. (LLM quota is
+  USD-only and separate from Stripe `SpendLimit`.)
 - **No model training on user data.** The Anthropic API is used for inference only. Make
   this an explicit, enforced policy and surface it in the privacy settings.
+- **Broader API rate limits** beyond auth minting and the SMS webhook (Gmail quota
+  handling exists separately via sync locks / retries).
 
 ### Recently closed
 
+- **Log redaction in app logs.** Structured logging scrubs tokens and sensitive fields via
+  `app.core.redaction` (PRD 13.2 baseline).
+- **Auth + SMS webhook rate limiting.** Redis fixed-window limits on Apple / anonymous
+  session minting and `POST /inbox/sms` (fail-open if Redis is down).
+- **Indexed SMS forward tokens.** `users.sms_forward_token` replaces a full-table scan of
+  preferences JSON; Settings can rotate the token.
 - **OAuth token refresh.** All Gmail/Calendar access goes through
   `connected_accounts.refresh_google_token`, which refreshes the access token when expired,
   re-encrypts and persists the rotated payload, and raises `TokenReconnectRequired` (surfaced

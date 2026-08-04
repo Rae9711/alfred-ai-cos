@@ -189,19 +189,38 @@ def accept_proposal(
     proposal_id: str,
     *,
     timezone: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    write_target: str | None = None,
 ) -> tuple[ScheduleProposal, str]:
-    """Book the proposal on the user's calendar via the audited capability spine."""
+    """Book the proposal on the user's calendar via the audited capability spine.
+
+    When write_target/preference is Apple, mark accepted without Google write —
+    the mobile client creates the EventKit event.
+    """
     from app.services.assistant import resolve_timezone
+    from app.services.calendar_write import should_write_apple
 
     proposal = get_proposal(db, user.id, proposal_id)
     if proposal.status != ScheduleProposalStatus.pending:
         raise ValueError("Proposal is not pending")
 
     resolve_timezone(db, user, timezone or proposal.timezone)
+    start_dt = _parse_iso(start) if start else proposal.start_time
+    end_dt = _parse_iso(end) if end else proposal.end_time
+    if end_dt <= start_dt:
+        end_dt = start_dt + timedelta(hours=1)
+
+    if should_write_apple(user, write_target=write_target):
+        proposal.status = ScheduleProposalStatus.accepted
+        proposal.calendar_event_id = None
+        db.commit()
+        return proposal, f"Accepted “{proposal.title}” for Apple Calendar"
+
     target: dict[str, str] = {
         "title": proposal.title,
-        "start": proposal.start_time.isoformat(),
-        "end": proposal.end_time.isoformat(),
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
     }
     if proposal.location:
         target["location"] = proposal.location

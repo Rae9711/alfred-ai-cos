@@ -1,9 +1,8 @@
 // Thin typed fetch client for the Albert API. Reads the base URL from Expo config
 // and attaches the session token from secure storage.
 
-import Constants from "expo-constants";
-import { Platform } from "react-native";
-import * as Sentry from "@sentry/react-native";
+import { captureException } from "@/lib/sentry";
+import { resolveApiBaseUrl } from "@/api/apiBaseUrl";
 import type {
   ActionProposal,
   AppNotification,
@@ -14,6 +13,7 @@ import type {
   BillingCheckout,
   Briefing,
   CaptureResponse,
+  TranscribeResponse,
   Commitment,
   CommitmentDraft,
   CommitmentStatus,
@@ -49,27 +49,9 @@ import type {
 
 import { clearToken, getToken } from "./auth";
 
-/**
- * API base URL resolution:
- *   • Native (Expo Go / device): production URL from app.json `extra.apiBaseUrl`.
- *   • Web dev: localhost:8000 — requests go through `scripts/dev-api-proxy.mjs`
- *     which adds CORS headers and forwards to production. The browser blocks
- *     direct cross-origin calls to alfredaitech.com, so the proxy
- *     is the only way to dev against prod from Expo web without setting up a
- *     full local backend.
- *   • Fallback: localhost:8000 for native against a local backend.
- */
-function resolveBaseUrl(): string {
-  if (Platform.OS === "web" && __DEV__) {
-    return "http://localhost:8000";
-  }
-  return (
-    (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
-    "http://localhost:8000"
-  );
-}
-
-const BASE_URL: string = resolveBaseUrl();
+// Resolved per module load. resolveApiBaseUrl never falls back to localhost on
+// device builds (that caused "Network request failed" on Ad Hoc installs).
+const BASE_URL: string = resolveApiBaseUrl();
 
 // Correlates a client request with the backend's structured logs (X-Request-ID). RN has
 // no guaranteed crypto.randomUUID, so a v4-shaped id from Math.random is enough here.
@@ -91,11 +73,36 @@ function deviceTimezone(): string {
   }
 }
 
-// The AuthContext registers a handler so a 401 (expired/invalid token, or a rotated
-// server secret) drops the user back to Connect instead of looping on dead requests.
+// The AuthContext registers a handler so a confirmed invalid session drops the
+// user back to Connect instead of looping on dead requests.
 let onAuthExpired: (() => void) | null = null;
 export function setOnAuthExpired(fn: (() => void) | null): void {
   onAuthExpired = fn;
+}
+
+/** Only clear Keychain after /me confirms the JWT is dead — avoids wiping a
+ *  valid session when a single endpoint mis-returns 401 during startup. */
+let confirmingAuth = false;
+async function confirmAndClearExpiredSession(token: string): Promise<void> {
+  if (confirmingAuth) return;
+  confirmingAuth = true;
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "ngrok-skip-browser-warning": "true",
+        "X-Request-ID": requestId(),
+      },
+    });
+    if (res.status === 401) {
+      await clearToken();
+      onAuthExpired?.();
+    }
+  } catch {
+    // Network blip while confirming — keep the local session.
+  } finally {
+    confirmingAuth = false;
+  }
 }
 
 async function request<T>(
@@ -122,11 +129,8 @@ async function request<T>(
       },
     });
     if (!res.ok) {
-      // A 401 while we hold a token means it's no longer valid — clear it and bounce to
-      // Connect so the user (and friends) re-auth cleanly instead of looping on 401s.
       if (res.status === 401 && token) {
-        await clearToken();
-        onAuthExpired?.();
+        await confirmAndClearExpiredSession(token);
       }
       // Truncate the server detail before it becomes the error message: an API error body
       // can echo email/subject fragments, and this string flows into Sentry below.
@@ -145,13 +149,57 @@ async function request<T>(
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error("Request timed out — try again");
     }
+    // RN surfaces unreachable hosts as a generic TypeError; rewrite so Connect /
+    // Settings show something actionable instead of "Network request failed".
+    if (
+      e instanceof TypeError ||
+      (e instanceof Error && /network request failed/i.test(e.message))
+    ) {
+      const friendly = new Error(
+        `Can't reach Alfred at ${BASE_URL}. Check your connection and try again.`,
+      );
+      captureException(friendly);
+      throw friendly;
+    }
     // Report to Sentry (no-op when DSN is blank). The message is already truncated above,
     // so no raw server detail leaves the device.
-    Sentry.captureException(e);
+    captureException(e);
     throw e;
   } finally {
     if (timer != null) clearTimeout(timer);
   }
+}
+
+async function uploadVoiceAudio<T>(uri: string, path: string): Promise<T> {
+  const token = await getToken();
+  const form = new FormData();
+  // React Native FormData accepts a { uri, name, type } file object.
+  form.append("audio", {
+    uri,
+    name: "note.m4a",
+    type: "audio/m4a",
+  } as unknown as Blob);
+  const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+    method: "POST",
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 160);
+    if (res.status === 501) {
+      throw new Error(
+        "Voice input is not configured on the server yet. Set TRANSCRIPTION_PROVIDER.",
+      );
+    }
+    if (res.status === 401) {
+      onAuthExpired?.();
+    }
+    throw new Error(`API ${res.status}: ${detail}`);
+  }
+  return (await res.json()) as T;
 }
 
 export const api = {
@@ -175,6 +223,20 @@ export const api = {
         method: "POST",
       },
     ),
+  // Production-safe: create a real Albert session without linking Gmail. Mailboxes
+  // can be connected later from Settings (startGoogleLinkAuth).
+  continueWithoutGmail: () =>
+    request<SessionToken>("/auth/continue-without-gmail", { method: "POST" }),
+  // Native Sign in with Apple — identity_token from expo-apple-authentication.
+  signInWithApple: (body: {
+    identity_token: string;
+    full_name?: string | null;
+    email?: string | null;
+  }) =>
+    request<SessionToken>("/auth/apple", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   // Revoke the current session server-side (adds its jti to the denylist) so the token
   // can't be reused even before its 30-day expiry. The bearer token is attached by
   // request(); a short timeout keeps sign-out snappy even on a bad connection.
@@ -361,17 +423,35 @@ export const api = {
     const q = opts?.upcoming ? "?upcoming=true" : "";
     return request<Task[]>(`/tasks${q}`);
   },
-  schedulePlanningBlock: (body: { title: string; start: string; end: string }) =>
+  schedulePlanningBlock: (body: {
+    title: string;
+    start: string;
+    end: string;
+    write_target?: "google" | "apple";
+  }) =>
     request<{ booked: boolean; reply: string; event_id?: string | null }>(
       "/today/schedule-block",
       { method: "POST", body: JSON.stringify(body) },
     ),
-  acceptScheduleProposal: (id: string, timezone?: string) =>
+  acceptScheduleProposal: (
+    id: string,
+    opts?: {
+      timezone?: string;
+      start?: string;
+      end?: string;
+      write_target?: "google" | "apple";
+    },
+  ) =>
     request<{ accepted: boolean; reply: string; event_id?: string | null }>(
       `/schedule-proposals/${id}/accept`,
       {
         method: "POST",
-        body: JSON.stringify({ timezone: timezone ?? deviceTimezone() }),
+        body: JSON.stringify({
+          timezone: opts?.timezone ?? deviceTimezone(),
+          start: opts?.start,
+          end: opts?.end,
+          write_target: opts?.write_target,
+        }),
       },
     ),
   dismissScheduleProposal: (id: string) =>
@@ -421,26 +501,10 @@ export const api = {
     }),
   getConversationInbox: () =>
     request<ConversationInboxResponse>("/conversations/inbox"),
-  captureVoice: async (uri: string): Promise<CaptureResponse> => {
-    const token = await getToken();
-    const form = new FormData();
-    // React Native FormData accepts a { uri, name, type } file object.
-    form.append("audio", {
-      uri,
-      name: "note.m4a",
-      type: "audio/m4a",
-    } as unknown as Blob);
-    const res = await fetch(`${BASE_URL}/api/v1/capture/voice`, {
-      method: "POST",
-      headers: {
-        "ngrok-skip-browser-warning": "true",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: form,
-    });
-    if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-    return (await res.json()) as CaptureResponse;
-  },
+  captureVoice: (uri: string) => uploadVoiceAudio<CaptureResponse>(uri, "/capture/voice"),
+  /** Speech-to-text for composer dictation — does not create tasks. */
+  transcribeVoice: (uri: string) =>
+    uploadVoiceAudio<TranscribeResponse>(uri, "/capture/transcribe"),
   getWaiting: () => request<WaitingView>("/waiting"),
   getMe: () => request<Me>("/me"),
   getSmsForwarding: () => request<SmsForwarding>("/me/sms-forwarding"),
@@ -450,6 +514,8 @@ export const api = {
     request<SmsInstallOut>("/me/sms-forwarding/backfill"),
   testSmsForwarding: () =>
     request<SmsIngestResult>("/me/sms-forwarding/test", { method: "POST" }),
+  rotateSmsForwarding: () =>
+    request<SmsForwarding>("/me/sms-forwarding/rotate", { method: "POST" }),
   submitOnboarding: (prefs: OnboardingPrefs) =>
     request<Me>("/onboarding", { method: "POST", body: JSON.stringify(prefs) }),
   registerDevice: (push_token: string, platform?: string) =>
@@ -467,6 +533,11 @@ export const api = {
     request<void>("/notifications/prefs", {
       method: "POST",
       body: JSON.stringify({ quiet_hours }),
+    }),
+  setCalendarWritePrimary: (calendar_write_primary: "google" | "apple") =>
+    request<void>("/notifications/prefs", {
+      method: "POST",
+      body: JSON.stringify({ calendar_write_primary }),
     }),
   disconnectAccount: (provider: string) =>
     request<void>(`/connected-accounts/provider/${provider}`, { method: "DELETE" }),

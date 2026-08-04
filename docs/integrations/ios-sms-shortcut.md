@@ -60,28 +60,27 @@ Signed download:
 
 ### Verify shortcut
 
-After import, open **Shortcuts → Albert SMS Forward** and confirm:
+After import, open **Shortcuts → Alfred SMS Forward** and confirm:
 
 | Check | Expected |
 | ----- | -------- |
-| **Dictionary** action | Five keys: `body`, `text`, `shortcut_input` (Shortcut Input), plus `from_number` / `from_name` from Get Details of Messages |
+| **Unknown Action** | None — only Text, Dictionary, Get Contents of URL |
+| **Dictionary** action | Three keys: `body`, `text`, `shortcut_input` (all → Shortcut Input) |
 | **Get Contents of URL** | Method **POST**, request body **JSON**, URL `…/inbox/sms` |
 | Headers | **Content-Type** `application/json` and **X-Sms-Token** with your token |
 
 The forward shortcut maps **Shortcut Input** (the incoming message from the
 automation trigger) into the JSON body. Sender phone is not included
 (Message Received does not expose it reliably on all iOS versions) — **Open in
-Messages** may show a toast instead of pre-filling the recipient unless you add
-**Get Details of Messages** manually (advanced).
+Messages** may show a toast instead of pre-filling the recipient.
 
 ### Forward shortcut actions
 
 | Step       | Action ID                         | Purpose                                      |
 | ---------- | --------------------------------- | -------------------------------------------- |
 | 1 (import) | `is.workflow.actions.gettext`     | Prompt for X-Sms-Token                       |
-| 2–3        | `is.workflow.actions.properties.messages` | Sender phone + name (best-effort)            |
-| 4          | `is.workflow.actions.dictionary`  | JSON payload (`body`, `text`, `shortcut_input`, `from_number`, `from_name`) |
-| 5          | `is.workflow.actions.downloadurl` | POST to Albert webhook                       |
+| 2          | `is.workflow.actions.dictionary`  | JSON payload (`body`, `text`, `shortcut_input`) |
+| 3          | `is.workflow.actions.downloadurl` | POST to Albert webhook                       |
 
 ### iOS automation: empty Shortcut Input
 
@@ -126,14 +125,14 @@ Success looks like:
 
 | Symptom                                                | Likely cause                            | Fix                                                                       |
 | ------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------- |
-| **Unknown Action** blocks                              | Old shortcut or `contentitemproperties` | Delete shortcut, re-import from Albert settings (~20+ KB signed file).    |
+| **Unknown Action** blocks                              | Old shortcut with `properties.messages` | Delete *all* Albert-SMS-Forward copies, re-import from Alfred settings.   |
 | **The shortcut URL provided was invalid**              | `shortcuts://` from in-app Linking      | Tap install button again (opens HTTPS in Safari).                         |
 | **Importing unsigned shortcut files is not supported** | Unsigned server build                   | Maintainer: `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
-| **401 Missing/Invalid X-Sms-Token**                    | Wrong or missing header                 | Copy token again from Albert → You → SMS forwarding                       |
-| **422 Unprocessable Entity**                           | Body shape from Shortcuts               | Use **Text** for phone; ensure `body` is message text                     |
-| **Dictionary shows only *Add New Item***               | ActionOutput refs stripped on import    | Delete shortcut, re-import signed Forward from Albert settings; Dictionary must show 3 keys. |
+| **401 Missing/Invalid X-Sms-Token**                    | Wrong or missing header                 | Copy token again from Alfred → You → SMS forwarding; if you rotated the token, re-paste into Shortcuts |
+| **422 Unprocessable Entity**                           | Body shape from Shortcuts               | Ensure `body` is message text (Shortcut Input)                            |
+| **Dictionary shows only *Add New Item***               | Bare `WFTextTokenAttachment` in Dictionary values (or broken ActionOutput refs) stripped on import | Delete shortcut, re-import signed Forward from Alfred settings; Dictionary must show 3 keys mapped to Shortcut Input. |
 | SMS missing in Inbox                                   | Sync delay                              | Pull to refresh; confirm curl returns 200 first                           |
-| Reply opens Messages without recipient                 | No sender phone from Shortcut           | Expected if Get Details fails; add **Get Details of Messages** manually   |
+| Reply opens Messages without recipient                 | No sender phone from Shortcut           | Expected — Message Received does not expose phone reliably                |
 
 ## Reply flow in the app
 

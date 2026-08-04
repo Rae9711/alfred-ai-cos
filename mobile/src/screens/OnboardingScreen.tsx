@@ -21,6 +21,7 @@ import {
   inputPlaceholder,
   inputStyle,
 } from "@/components/ui";
+import { writeOnboardedCache } from "@/lib/onboardingCache";
 import { colors, fonts, radius, spacing } from "@/theme/theme";
 
 type Question = {
@@ -57,6 +58,7 @@ const QUESTIONS: Question[] = [
 export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [prefs, setPrefs] = useState<OnboardingPrefs>({});
   const [saving, setSaving] = useState(false);
+  const [smsShortcutUrl, setSmsShortcutUrl] = useState<string | null>(null);
   const [smsImportUrl, setSmsImportUrl] = useState<string | null>(null);
   const [shortcutReady, setShortcutReady] = useState(Platform.OS !== "ios");
 
@@ -64,7 +66,12 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
     if (Platform.OS !== "ios") return;
     void api
       .getSmsForwardingInstall()
-      .then((cfg) => setSmsImportUrl(cfg.import_url ?? cfg.shortcut_url))
+      .then((cfg) => {
+        // Prefer HTTPS .shortcut (same as Settings) — shortcuts:// often fails
+        // from in-app Linking with "the shortcut URL provided was invalid".
+        setSmsShortcutUrl(cfg.shortcut_url);
+        setSmsImportUrl(cfg.import_url);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -77,6 +84,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
     setSaving(true);
     try {
       await api.submitOnboarding(prefs);
+      await writeOnboardedCache(true);
       onDone();
     } finally {
       setSaving(false);
@@ -142,7 +150,8 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
               label="Install SMS shortcut"
               kind="accent"
               onPress={() => {
-                if (smsImportUrl) void Linking.openURL(smsImportUrl);
+                const target = smsShortcutUrl ?? smsImportUrl;
+                if (target) void Linking.openURL(target);
               }}
             />
             <Pressable

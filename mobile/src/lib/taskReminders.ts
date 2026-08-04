@@ -39,7 +39,7 @@ export async function scheduleLocalTaskReminder(
     identifier: id,
     content: {
       title: input.title,
-      body: "Reminder from Alfred",
+      body: "Alfred 提醒",
       data: { type: "reminder", task_id: input.taskId, deep_link: "/today" },
       sound: Platform.OS === "ios" ? "default" : undefined,
     },

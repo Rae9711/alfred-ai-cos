@@ -149,7 +149,23 @@ def process_message(
     body: str | None = None,
     force_reclassify: bool = False,
 ) -> list[Commitment]:
+    from app.services.llm_quota import LlmQuotaExceeded, llm_user_scope
+
     del force_reclassify  # reserved for sync reclassify batches
+    try:
+        with llm_user_scope(message.user_id, db=db):
+            return _process_message_body(db, message, body=body)
+    except LlmQuotaExceeded:
+        # Cap exhausted: leave the message unclassified rather than burning more API $.
+        return []
+
+
+def _process_message_body(
+    db: Session,
+    message: Message,
+    *,
+    body: str | None = None,
+) -> list[Commitment]:
     llm = get_llm()
     user = db.get(User, message.user_id)
     if user is None:

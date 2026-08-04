@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.enums import (
-    ActionStatus,
     CommitmentOwner,
     CommitmentStatus,
     NotificationImportance,
@@ -22,10 +21,10 @@ from app.db.enums import (
     Priority,
 )
 from app.db.models import (
-    ActionProposal,
     CalendarEvent,
     Commitment,
     Device,
+    Message,
     Notification,
     User,
 )
@@ -33,6 +32,7 @@ from app.services.inbox_resolution import (
     filter_actionable_commitments,
     filter_actionable_tasks,
     handled_message_ids,
+    user_message_ids,
 )
 
 # Notification types that may reach the user's device. Everything else is
@@ -84,17 +84,18 @@ def scan_pending_approvals(db: Session, user_id: str, *, now: datetime) -> int:
     The grace window (PENDING_APPROVAL_GRACE) skips the synchronous propose-then-approve
     flows (Ask screen booking, Today Act send) where the user is right there and a push
     would be noise."""
+    from app.services.actions import list_pending_proposals
+
     cutoff = now - PENDING_APPROVAL_GRACE
-    waiting = list(
-        db.scalars(
-            select(ActionProposal).where(
-                ActionProposal.user_id == user_id,
-                ActionProposal.status == ActionStatus.proposed,
-                ActionProposal.approval_required.is_(True),
-                ActionProposal.created_at <= cutoff,
-            )
-        )
-    )
+    # Prune orphan/handled draft proposals first so we never push for dead items.
+    waiting = [
+        p
+        for p in list_pending_proposals(db, user_id)
+        if p.approval_required
+        and p.created_at is not None
+        and (p.created_at if p.created_at.tzinfo else p.created_at.replace(tzinfo=UTC))
+        <= cutoff
+    ]
     enqueued = 0
     for p in waiting:
         title = "Alfred wants your approval"
@@ -429,6 +430,7 @@ def scan_for_risks(db: Session, user_id: str, *, today: date_type) -> int:
             )
         ),
         handled_message_ids(db, user_id),
+        known_message_ids=user_message_ids(db, user_id),
     )
     enqueued = 0
     for c in open_commitments:
@@ -471,6 +473,7 @@ def scan_waiting_aging(db: Session, user_id: str, *, now: datetime) -> int:
             )
         ),
         handled_message_ids(db, user_id),
+        known_message_ids=user_message_ids(db, user_id),
     )
     enqueued = 0
     for c in stale:
@@ -508,8 +511,15 @@ def _prepare_follow_up_action(db: Session, user: User, commitment: Commitment) -
     from app.db.enums import ActionType
     from app.services import prep_draft
     from app.services.actions import propose_action_internal
+    from app.services.inbox_view import message_is_handled
 
     try:
+        # Don't stage chase sends for mail the user already read/handled, or whose
+        # source message is gone — those clutter the home approval banner forever.
+        if commitment.source_id:
+            message = db.get(Message, commitment.source_id)
+            if message is None or message_is_handled(message):
+                return None
         draft_id = prep_draft.ensure_draft_for(db, user, commitment=commitment)
         if draft_id is None:
             return None
@@ -655,6 +665,7 @@ def scan_top_priorities(db: Session, user: User, *, today: date_type) -> int:
             )
         ),
         handled_message_ids(db, user.id),
+        known_message_ids=user_message_ids(db, user.id),
     )
     enqueued = 0
     for c in open_commitments:

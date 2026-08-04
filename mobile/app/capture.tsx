@@ -1,21 +1,27 @@
-// Full-screen capture route, presented over the tabs (the prototype's center "+").
-// Closes back to Today; CaptureScreen reloads the dashboard on confirm.
-//
-// Accepts ?text=... so an iOS Shortcut can dictate → open `albert://capture?text=...`
-// → the screen auto-submits the captured text without the user typing.
+// Capture deep link → Alfred hub capture mode.
+// Keeps Shortcuts working: `albert://capture?text=...` still lands in capture
+// with prefilled text, now inside the Alfred tab instead of a standalone forever page.
 
+import { useEffect } from "react";
+import { View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { CaptureScreen } from "@/screens/CaptureScreen";
-import { LocaleProvider } from "@/context/LocaleContext";
+import { requestAlfredOpen } from "@/lib/alfredLaunch";
+import { colors } from "@/theme/theme";
 
 export default function Capture() {
   const router = useRouter();
   const params = useLocalSearchParams<{ text?: string }>();
   const initialText = typeof params.text === "string" ? params.text : undefined;
-  return (
-    <LocaleProvider>
-      <CaptureScreen onClose={() => router.back()} initialText={initialText} />
-    </LocaleProvider>
-  );
+
+  useEffect(() => {
+    requestAlfredOpen({
+      capture: true,
+      text: initialText,
+      mode: "capture",
+    });
+    router.replace("/(tabs)" as never);
+  }, [initialText, router]);
+
+  return <View style={{ flex: 1, backgroundColor: colors.paper }} />;
 }

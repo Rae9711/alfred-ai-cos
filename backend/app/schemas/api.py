@@ -34,6 +34,15 @@ class SessionToken(BaseModel):
     token_type: str = "bearer"
 
 
+class AppleSignInRequest(BaseModel):
+    """Native Sign in with Apple identity token + optional name (first grant only)."""
+
+    identity_token: str
+    full_name: str | None = None
+    # Optional Apple-provided email from the credential (may be omitted on later sign-ins).
+    email: str | None = None
+
+
 # --- Commitments ---
 class CommitmentOut(BaseModel):
     id: str
@@ -195,6 +204,8 @@ class ScheduleBlockRequest(BaseModel):
     start: str  # ISO 8601 with timezone
     end: str
     timezone: str | None = None
+    # When "apple", skip Google write — device creates via EventKit.
+    write_target: str | None = None
 
 
 class ScheduleBlockResponse(BaseModel):
@@ -206,6 +217,9 @@ class ScheduleBlockResponse(BaseModel):
 
 class AcceptScheduleProposalRequest(BaseModel):
     timezone: str | None = None
+    start: str | None = None
+    end: str | None = None
+    write_target: str | None = None
 
 
 class AcceptScheduleProposalResponse(BaseModel):
@@ -213,6 +227,13 @@ class AcceptScheduleProposalResponse(BaseModel):
     reply: str
     detail: str | None = None
     event_id: str | None = None
+
+
+class DeviceCalendarEventOut(BaseModel):
+    title: str
+    start: str
+    end: str
+    location: str | None = None
 
 
 class AssistantAskRequest(BaseModel):
@@ -224,11 +245,12 @@ class AssistantAskRequest(BaseModel):
 
 class AssistantAskResponse(BaseModel):
     reply: str  # one-line message to show the user
-    action: str  # "booked" | "updated" | "cancelled" | "created" | "none"
+    action: str  # "booked" | "updated" | "cancelled" | "created" | "device_book" | "none"
     detail: str | None = None  # execution detail when an action ran
     task_id: str | None = None
     task_title: str | None = None
     remind_at: datetime | None = None
+    device_calendar: DeviceCalendarEventOut | None = None
 
 
 class AssistantChatMessage(BaseModel):
@@ -249,6 +271,7 @@ class AssistantChatResponse(BaseModel):
     task_id: str | None = None
     task_title: str | None = None
     remind_at: datetime | None = None
+    device_calendar: DeviceCalendarEventOut | None = None
 
 
 class UpdateMeetingRequest(BaseModel):
@@ -323,6 +346,7 @@ class UpcomingMeeting(BaseModel):
     attendees: list[str]
     prep_required: bool
     html_link: str | None = None
+    source: str | None = "google"
 
     model_config = {"from_attributes": True}
 
@@ -398,6 +422,8 @@ class NotificationFeedbackRequest(BaseModel):
 class NotificationPrefs(BaseModel):
     # Stored in User.preferences. quiet_hours is "HH-HH" or "HH:MM-HH:MM".
     quiet_hours: str | None = None
+    # "google" | "apple" — primary calendar for new events (writes only).
+    calendar_write_primary: str | None = None
 
 
 # --- Onboarding / account ---
@@ -410,6 +436,17 @@ class OnboardingPrefs(BaseModel):
     proactiveness: str | None = None  # quiet | balanced | very_proactive
 
 
+class LlmQuotaOut(BaseModel):
+    """Monthly AI budget remaining (estimated USD from Anthropic token rates)."""
+
+    period: str  # YYYY-MM
+    cap_usd: float
+    used_usd: float
+    remaining_usd: float
+    used_pct: float
+    capped: bool
+
+
 class MeOut(BaseModel):
     id: str
     email: str
@@ -418,6 +455,7 @@ class MeOut(BaseModel):
     preferences: dict[str, object]
     onboarded: bool
     connected_mailboxes: list[ConnectedMailboxOut] = []
+    llm_quota: LlmQuotaOut | None = None
 
 
 class ConnectedMailboxOut(BaseModel):
@@ -454,6 +492,13 @@ class CaptureRequest(BaseModel):
 class CaptureResponse(BaseModel):
     tasks: list[TaskOut]
     detected_project: str | None
+    transcript: str | None = None
+
+
+class TranscribeResponse(BaseModel):
+    """Raw speech-to-text for composer dictation (no task persistence)."""
+
+    transcript: str
 
 
 # --- Conversation (WeChat paste workflow) ---
@@ -484,6 +529,7 @@ class ParsedConversationOut(BaseModel):
 
 class ConversationParseRequest(BaseModel):
     text: str
+    self_aliases: list[str] | None = None
 
 
 class ReplySuggestionOut(BaseModel):
@@ -511,11 +557,13 @@ class ConversationAnalyzeRequest(BaseModel):
     goal: str = "custom"  # comfort | follow_up | confirm | custom
     tones: list[str] | None = None
     timezone: str | None = None
+    self_aliases: list[str] | None = None
 
 
 class ConversationAnalyzeResponse(BaseModel):
     reply_suggestions: list[ReplySuggestionOut]
     actions: list[ConversationActionOut]
+    insight: str | None = None
 
 
 class ConversationConfirmRequest(BaseModel):

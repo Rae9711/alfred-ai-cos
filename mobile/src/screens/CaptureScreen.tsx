@@ -2,9 +2,9 @@
 // interaction-space.md). One unified composer (text + inline mic, no mode tabs to
 // choose between first) replaces the old Speak/Type/Snap/Forward switcher — talking
 // to Alfred shouldn't require picking a mode before you can start. Recording (ink
-// bg, timer, animated waveform) and parsed (transcript, detected chips, extracted
-// task cards) states are unchanged. Type → captureText, Voice → captureVoice (both
-// real). Snap/Forward remain reachable as secondary actions, still styled stubs.
+// bg, timer, animated waveform) and parsed (task cards) states are unchanged.
+// Voice uses on-device speech recognition; only transcript text is POSTed to /capture.
+// Snap/Forward remain reachable as secondary actions, still styled stubs.
 //
 // Deliberately NOT a chat transcript: one capture in, one acknowledgment card back,
 // no persistent back-and-forth history. A transcript view would make this visually
@@ -66,8 +66,13 @@ export function CaptureScreen({
     setPhase("parsed");
   });
 
+  useEffect(() => {
+    if (voice.error) setError(voice.error);
+  }, [voice.error]);
+
   const recording = voice.state === "recording";
-  const dark = phase === "recording" || recording;
+  const uploading = voice.state === "uploading";
+  const dark = phase === "recording" || recording || uploading;
 
   const submitText = useCallback(async () => {
     const trimmed = text.trim();
@@ -114,7 +119,7 @@ export function CaptureScreen({
         <Eyebrow color={dark ? "rgba(255,255,255,0.6)" : colors.ink3}>
           {phase === "idle"
             ? t.capture.eyebrowIdle
-            : recording
+            : recording || uploading
               ? t.capture.eyebrowListening
               : t.capture.eyebrowCaptured}
         </Eyebrow>
@@ -127,7 +132,7 @@ export function CaptureScreen({
           onRedo={reset}
           onDone={onClose}
         />
-      ) : recording ? (
+      ) : recording || uploading ? (
         <RecordingState onStop={() => void voice.stop()} />
       ) : (
         <IdleState
@@ -499,7 +504,7 @@ function ParsedState({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
+  screen: { flex: 1, backgroundColor: colors.washBottom },
   screenDark: { backgroundColor: colors.ink },
   top: {
     flexDirection: "row",

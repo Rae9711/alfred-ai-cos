@@ -9,7 +9,6 @@ from app.services.sms_shortcut import (
     DETECT_TEXT_ACTION,
     HASH_ACTION,
     LEGACY_BACKFILL_SHORTCUT_FILENAME,
-    MESSAGE_PROPERTIES_ACTION,
     SHARE_SHORTCUT_FILENAME,
     SHARE_SHORTCUT_NAME,
     SHORTCUT_NAME,
@@ -21,6 +20,15 @@ from app.services.sms_shortcut import (
     shortcut_download_url,
 )
 
+# Action IDs that resolve as "Unknown Action" on many iOS builds.
+UNSUPPORTED_MESSAGE_ACTIONS = {
+    "is.workflow.actions.properties.messages",
+    "is.workflow.actions.filter.messages",
+    "is.workflow.actions.contentitemproperties",
+    "is.workflow.actions.detect.contacts",
+    "is.workflow.actions.properties.contacts",
+}
+
 
 def _action_ids(data: dict) -> list[str]:
     return [a["WFWorkflowActionIdentifier"] for a in data["WFWorkflowActions"]]
@@ -29,52 +37,54 @@ def _action_ids(data: dict) -> list[str]:
 def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
     assert _action_ids(data) == [
-        MESSAGE_PROPERTIES_ACTION,
-        MESSAGE_PROPERTIES_ACTION,
         "is.workflow.actions.dictionary",
         "is.workflow.actions.downloadurl",
     ]
 
-    dict_action = data["WFWorkflowActions"][2]
+    dict_action = data["WFWorkflowActions"][0]
     wf_items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"]
     items = wf_items["WFDictionaryFieldValueItems"]
-    assert len(items) == 5
+    assert len(items) == 3
     keys = {item["WFKey"]["Value"]["string"] for item in items}
-    assert keys == {"body", "shortcut_input", "text", "from_number", "from_name"}
+    assert keys == {"body", "shortcut_input", "text"}
     by_key = {item["WFKey"]["Value"]["string"]: item for item in items}
     for key in ("body", "text", "shortcut_input"):
-        val = by_key[key]["WFValue"]["Value"]
-        assert val["Type"] == "Variable"
-        assert val["VariableName"] == "Shortcut Input"
-        assert "OutputUUID" not in val
+        # Keys/values must be WFTextTokenString — bare attachments import blank.
+        assert by_key[key]["WFKey"]["WFSerializationType"] == "WFTextTokenString"
+        val = by_key[key]["WFValue"]
+        assert val["WFSerializationType"] == "WFTextTokenString"
+        assert val["Value"]["string"] == "\ufffc"
+        att = val["Value"]["attachmentsByRange"]["{0, 1}"]
+        assert att["Type"] == "Variable"
+        assert att["VariableName"] == "Shortcut Input"
+        assert "OutputUUID" not in att
 
     post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
     json_items = post["WFWorkflowActionParameters"]["WFJSONValues"]["Value"][
         "WFDictionaryFieldValueItems"
     ]
-    assert len(json_items) == 5
+    assert len(json_items) == 3
+    for item in json_items:
+        assert item["WFValue"]["WFSerializationType"] == "WFTextTokenString"
+        assert item["WFValue"]["Value"]["string"] == "\ufffc"
 
 
-def test_build_sms_forward_shortcut_does_not_use_unsupported_message_actions() -> None:
+def test_build_sms_forward_shortcut_uses_only_stock_actions() -> None:
     data = plistlib.loads(build_sms_forward_shortcut(sms_token="tok"))
-    forbidden = {
-        "is.workflow.actions.filter.messages",
-        "is.workflow.actions.contentitemproperties",
-        "is.workflow.actions.detect.contacts",
-        "is.workflow.actions.properties.contacts",
-    }
     for action in data["WFWorkflowActions"]:
-        assert action["WFWorkflowActionIdentifier"] not in forbidden
+        assert action["WFWorkflowActionIdentifier"] not in UNSUPPORTED_MESSAGE_ACTIONS
 
 
 def test_build_sms_forward_shortcut_default_prompts_for_token() -> None:
     data = plistlib.loads(build_sms_forward_shortcut())
     assert data["WFWorkflowName"] == SHORTCUT_NAME
     assert data["WFWorkflowImportQuestions"]
-    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
-        "is.workflow.actions.gettext"
-    )
+    assert _action_ids(data) == [
+        "is.workflow.actions.gettext",
+        "is.workflow.actions.dictionary",
+        "is.workflow.actions.downloadurl",
+    ]
     post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionIdentifier"] == "is.workflow.actions.downloadurl"
     assert post["WFWorkflowActionParameters"]["WFURL"] == DEFAULT_WEBHOOK_URL
@@ -86,7 +96,9 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
         build_sms_forward_shortcut(webhook_url="https://example.test/sms", sms_token="tok")
     )
     assert data["WFWorkflowImportQuestions"] == []
-    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == MESSAGE_PROPERTIES_ACTION
+    assert data["WFWorkflowActions"][0]["WFWorkflowActionIdentifier"] == (
+        "is.workflow.actions.dictionary"
+    )
     dict_action = next(
         a
         for a in data["WFWorkflowActions"]
@@ -95,12 +107,13 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
     dict_items = dict_action["WFWorkflowActionParameters"]["WFItems"]["Value"][
         "WFDictionaryFieldValueItems"
     ]
-    assert len(dict_items) == 5
+    assert len(dict_items) == 3
     post = data["WFWorkflowActions"][-1]
     headers = post["WFWorkflowActionParameters"]["WFHTTPHeaders"]["Value"][
         "WFDictionaryFieldValueItems"
     ]
     token_header = next(h for h in headers if h["WFKey"]["Value"]["string"] == "X-Sms-Token")
+    assert token_header["WFValue"]["WFSerializationType"] == "WFTextTokenString"
     assert token_header["WFValue"]["Value"]["string"] == "tok"
     assert post["WFWorkflowActionParameters"]["WFURL"] == "https://example.test/sms"
 
@@ -129,8 +142,6 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
     assert data["WFWorkflowTypes"] == ["ActionExtension"]
     assert _action_ids(data) == [
         DETECT_TEXT_ACTION,
-        MESSAGE_PROPERTIES_ACTION,
-        MESSAGE_PROPERTIES_ACTION,
         HASH_ACTION,
         "is.workflow.actions.dictionary",
         "is.workflow.actions.downloadurl",
@@ -148,8 +159,6 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
         "body",
         "text",
         "shortcut_input",
-        "from_number",
-        "from_name",
         "message_id",
         "backfill",
     }
@@ -158,14 +167,9 @@ def test_build_sms_share_shortcut_posts_shared_message() -> None:
     assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
 
 
-def test_build_sms_share_shortcut_does_not_use_unsupported_message_actions() -> None:
+def test_build_sms_share_shortcut_uses_only_stock_actions() -> None:
     data = plistlib.loads(build_sms_share_shortcut(sms_token="tok"))
-    forbidden = {
-        "is.workflow.actions.filter.messages",
-        "is.workflow.actions.detect.contacts",
-        "is.workflow.actions.properties.contacts",
-        "is.workflow.actions.repeat.each",
-    }
+    forbidden = UNSUPPORTED_MESSAGE_ACTIONS | {"is.workflow.actions.repeat.each"}
     for action in data["WFWorkflowActions"]:
         assert action["WFWorkflowActionIdentifier"] not in forbidden
 

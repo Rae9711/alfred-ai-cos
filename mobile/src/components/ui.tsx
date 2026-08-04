@@ -3,7 +3,7 @@
 // alf-card, alf-card-flat, alf-btn, alf-check, alf-icon-btn, Avatar). See
 // theme/DESIGN.md for the spec. Plain RN primitives + react-native-svg icons.
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   Pressable,
@@ -22,29 +22,41 @@ import { colors, fonts, layout, radius, spacing } from "@/theme/theme";
 
 // Serif display text (greetings, titles, priority titles). Italic optional.
 // `em` portions of a title are italic + accentInk; use <SerifEm> inline.
+// `display` uses SemiBold + tighter tracking so hero type feels inked, not flat.
 export function Serif({
   children,
   size = 18,
   color = colors.ink,
   italic = false,
+  display = false,
   style,
 }: {
   children: ReactNode;
   size?: number;
   color?: string;
   italic?: boolean;
+  /** Heavier optical weight for hero greetings / focal titles. */
+  display?: boolean;
   style?: StyleProp<TextStyle>;
 }) {
+  const family = italic
+    ? fonts.brandItalic
+    : display
+      ? fonts.serifDisplay
+      : fonts.serif;
+  // Display: Songti tracking + denser leading. Body serif: milder.
+  const tracking = display ? -0.045 * size : -0.012 * size;
+  const leading = display ? size * 1.15 : size * 1.2;
   return (
     <Text
       style={[
         {
-          fontFamily: fonts.serif,
+          fontFamily: family,
           fontSize: size,
-          lineHeight: size * 1.15,
-          letterSpacing: -0.01 * size,
-          color,
+          lineHeight: leading,
+          letterSpacing: tracking,
           fontStyle: italic ? "italic" : "normal",
+          color,
         },
         style,
       ]}
@@ -54,16 +66,57 @@ export function Serif({
   );
 }
 
-// Inline italic accent span inside a serif title ("Good morning, <em>Maya</em>.").
+// Brand italic name span ("晚上好，<em>Rae</em>") — Georgia + blue-700.
 export function SerifEm({ children }: { children: ReactNode }) {
   return (
-    <Text style={{ fontStyle: "italic", color: colors.accentInk }}>
+    <Text
+      style={{
+        fontFamily: fonts.brandItalic,
+        fontStyle: "italic",
+        fontWeight: "500",
+        letterSpacing: -0.4,
+        color: colors.accentInk,
+      }}
+    >
       {children}
     </Text>
   );
 }
 
-// alf-h2: serif 22, used in sheet headers.
+/** Progressive disclosure — collapsed by default; one job: reveal secondary content. */
+export function Disclose({
+  label,
+  labelExpanded,
+  children,
+  defaultOpen = false,
+  style,
+}: {
+  label: string;
+  labelExpanded?: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <View style={style}>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        style={styles.discloseToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <Text style={styles.discloseLabel}>
+          {open ? (labelExpanded ?? label) : label}
+        </Text>
+        <Text style={styles.discloseChevron}>{open ? "−" : "+"}</Text>
+      </Pressable>
+      {open ? <View style={styles.discloseBody}>{children}</View> : null}
+    </View>
+  );
+}
+
+// alf-h2: serif display 24, used in sheet headers — heavier than body serif.
 export function H2({
   children,
   style,
@@ -122,7 +175,7 @@ export function ScreenHeader({
   title,
   titleEm,
   subtitle,
-  titleSize = 34,
+  titleSize = 38,
   right,
 }: {
   eyebrow: string;
@@ -138,7 +191,7 @@ export function ScreenHeader({
         <Eyebrow>{eyebrow}</Eyebrow>
         {right ?? null}
       </View>
-      <Serif size={titleSize} style={styles.screenTitle}>
+      <Serif size={titleSize} display style={styles.screenTitle}>
         {title}
         {titleEm ? <SerifEm>{titleEm}</SerifEm> : null}
       </Serif>
@@ -309,6 +362,37 @@ export function IconBtn({
   );
 }
 
+/** Soft embossed well for glyphs — highlight rim + cool shadow (立体, not flat). */
+export function IconWell({
+  children,
+  size = 32,
+  tone = "stone",
+  style,
+}: {
+  children: ReactNode;
+  size?: number;
+  tone?: "stone" | "accent" | "warn";
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View
+      style={[
+        styles.iconWell,
+        {
+          width: size,
+          height: size,
+          borderRadius: Math.max(10, size * 0.32),
+        },
+        tone === "accent" && styles.iconWellAccent,
+        tone === "warn" && styles.iconWellWarn,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
 // ── Check ─────────────────────────────────────────────────────────────────
 
 // Circular checkbox. Tapping animates an accent fill scaling in from the center with
@@ -419,16 +503,16 @@ export function FooterStamp({ text }: { text?: string }) {
 
 const styles = StyleSheet.create({
   h2: {
-    fontFamily: fonts.serif,
-    fontSize: 22,
-    letterSpacing: -0.22,
-    lineHeight: 25,
+    fontFamily: fonts.serifDisplay,
+    fontSize: 24,
+    letterSpacing: -0.55,
+    lineHeight: 28,
     color: colors.ink,
   },
   eyebrow: {
     fontFamily: fonts.mono,
     fontSize: 11,
-    letterSpacing: 1.4,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
   },
   sectionRow: {
@@ -439,9 +523,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-    letterSpacing: 0.78,
+    fontFamily: fonts.sansSemibold,
+    fontSize: 12,
+    letterSpacing: 0.9,
     textTransform: "uppercase",
     color: colors.ink3,
   },
@@ -455,8 +539,9 @@ const styles = StyleSheet.create({
   },
   screenTitle: { marginTop: 2 },
   screenSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    lineHeight: 21,
     color: colors.ink3,
     marginTop: spacing.xs,
     maxWidth: 320,
@@ -479,7 +564,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
-  pillTextSans: { fontSize: 12.5 },
+  pillTextSans: { fontFamily: fonts.sans, fontSize: 12.5 },
   pill_accent: {
     backgroundColor: colors.accentSoft,
     borderColor: colors.accent,
@@ -493,10 +578,11 @@ const styles = StyleSheet.create({
     padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair,
-    shadowColor: "#19171A",
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#141316",
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   cardFlat: {
     backgroundColor: "transparent",
@@ -504,6 +590,32 @@ const styles = StyleSheet.create({
     padding: layout.cardPad,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hair2,
+  },
+
+  discloseToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+  },
+  discloseLabel: {
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    letterSpacing: 1.0,
+    textTransform: "uppercase",
+    color: colors.ink3,
+    flex: 1,
+  },
+  discloseChevron: {
+    fontFamily: fonts.mono,
+    fontSize: 16,
+    color: colors.ink4,
+    paddingHorizontal: 4,
+  },
+  discloseBody: {
+    marginTop: 4,
+    gap: 8,
   },
 
   btn: {
@@ -526,7 +638,7 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.4 },
   btnPressed: { transform: [{ scale: 0.97 }] },
-  btnText: { fontSize: 14, fontWeight: "500" },
+  btnText: { fontFamily: fonts.sansMedium, fontSize: 14, fontWeight: "500" },
   btnTextTiny: { fontSize: 12 },
   btnText_ink: { color: colors.paper },
   btnText_accent: { color: "#FFFFFF" },
@@ -545,6 +657,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
+  },
+
+  iconWell: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accentWell,
+    borderWidth: 1,
+    borderTopColor: colors.hairLight,
+    borderLeftColor: "rgba(255,255,255,0.92)",
+    borderRightColor: "rgba(74,88,117,0.09)",
+    borderBottomColor: "rgba(130,120,100,0.14)",
+    shadowColor: "#2D3D5A",
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  iconWellAccent: {
+    backgroundColor: colors.accentWell,
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  iconWellWarn: {
+    backgroundColor: colors.warnSoft,
+    shadowColor: "#6B3A2A",
   },
 
   check: {
