@@ -29,32 +29,65 @@ def _uid() -> str:
     return str(uuid.uuid4()).upper()
 
 
-def _attachment(output_uuid: str, output_name: str) -> dict[str, Any]:
+def _action_output_ref(output_uuid: str, output_name: str) -> dict[str, Any]:
     return {
-        "Value": {
-            "OutputUUID": output_uuid,
-            "Type": "ActionOutput",
-            "OutputName": output_name,
-        },
+        "OutputUUID": output_uuid,
+        "Type": "ActionOutput",
+        "OutputName": output_name,
+    }
+
+
+def _attachment(output_uuid: str, output_name: str) -> dict[str, Any]:
+    """Bare attachment — valid for data-flow params like WFInput, not Dictionary UI fields."""
+    return {
+        "Value": _action_output_ref(output_uuid, output_name),
         "WFSerializationType": "WFTextTokenAttachment",
+    }
+
+
+def _shortcut_input_ref() -> dict[str, Any]:
+    return {
+        "Type": "Variable",
+        "VariableName": "Shortcut Input",
     }
 
 
 def _shortcut_input_attachment() -> dict[str, Any]:
     return {
-        "Value": {
-            "Type": "Variable",
-            "VariableName": "Shortcut Input",
-        },
+        "Value": _shortcut_input_ref(),
         "WFSerializationType": "WFTextTokenAttachment",
     }
 
 
 def _shortcut_input_variable() -> dict[str, Any]:
     """Unwrapped variable ref — required by message actions on some iOS builds."""
+    return _shortcut_input_ref()
+
+
+def _text_token_string(
+    *,
+    literal: str = "",
+    attachment: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """WFTextTokenString — required for Dictionary / JSON / header field values.
+
+    Bare ``WFTextTokenAttachment`` signs and imports but iOS strips or blanks the
+    Dictionary rows (UI shows only “Add New Item”). Apple serializes variable
+    values as U+FFFC + attachmentsByRange instead.
+    """
+    if attachment is None:
+        return {
+            "Value": {"string": literal, "attachmentsByRange": {}},
+            "WFSerializationType": "WFTextTokenString",
+        }
+    # Unwrap {Value, WFSerializationType} attachments to the inner ref dict.
+    inner = attachment.get("Value", attachment) if isinstance(attachment, dict) else attachment
     return {
-        "Type": "Variable",
-        "VariableName": "Shortcut Input",
+        "Value": {
+            "string": f"{literal}\ufffc",
+            "attachmentsByRange": {f"{{{len(literal)}, 1}}": inner},
+        },
+        "WFSerializationType": "WFTextTokenString",
     }
 
 
@@ -73,20 +106,17 @@ def _detect_text_from_shortcut_input(*, output_name: str) -> tuple[dict[str, Any
 
 def _dict_field(key: str, value_attachment: dict[str, Any]) -> dict[str, Any]:
     return {
-        "WFKey": {"Value": {"string": key, "attachmentsByRange": {}}},
+        "WFKey": _text_token_string(literal=key),
         "WFItemType": 0,
-        "WFValue": value_attachment,
+        "WFValue": _text_token_string(attachment=value_attachment),
     }
 
 
 def _dict_field_text(key: str, text: str) -> dict[str, Any]:
     return {
-        "WFKey": {"Value": {"string": key, "attachmentsByRange": {}}},
+        "WFKey": _text_token_string(literal=key),
         "WFItemType": 0,
-        "WFValue": {
-            "Value": {"string": text, "attachmentsByRange": {}},
-            "WFSerializationType": "WFTextTokenString",
-        },
+        "WFValue": _text_token_string(literal=text),
     }
 
 
@@ -122,19 +152,12 @@ def _post_sms_webhook_action(
             "Value": {
                 "WFDictionaryFieldValueItems": [
                     {
-                        "WFKey": {
-                            "Value": {"string": "Content-Type", "attachmentsByRange": {}},
-                        },
+                        "WFKey": _text_token_string(literal="Content-Type"),
                         "WFItemType": 0,
-                        "WFValue": {
-                            "Value": {"string": "application/json", "attachmentsByRange": {}},
-                            "WFSerializationType": "WFTextTokenString",
-                        },
+                        "WFValue": _text_token_string(literal="application/json"),
                     },
                     {
-                        "WFKey": {
-                            "Value": {"string": "X-Sms-Token", "attachmentsByRange": {}},
-                        },
+                        "WFKey": _text_token_string(literal="X-Sms-Token"),
                         "WFItemType": 0,
                         "WFValue": token_header_value,
                     },
@@ -184,7 +207,8 @@ def _token_prompt_action() -> tuple[dict[str, Any], dict[str, Any], list[dict[st
             "CustomOutputName": "Alfred Token",
         },
     }
-    token_header_value = _attachment(token_uuid, "Alfred Token")
+    # Header values must be WFTextTokenString (same blank-field rule as Dictionary).
+    token_header_value = _text_token_string(attachment=_attachment(token_uuid, "Alfred Token"))
     import_questions = [
         {
             "ActionIndex": 0,
@@ -208,9 +232,10 @@ def build_sms_forward_shortcut(
       Otherwise the shortcut prompts for the token on import via WFWorkflowImportQuestions.
 
       Stock actions only (Text → Dictionary → Get Contents of URL). Message Received
-      passes Shortcut Input; map it directly into body/text/shortcut_input. Do not use
-      Get Details of Messages — that action ID shows as Unknown Action on many devices
-      and causes the Dictionary to import empty (POST ``{}``).
+      passes Shortcut Input; map it into body/text/shortcut_input via WFTextTokenString
+      (U+FFFC + attachmentsByRange). Bare WFTextTokenAttachment values sign but import
+      as an empty Dictionary on iOS. Do not use Get Details of Messages — that action
+      ID shows as Unknown Action on many devices and also blanks Dictionary items.
     """
     dict_uuid = _uid()
     input_ref = _shortcut_input_attachment()
@@ -225,10 +250,7 @@ def build_sms_forward_shortcut(
 
     token_header_value: dict[str, Any]
     if sms_token:
-        token_header_value = {
-            "Value": {"string": sms_token, "attachmentsByRange": {}},
-            "WFSerializationType": "WFTextTokenString",
-        }
+        token_header_value = _text_token_string(literal=sms_token)
         import_questions: list[dict[str, Any]] = []
         actions: list[dict[str, Any]] = [payload_dict]
     else:
@@ -353,10 +375,7 @@ def build_sms_share_shortcut(
 
     token_header_value: dict[str, Any]
     if sms_token:
-        token_header_value = {
-            "Value": {"string": sms_token, "attachmentsByRange": {}},
-            "WFSerializationType": "WFTextTokenString",
-        }
+        token_header_value = _text_token_string(literal=sms_token)
         import_questions: list[dict[str, Any]] = []
         actions: list[dict[str, Any]] = [get_body, get_hash, payload_dict]
     else:

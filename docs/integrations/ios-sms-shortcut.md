@@ -130,7 +130,7 @@ Success looks like:
 | **Importing unsigned shortcut files is not supported** | Unsigned server build                   | Maintainer: `python3 backend/scripts/build_sms_shortcut.py` and redeploy. |
 | **401 Missing/Invalid X-Sms-Token**                    | Wrong or missing header                 | Copy token again from Alfred → You → SMS forwarding; if you rotated the token, re-paste into Shortcuts |
 | **422 Unprocessable Entity**                           | Body shape from Shortcuts               | Ensure `body` is message text (Shortcut Input)                            |
-| **Dictionary shows only *Add New Item***               | Broken action refs stripped on import   | Delete shortcut, re-import signed Forward; Dictionary must show 3 keys.   |
+| **Dictionary shows only *Add New Item***               | Bare `WFTextTokenAttachment` in Dictionary values (or broken ActionOutput refs) stripped on import | Delete shortcut, re-import signed Forward from Alfred settings; Dictionary must show 3 keys mapped to Shortcut Input. |
 | SMS missing in Inbox                                   | Sync delay                              | Pull to refresh; confirm curl returns 200 first                           |
 | Reply opens Messages without recipient                 | No sender phone from Shortcut           | Expected — Message Received does not expose phone reliably                |
 

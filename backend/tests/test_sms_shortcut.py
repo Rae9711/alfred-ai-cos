@@ -49,10 +49,15 @@ def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
     assert keys == {"body", "shortcut_input", "text"}
     by_key = {item["WFKey"]["Value"]["string"]: item for item in items}
     for key in ("body", "text", "shortcut_input"):
-        val = by_key[key]["WFValue"]["Value"]
-        assert val["Type"] == "Variable"
-        assert val["VariableName"] == "Shortcut Input"
-        assert "OutputUUID" not in val
+        # Keys/values must be WFTextTokenString — bare attachments import blank.
+        assert by_key[key]["WFKey"]["WFSerializationType"] == "WFTextTokenString"
+        val = by_key[key]["WFValue"]
+        assert val["WFSerializationType"] == "WFTextTokenString"
+        assert val["Value"]["string"] == "\ufffc"
+        att = val["Value"]["attachmentsByRange"]["{0, 1}"]
+        assert att["Type"] == "Variable"
+        assert att["VariableName"] == "Shortcut Input"
+        assert "OutputUUID" not in att
 
     post = data["WFWorkflowActions"][-1]
     assert post["WFWorkflowActionParameters"]["WFHTTPBodyType"] == "Json"
@@ -60,6 +65,9 @@ def test_build_sms_forward_shortcut_maps_shortcut_input_to_json_body() -> None:
         "WFDictionaryFieldValueItems"
     ]
     assert len(json_items) == 3
+    for item in json_items:
+        assert item["WFValue"]["WFSerializationType"] == "WFTextTokenString"
+        assert item["WFValue"]["Value"]["string"] == "\ufffc"
 
 
 def test_build_sms_forward_shortcut_uses_only_stock_actions() -> None:
@@ -105,6 +113,7 @@ def test_build_sms_forward_shortcut_embeds_token_when_given() -> None:
         "WFDictionaryFieldValueItems"
     ]
     token_header = next(h for h in headers if h["WFKey"]["Value"]["string"] == "X-Sms-Token")
+    assert token_header["WFValue"]["WFSerializationType"] == "WFTextTokenString"
     assert token_header["WFValue"]["Value"]["string"] == "tok"
     assert post["WFWorkflowActionParameters"]["WFURL"] == "https://example.test/sms"
 
