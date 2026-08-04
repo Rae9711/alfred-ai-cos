@@ -763,6 +763,47 @@ export function SettingsScreen() {
               )}
             </View>
           </View>
+
+          {me?.llm_quota ? (
+            <>
+              <SectionTitle label={s.aiAllowanceTitle} />
+              <View style={styles.smsCard}>
+                <View style={styles.subscriptionHead}>
+                  <View style={styles.subscriptionPlanBlock}>
+                    <Text style={styles.subscriptionPlanName}>
+                      {me.llm_quota.capped
+                        ? s.aiAllowanceUsedUp
+                        : s.aiAllowanceRemaining(
+                            `$${me.llm_quota.remaining_usd.toFixed(2)}`,
+                            `$${me.llm_quota.cap_usd.toFixed(2)}`,
+                          )}
+                    </Text>
+                    <Meta style={styles.subscriptionMeta}>
+                      {me.llm_quota.period} · {me.llm_quota.used_pct}% used
+                    </Meta>
+                  </View>
+                  <Pill
+                    label={`${Math.min(100, Math.round(me.llm_quota.used_pct))}%`}
+                    kind={me.llm_quota.capped ? "warn" : "muted"}
+                  />
+                </View>
+                <View style={styles.quotaTrack}>
+                  <View
+                    style={[
+                      styles.quotaFill,
+                      {
+                        width: `${Math.min(100, me.llm_quota.used_pct)}%`,
+                        backgroundColor: me.llm_quota.capped
+                          ? colors.warn
+                          : colors.accent,
+                      },
+                    ]}
+                  />
+                </View>
+                <Meta style={styles.langHint}>{s.aiAllowanceHint}</Meta>
+              </View>
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -1450,6 +1491,17 @@ const styles = StyleSheet.create({
   subscriptionDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.hair,
+  },
+  quotaTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.hair,
+    overflow: "hidden",
+    marginTop: spacing.sm,
+  },
+  quotaFill: {
+    height: "100%",
+    borderRadius: 3,
   },
   subscriptionFeatureRow: {
     flexDirection: "row",

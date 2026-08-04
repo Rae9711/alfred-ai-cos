@@ -436,6 +436,17 @@ class OnboardingPrefs(BaseModel):
     proactiveness: str | None = None  # quiet | balanced | very_proactive
 
 
+class LlmQuotaOut(BaseModel):
+    """Monthly AI budget remaining (estimated USD from Anthropic token rates)."""
+
+    period: str  # YYYY-MM
+    cap_usd: float
+    used_usd: float
+    remaining_usd: float
+    used_pct: float
+    capped: bool
+
+
 class MeOut(BaseModel):
     id: str
     email: str
@@ -444,6 +455,7 @@ class MeOut(BaseModel):
     preferences: dict[str, object]
     onboarded: bool
     connected_mailboxes: list[ConnectedMailboxOut] = []
+    llm_quota: LlmQuotaOut | None = None
 
 
 class ConnectedMailboxOut(BaseModel):

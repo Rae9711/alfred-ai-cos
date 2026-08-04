@@ -378,6 +378,12 @@ export const translations = {
       subscriptionManage: "Manage subscription",
       subscriptionComingSoon: "Coming soon",
       subscriptionCheckoutFailed: "Could not open checkout.",
+      aiAllowanceTitle: "AI allowance",
+      aiAllowanceRemaining: (remaining: string, cap: string) =>
+        `${remaining} of ${cap} left this month`,
+      aiAllowanceUsedUp: "Monthly AI allowance used up — resets next month.",
+      aiAllowanceHint:
+        "Covers Alfred chat, Capture, drafts, and inbox AI. Resets on the 1st.",
       notificationsTitle: "Notifications",
       notificationsPolicy:
         "Alfred only pushes for mail that needs your action, task reminders, and upcoming meetings.",
@@ -946,6 +952,11 @@ export const translations = {
       subscriptionManage: "管理订阅",
       subscriptionComingSoon: "即将开放",
       subscriptionCheckoutFailed: "无法打开结账页面。",
+      aiAllowanceTitle: "AI 额度",
+      aiAllowanceRemaining: (remaining: string, cap: string) =>
+        `本月还剩 ${remaining} / ${cap}`,
+      aiAllowanceUsedUp: "本月 AI 额度已用完，下月自动重置。",
+      aiAllowanceHint: "含管家对话、速记、草稿与收件箱 AI。每月 1 日重置。",
       notificationsTitle: "通知",
       notificationsPolicy:
         "Alfred 仅在需处理邮件、任务提醒和即将开始的会议时推送。",

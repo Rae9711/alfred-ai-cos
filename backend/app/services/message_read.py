@@ -48,7 +48,9 @@ def mark_message_read(db: Session, user: User, message: Message) -> tuple[Messag
     """Remove UNREAD in Gmail when permitted; always update local label snapshot.
 
     Returns (message, gmail_synced). gmail_synced is False when the mailbox token
-    only has gmail.readonly — caller should prompt the user to reconnect Gmail.
+    lacks gmail.modify, or when the Gmail write fails (token/network/API) — caller
+    should prompt the user to reconnect Gmail when False after a user-initiated
+    mark-read.
     """
     if message.user_id != user.id:
         raise ValueError("Message not found")
@@ -75,19 +77,18 @@ def mark_message_read(db: Session, user: User, message: Message) -> tuple[Messag
         return message, False
 
     stored_token = decrypt_token(account.token_ciphertext)
-    creds, token = fresh_credentials(stored_token)
     gmail_synced = False
+    token = stored_token
     try:
+        creds, token = fresh_credentials(stored_token)
         with use_gmail_credentials(creds):
             message.gmail_labels = gmail.modify_message_labels(
                 token, message.external_id, remove=["UNREAD"]
             )
         gmail_synced = True
-    except Exception as exc:
-        # Insufficient scopes or expired grants — keep the app read state consistent.
-        status = getattr(getattr(exc, "resp", None), "status", None)
-        if status not in (403, 401):
-            raise
+    except Exception:
+        # Token refresh / 401 / 403 / 404 / network / 5xx — keep app read state
+        # consistent and let the client prompt reconnect when gmail_synced is False.
         _mark_read_local(message)
         gmail_synced = False
 

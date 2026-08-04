@@ -23,6 +23,7 @@ from app.db.models import (
     Device,
     DraftReply,
     ExecutionLog,
+    LlmUsagePeriod,
     Message,
     Notification,
     SpendLimit,
@@ -31,6 +32,7 @@ from app.db.models import (
 )
 from app.schemas.api import (
     ConnectedMailboxOut,
+    LlmQuotaOut,
     MeOut,
     OnboardingPrefs,
     SmsForwardingOut,
@@ -40,6 +42,7 @@ from app.schemas.api import (
 from app.services import google_oauth, learning, sms_inbox
 from app.services.connected_accounts import list_google_accounts
 from app.services.crypto import decrypt_token
+from app.services.llm_quota import get_quota_status
 from app.services.message_read import account_has_gmail_modify
 from app.services.sms_shortcut import build_sms_backfill_install_urls, build_sms_install_urls
 
@@ -55,6 +58,7 @@ _USER_SCOPED = (
     ExecutionLog,
     ActionProposal,
     SpendLimit,
+    LlmUsagePeriod,
     DraftReply,
     Notification,
     Device,
@@ -93,6 +97,7 @@ def _me(db: Session, user: User) -> MeOut:
         display_email = str(prefs.get("apple_email") or "Apple ID")
     elif user.email.endswith("@local.alfred"):
         display_email = str(prefs.get("display_email") or "Alfred account")
+    quota = get_quota_status(db, user.id)
     return MeOut(
         id=user.id,
         email=display_email,
@@ -101,6 +106,14 @@ def _me(db: Session, user: User) -> MeOut:
         preferences=prefs,
         onboarded=_is_onboarded(user),
         connected_mailboxes=mailboxes,
+        llm_quota=LlmQuotaOut(
+            period=quota.period,
+            cap_usd=quota.cap_usd,
+            used_usd=quota.used_usd,
+            remaining_usd=quota.remaining_usd,
+            used_pct=quota.used_pct,
+            capped=quota.capped,
+        ),
     )
 
 

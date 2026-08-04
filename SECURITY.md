@@ -115,13 +115,24 @@ can otherwise sync the same mailbox concurrently, doubling Gmail API traffic and
 the stored `gmail_history_id` cursor. The lock auto-expires (so a crashed worker can't wedge
 it) and fails open if Redis is unreachable.
 
+### Per-user monthly LLM spend cap
+
+Every Anthropic call is attributed to the authenticated (or sync) user and estimated in USD
+cents from published list prices (`app/services/llm_quota.py`). Spend accumulates in
+`llm_usage_periods` for the calendar month (`YYYY-MM`). When `LLM_MONTHLY_CAP_USD` is
+reached, further LLM calls raise `LlmQuotaExceeded` (HTTP 402 on interactive routes;
+background classification skips the message). `GET /me` returns remaining allowance for the
+Settings UI. Cap `0` disables enforcement (dev only). Default `$8` is a profitable cushion
+vs `$17` ARPU; ~`$15` is a hard break-even ceiling after Stripe fees.
+
 ## What this foundation does not yet do
 
 These are required before a real beta, tracked in TODO.md:
 
 - **Role-based backend access.**
 - **Multi-currency spend accounting.** The `SpendLimit` is a single-currency per-period cap,
-  not a ledger; cross-currency charges are not normalized against the cap.
+  not a ledger; cross-currency charges are not normalized against the cap. (LLM quota is
+  USD-only and separate from Stripe `SpendLimit`.)
 - **No model training on user data.** The Anthropic API is used for inference only. Make
   this an explicit, enforced policy and surface it in the privacy settings.
 - **Broader API rate limits** beyond auth minting and the SMS webhook (Gmail quota

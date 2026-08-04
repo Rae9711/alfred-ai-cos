@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 from app.core.metrics import LLM_LATENCY, LLM_TOKENS, record_llm_usage
+from app.services.llm_quota import assert_bound_user_quota, charge_bound_user_usage
 from app.schemas.llm import (
     AssistantChatReply,
     AssistantInterpretation,
@@ -154,7 +155,8 @@ _CAPTURE_SYSTEM = (
 )
 _INTERPRET_SYSTEM = (
     "You are Albert's assistant agent. Read one free-text request and decide what to do.\n"
-    "If the user asks to schedule, book, block, or hold time on their calendar, set "
+    "If the user asks to schedule, book, block, or hold time on their calendar — including "
+    "Chinese like '明天十一点要去机场', '周五下午3点开会', '明天去 Somerset' — set "
     "intent='book_calendar' and fill title, start, and end.\n"
     "If they ask to move, reschedule, or change the time of an existing event, set "
     "intent='reschedule_calendar', pick event_id from the upcoming-events list, and "
@@ -170,10 +172,11 @@ _INTERPRET_SYSTEM = (
     "set intent='create_task', title to the actionable task (e.g. 'Pay rent', not "
     "'Remind me to pay rent'), due_date as YYYY-MM-DD when a date is implied, and a "
     "short confirmation in reply. Resolve relative dates against the current local time.\n"
-    "Resolve relative phrasing ('tomorrow', 'this evening', '5 to 6pm', 'Friday morning') "
-    "against the given current local time, and return start/end as ISO 8601 WITH the "
-    "user's UTC offset (e.g. 2026-05-28T17:00:00+02:00). Default an event to 1 hour "
-    "if only a start is given. Put a short confirmation in reply.\n"
+    "Resolve relative phrasing ('tomorrow', 'this evening', '5 to 6pm', 'Friday morning', "
+    "'明天十一点', '下午三点') against the given current local time, and return start/end "
+    "as ISO 8601 WITH the user's UTC offset (e.g. 2026-05-28T17:00:00+02:00). Default an "
+    "event to 1 hour if only a start is given. Put a short confirmation in reply, matching "
+    "the user's language (English or Chinese).\n"
     "For texting/SMS (e.g. 'text Mom: hi', '给 Mom 发：明天见'): set intent='none' and "
     "tell them to phrase it that way — Albert drafts the text locally from contacts.\n"
     "For email or inbox-thread replies: set intent='none' and point them to Inbox.\n"
@@ -253,10 +256,7 @@ class AnthropicLLMClient:
         self._client = Anthropic(api_key=settings.anthropic_api_key)
 
     def _meter_usage(self, model: str, usage: Any) -> None:
-        """Record token counts and stash the usage object as the single source of truth.
-
-        Later stages (e.g. per-call cost accounting) read this back via
-        ``metrics.last_llm_usage()`` rather than re-counting tokens themselves."""
+        """Record Prometheus tokens, stash usage, and debit the bound user's monthly cap."""
         if usage is None:
             return
         record_llm_usage(usage)
@@ -266,6 +266,7 @@ class AnthropicLLMClient:
             LLM_TOKENS.labels(model=model, kind="input").inc(input_tokens)
         if output_tokens is not None:
             LLM_TOKENS.labels(model=model, kind="output").inc(output_tokens)
+        charge_bound_user_usage(model=model, usage=usage)
 
     def _structured(
         self,
@@ -276,6 +277,7 @@ class AnthropicLLMClient:
         tool: ToolParam,
     ) -> dict[str, Any]:
         """Force a single tool and return its validated raw input dict."""
+        assert_bound_user_quota()
         with LLM_LATENCY.labels(method="structured", model=model).time():
             response = self._client.messages.create(
                 model=model,
@@ -419,6 +421,7 @@ class AnthropicLLMClient:
 
     def generate_daily_briefing(self, *, today_payload: dict[str, Any]) -> str:
         model = settings.llm_extract_model
+        assert_bound_user_quota()
         with LLM_LATENCY.labels(method="briefing", model=model).time():
             response = self._client.messages.create(
                 model=model,

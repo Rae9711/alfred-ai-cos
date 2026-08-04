@@ -203,6 +203,15 @@ export interface MessageReadResult {
   category?: InboxMessage["category"] | string | null;
 }
 
+export interface LlmQuota {
+  period: string;
+  cap_usd: number;
+  used_usd: number;
+  remaining_usd: number;
+  used_pct: number;
+  capped: boolean;
+}
+
 export interface Me {
   id: string;
   email: string;
@@ -211,6 +220,7 @@ export interface Me {
   preferences: Record<string, unknown>;
   onboarded: boolean;
   connected_mailboxes: ConnectedMailbox[];
+  llm_quota?: LlmQuota | null;
 }
 
 export interface AppNotification {
